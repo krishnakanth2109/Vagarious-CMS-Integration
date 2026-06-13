@@ -55,6 +55,7 @@ const Candidates = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [jobs, setJobs] = useState([]);
   const [jobsLoading, setJobsLoading] = useState(true);
+  const [jobsFailed, setJobsFailed] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
 
@@ -65,8 +66,6 @@ const Candidates = () => {
     experience: "",
     currentCompany: "",
     currentRole: "",
-    // ✅ FIX: This will now store "Job Title||Company Name" for combined jobs,
-    // or "General Application" for general. We split it before sending to API.
     appliedJob: "", 
     skills: "",
     preferredLocation: "",
@@ -77,17 +76,29 @@ const Candidates = () => {
   // Fetch Jobs from Backend (public endpoint — no auth required)
   useEffect(() => {
     const fetchJobs = async () => {
+      // 8-second timeout so Render cold-start doesn't hang the page
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 8000);
       try {
-        const response = await axios.get(`${API_URL}/jobs/public`);
+        const response = await axios.get(`${API_URL}/jobs/public`, {
+          signal: controller.signal,
+        });
         setJobs(response.data);
-      } catch (error) {
-        console.error("Failed to fetch jobs:", error);
+        setJobsFailed(false);
+      } catch (error: any) {
+        // Don't treat abort as a visible error — just silently show General Application
+        if (error?.name !== "CanceledError" && error?.name !== "AbortError") {
+          console.error("Failed to fetch jobs:", error);
+        }
+        setJobsFailed(true);
       } finally {
+        clearTimeout(timer);
         setJobsLoading(false);
       }
     };
     fetchJobs();
   }, []);
+
 
   // --- Strict Validation Rules ---
   const validate = (): boolean => {
@@ -256,6 +267,13 @@ const fileInputRef = useRef(null);
 
           {jobsLoading ? (
             <div className="text-center py-20"><Loader2 className="animate-spin mx-auto w-10 h-10 text-primary" /></div>
+          ) : jobsFailed ? (
+            // Jobs couldn't load (server deploying / network issue) — show a soft banner
+            <div className="col-span-full text-center py-20 bg-blue-50/60 rounded-2xl border-2 border-dashed border-blue-200">
+              <Loader2 className="mx-auto w-8 h-8 text-blue-400 mb-3" />
+              <p className="text-blue-700 font-semibold text-lg">Job listings are loading…</p>
+              <p className="text-blue-500 text-sm mt-1">Our job board is updating. You can still <a href="#register" className="underline font-bold">submit your profile</a> now!</p>
+            </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
               {filteredJobs.length === 0 ? (
@@ -308,7 +326,6 @@ const fileInputRef = useRef(null);
                       </div>
                     </div>
 
-                    {/* ✅ FIX: Pass both job.title AND job.company to handleApplyClick */}
                     <Button 
                       className="w-full mt-auto font-bold group-hover:bg-primary transition-all rounded-xl" 
                       onClick={() => handleApplyClick(job.title, job.company)}
@@ -360,15 +377,21 @@ const fileInputRef = useRef(null);
                     onChange={handleChange}
                     className={`flex h-12 w-full rounded-xl border bg-background px-3 py-2 text-sm focus:ring-2 focus:ring-primary outline-none transition-all ${errors.appliedJob ? "border-destructive" : "border-input"}`}
                   >
-                    <option value="" disabled>Select a Job Role...</option>
+                    <option value="" disabled>
+                      {jobsFailed ? "Select — or choose General Application below" : "Select a Job Role..."}
+                    </option>
                     <option value="General Application">General Application (No specific role)</option>
-                    {jobs.map((job: any) => (
-                      // ✅ FIX: value now stores "Title||Company" so company is preserved
+                    {!jobsFailed && jobs.map((job: any) => (
                       <option key={job._id} value={`${job.title}||${job.company}`}>
                         {job.title} - {job.location} ({job.company})
                       </option>
                     ))}
                   </select>
+                  {jobsFailed && (
+                    <p className="text-[11px] text-blue-500 font-medium">
+                      ℹ️ Specific job listings are updating — select "General Application" to continue.
+                    </p>
+                  )}
                   {errors.appliedJob && <p className="text-[10px] text-destructive font-medium">{errors.appliedJob}</p>}
                 </div>
 

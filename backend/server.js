@@ -61,7 +61,7 @@ const ALLOWED_ORIGINS = [
   'https://cms-csk.netlify.app',
   'http://localhost:5000',
   // Allow any Netlify preview deploy URL
-  /\.netlify\.app$/,
+   'https://vagarioussolutions.com',
   'https://vagarious-420.netlify.app'
 ];
 
