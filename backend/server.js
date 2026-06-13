@@ -1,45 +1,45 @@
 import 'dotenv/config'; // CRITICAL: Loads .env BEFORE any other imports
 
-import express        from 'express';
-import cors           from 'cors';
-import mongoose       from 'mongoose';
+import express from 'express';
+import cors from 'cors';
+import mongoose from 'mongoose';
 import { createServer } from 'http';
-import { Server }    from 'socket.io';
-import path          from 'path';
+import { Server } from 'socket.io';
+import path from 'path';
 import { fileURLToPath } from 'url';
-import fs            from 'fs';
+import fs from 'fs';
 
 import { protect, authorize } from './middleware/authMiddleware.js';
 import Candidate from './models/Candidate.js';
-import User      from './models/User.js';
+import User from './models/User.js';
 
 // ── Route modules ─────────────────────────────────────────────────────────────
-import authRoutes      from './routes/authRoutes.js';
+import authRoutes from './routes/authRoutes.js';
 import recruiterRoutes from './routes/recruiterRoutes.js';
 import candidateRoutes from './routes/candidateRoutes.js';
-import clientRoutes    from './routes/clientRoutes.js';
-import jobRoutes       from './routes/jobRoutes.js';
+import clientRoutes from './routes/clientRoutes.js';
+import jobRoutes from './routes/jobRoutes.js';
 import interviewRoutes from './routes/interviewRoutes.js';
-import messageRoutes   from './routes/messageRoutes.js';
-import channelRoutes  from './routes/channelRoutes.js';
-import aiMockRoutes          from './routes/aiMockRoutes.js';
-import jobApplicationRoutes  from './routes/jobApplicationRoutes.js';
+import messageRoutes from './routes/messageRoutes.js';
+import channelRoutes from './routes/channelRoutes.js';
+import aiMockRoutes from './routes/aiMockRoutes.js';
+import jobApplicationRoutes from './routes/jobApplicationRoutes.js';
 
 // ── Agreement Module Routes ───────────────────────────────────────────────────
 import { connectAgreementDB } from './config/agreementDatabase.js';
 import agreementCompanyRoutes from './routes/agreementCompanyRoutes.js';
-import agreementLetterRoutes  from './routes/agreementLetterRoutes.js';
-import agreementEmailRoutes   from './routes/agreementEmailRoutes.js';
-import agreementUploadRoutes  from './routes/agreementUploadRoutes.js';
+import agreementLetterRoutes from './routes/agreementLetterRoutes.js';
+import agreementEmailRoutes from './routes/agreementEmailRoutes.js';
+import agreementUploadRoutes from './routes/agreementUploadRoutes.js';
 
 // ── __dirname shim for ES Modules ─────────────────────────────────────────────
 const __filename = fileURLToPath(import.meta.url);
-const __dirname  = path.dirname(__filename);
+const __dirname = path.dirname(__filename);
 
 const uploadDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
 
-const app        = express();
+const app = express();
 const httpServer = createServer(app);
 
 const FRONTEND_URL = (process.env.FRONTEND_URL || 'http://localhost:5174').trim().replace(/\/$/, '');
@@ -53,27 +53,32 @@ const ALLOWED_ORIGINS = [
   'http://127.0.0.1:5173',
   'http://localhost:5174',
   'http://127.0.0.1:5174',
-  'https://vagarious-cms.netlify.app',
-  'https://cms-vagarious.netlify.app',
-  'http://localhost:5000',
   'http://localhost:8080',
   'http://127.0.0.1:8080',
+  'https://vagarious-cms.netlify.app',
+  'https://cms-vagarious.netlify.app',
+  'https://vagarious-csk.netlify.app',
+  'https://cms-csk.netlify.app',
+  'http://localhost:5000',
+  // Allow any Netlify preview deploy URL
+  /\.netlify\.app$/,
+  'https://vagarious-420.netlify.app'
 ];
 
 // ── Socket.IO ──────────────────────────────────────────────────────────────────
 const io = new Server(httpServer, {
   cors: {
-    origin:      ALLOWED_ORIGINS,
-    methods:     ['GET', 'POST', 'PUT', 'DELETE'],
+    origin: ALLOWED_ORIGINS,
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
     credentials: true,
   },
 });
 
 // ── CORS ───────────────────────────────────────────────────────────────────────
 app.use(cors({
-  origin:         ALLOWED_ORIGINS,
-  credentials:    true,
-  methods:        ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  origin: ALLOWED_ORIGINS,
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
 }));
 
@@ -163,37 +168,37 @@ io.on('connection', (socket) => {
 // ═══════════════════════════════════════════════════════════════════════════════
 // ROUTE MODULES
 // ═══════════════════════════════════════════════════════════════════════════════
-app.use('/api/auth',       authRoutes);
+app.use('/api/auth', authRoutes);
 app.use('/api/recruiters', recruiterRoutes);
 app.use('/api/candidates', candidateRoutes);
-app.use('/api/clients',    clientRoutes);
-app.use('/api/jobs',       jobRoutes);
+app.use('/api/clients', clientRoutes);
+app.use('/api/jobs', jobRoutes);
 app.use('/api/interviews', interviewRoutes);
-app.use('/api/messages',   messageRoutes);
-app.use('/api/channels',   channelRoutes);
-app.use('/api/ai-mock',           aiMockRoutes);
-app.use('/api/job-applications',  jobApplicationRoutes);
+app.use('/api/messages', messageRoutes);
+app.use('/api/channels', channelRoutes);
+app.use('/api/ai-mock', aiMockRoutes);
+app.use('/api/job-applications', jobApplicationRoutes);
 
 // ── Agreement Module Routes ────────────────────────────────────────────────────
 app.use('/agreement-companies', agreementCompanyRoutes);
-app.use('/agreement-letters',   agreementLetterRoutes);
-app.use('/agreement-email',     agreementEmailRoutes);
-app.use('/upload',              agreementUploadRoutes);
+app.use('/agreement-letters', agreementLetterRoutes);
+app.use('/agreement-email', agreementEmailRoutes);
+app.use('/upload', agreementUploadRoutes);
 
 // Fallback routes (legacy support)
-app.use('/auth',       authRoutes);
+app.use('/auth', authRoutes);
 app.use('/recruiters', recruiterRoutes);
 app.use('/candidates', candidateRoutes);
-app.use('/clients',    clientRoutes);
-app.use('/jobs',       jobRoutes);
+app.use('/clients', clientRoutes);
+app.use('/jobs', jobRoutes);
 app.use('/interviews', interviewRoutes);
-app.use('/messages',   messageRoutes);
-app.use('/channels',   channelRoutes);
-app.use('/ai-mock',           aiMockRoutes);
-app.use('/job-applications',  jobApplicationRoutes);
+app.use('/messages', messageRoutes);
+app.use('/channels', channelRoutes);
+app.use('/ai-mock', aiMockRoutes);
+app.use('/job-applications', jobApplicationRoutes);
 
 // Mount AI mock routes at root so index.html can call /start-session-interview etc. directly
-app.use('/',           aiMockRoutes);
+app.use('/', aiMockRoutes);
 
 // ── Serve AI Mock Static Files ────────────────────────────────────────────────
 // Already served from root above
@@ -229,10 +234,10 @@ app.get('/api/reports', protect, authorize('admin', 'manager'), async (req, res)
       // If specific month index provided, use that month; otherwise last 30 days
       if (month !== undefined) {
         const mIdx = parseInt(month);
-        const yr   = mIdx > now.getMonth() ? now.getFullYear() - 1 : now.getFullYear();
-        const s    = new Date(yr, mIdx, 1, 0, 0, 0, 0);
-        const e    = new Date(yr, mIdx + 1, 0, 23, 59, 59, 999);
-        dateQuery  = { createdAt: { $gte: s, $lte: e } };
+        const yr = mIdx > now.getMonth() ? now.getFullYear() - 1 : now.getFullYear();
+        const s = new Date(yr, mIdx, 1, 0, 0, 0, 0);
+        const e = new Date(yr, mIdx + 1, 0, 23, 59, 59, 999);
+        dateQuery = { createdAt: { $gte: s, $lte: e } };
       } else {
         const s = new Date(now); s.setMonth(now.getMonth() - 1);
         dateQuery = { createdAt: { $gte: s } };
@@ -241,8 +246,8 @@ app.get('/api/reports', protect, authorize('admin', 'manager'), async (req, res)
     // filter === 'all' → no date restriction
 
     const INTERVIEW_STAGES = [
-      'L1 Interview','L2 Interview','L3 Interview','L4 Interview','L5 Interview',
-      'Final Interview','Technical Round','Technical Interview','HR Round','HR Interview','Interview',
+      'L1 Interview', 'L2 Interview', 'L3 Interview', 'L4 Interview', 'L5 Interview',
+      'Final Interview', 'Technical Round', 'Technical Interview', 'HR Round', 'HR Interview', 'Interview',
     ];
 
     // status is an ARRAY in MongoDB — helper to check membership
@@ -259,43 +264,43 @@ app.get('/api/reports', protect, authorize('admin', 'manager'), async (req, res)
       .select('status recruiterId recruiterName createdAt')
       .lean();
 
-    const totalSelected    = candidates.filter(c => hasStatus(c, 'Selected')).length;
-    const totalJoined      = candidates.filter(c => hasStatus(c, 'Joined')).length;
-    const conversionNum    = totalSelected > 0 ? Math.round((totalJoined / totalSelected) * 100) : 0;
+    const totalSelected = candidates.filter(c => hasStatus(c, 'Selected')).length;
+    const totalJoined = candidates.filter(c => hasStatus(c, 'Joined')).length;
+    const conversionNum = totalSelected > 0 ? Math.round((totalJoined / totalSelected) * 100) : 0;
     const activeRecruiters = await User.countDocuments({ role: 'recruiter', active: true });
 
     const recruiterMap = new Map();
     for (const c of candidates) {
-      const key  = c.recruiterId?.toString() || 'unassigned';
+      const key = c.recruiterId?.toString() || 'unassigned';
       const name = c.recruiterName || 'Unassigned';
       if (!recruiterMap.has(key)) {
         recruiterMap.set(key, { name, Submissions: 0, Turnups: 0, Selected: 0, Joined: 0 });
       }
       const row = recruiterMap.get(key);
       row.Submissions += 1;
-      if (hasAnyInterview(c))      row.Turnups  += 1;
+      if (hasAnyInterview(c)) row.Turnups += 1;
       if (hasStatus(c, 'Selected')) row.Selected += 1;
-      if (hasStatus(c, 'Joined'))   row.Joined   += 1;
+      if (hasStatus(c, 'Joined')) row.Joined += 1;
     }
     const recruiterPerformance = Array.from(recruiterMap.values())
       .sort((a, b) => b.Submissions - a.Submissions);
 
-    const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const monthlyData = [];
     for (let i = 5; i >= 0; i--) {
-      const d     = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const start = new Date(d.getFullYear(), d.getMonth(), 1);
-      const end   = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999);
-      const mC    = await Candidate.find({ createdAt: { $gte: start, $lte: end } })
+      const end = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999);
+      const mC = await Candidate.find({ createdAt: { $gte: start, $lte: end } })
         .select('status').lean();
-      const mHas  = (c, s) => (Array.isArray(c.status) ? c.status : [c.status||'']).includes(s);
+      const mHas = (c, s) => (Array.isArray(c.status) ? c.status : [c.status || '']).includes(s);
       monthlyData.push({
-        month:      MONTHS[d.getMonth()],
+        month: MONTHS[d.getMonth()],
         candidates: mC.length,
-        joined:     mC.filter(c => mHas(c, 'Joined')).length,
-        selected:   mC.filter(c => mHas(c, 'Selected')).length,
-        rejected:   mC.filter(c => mHas(c, 'Rejected')).length,
-        hold:       mC.filter(c => mHas(c, 'Hold')).length,
+        joined: mC.filter(c => mHas(c, 'Joined')).length,
+        selected: mC.filter(c => mHas(c, 'Selected')).length,
+        rejected: mC.filter(c => mHas(c, 'Rejected')).length,
+        hold: mC.filter(c => mHas(c, 'Hold')).length,
       });
     }
 
@@ -318,8 +323,8 @@ app.get('/api/reports/recruiter', protect, async (req, res) => {
     const recruiterId = req.user._id;
 
     const INTERVIEW_STAGES = new Set([
-      'L1 Interview','L2 Interview','L3 Interview','L4 Interview','L5 Interview',
-      'Final Interview','Technical Round','Technical Interview','HR Round','HR Interview','Interview',
+      'L1 Interview', 'L2 Interview', 'L3 Interview', 'L4 Interview', 'L5 Interview',
+      'Final Interview', 'Technical Round', 'Technical Interview', 'HR Round', 'HR Interview', 'Interview',
     ]);
 
     const all = await Candidate.find({
@@ -340,16 +345,16 @@ app.get('/api/reports/recruiter', protect, async (req, res) => {
       return arr.some(s => INTERVIEW_STAGES.has(s));
     };
 
-    const totalSubmissions         = all.length;
+    const totalSubmissions = all.length;
     const totalInterviewsScheduled = all.filter(c => hasAnyInterview(c)).length;
-    const joined                   = all.filter(c => hasStatus(c, 'Joined')).length;
-    const selected                 = all.filter(c => hasStatus(c, 'Selected')).length;
-    const rejected                 = all.filter(c => hasStatus(c, 'Rejected')).length;
-    const hold                     = all.filter(c => hasStatus(c, 'Hold')).length;
-    const successRate              = totalSubmissions > 0
+    const joined = all.filter(c => hasStatus(c, 'Joined')).length;
+    const selected = all.filter(c => hasStatus(c, 'Selected')).length;
+    const rejected = all.filter(c => hasStatus(c, 'Rejected')).length;
+    const hold = all.filter(c => hasStatus(c, 'Hold')).length;
+    const successRate = totalSubmissions > 0
       ? Math.round((joined / totalSubmissions) * 100) : 0;
 
-    const now        = new Date();
+    const now = new Date();
     const weeklyData = [];
 
     for (let w = 3; w >= 0; w--) {
@@ -367,35 +372,35 @@ app.get('/api/reports/recruiter', protect, async (req, res) => {
       });
 
       weeklyData.push({
-        week:       `W${4 - w}`,
-        submitted:  wC.length,
+        week: `W${4 - w}`,
+        submitted: wC.length,
         interviews: wC.filter(c => hasAnyInterview(c)).length,
-        selected:   wC.filter(c => hasStatus(c, 'Selected')).length,
-        rejected:   wC.filter(c => hasStatus(c, 'Rejected')).length,
-        hold:       wC.filter(c => hasStatus(c, 'Hold')).length,
-        joined:     wC.filter(c => hasStatus(c, 'Joined')).length,
+        selected: wC.filter(c => hasStatus(c, 'Selected')).length,
+        rejected: wC.filter(c => hasStatus(c, 'Rejected')).length,
+        hold: wC.filter(c => hasStatus(c, 'Hold')).length,
+        joined: wC.filter(c => hasStatus(c, 'Joined')).length,
       });
     }
 
-    const MONTHS      = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const monthlyData = [];
     for (let i = 11; i >= 0; i--) {
-      const d      = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const mStart = new Date(d.getFullYear(), d.getMonth(), 1);
-      const mEnd   = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999);
-      const mC     = all.filter(c => {
+      const mEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999);
+      const mC = all.filter(c => {
         const cd = new Date(c.createdAt);
         return cd >= mStart && cd <= mEnd;
       });
       if (mC.length > 0 || i < 6) {
         monthlyData.push({
-          month:      MONTHS[d.getMonth()],
-          submitted:  mC.length,
+          month: MONTHS[d.getMonth()],
+          submitted: mC.length,
           interviews: mC.filter(c => hasAnyInterview(c)).length,
-          selected:   mC.filter(c => hasStatus(c, 'Selected')).length,
-          rejected:   mC.filter(c => hasStatus(c, 'Rejected')).length,
-          hold:       mC.filter(c => hasStatus(c, 'Hold')).length,
-          joined:     mC.filter(c => hasStatus(c, 'Joined')).length,
+          selected: mC.filter(c => hasStatus(c, 'Selected')).length,
+          rejected: mC.filter(c => hasStatus(c, 'Rejected')).length,
+          hold: mC.filter(c => hasStatus(c, 'Hold')).length,
+          joined: mC.filter(c => hasStatus(c, 'Joined')).length,
         });
       }
     }
