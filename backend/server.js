@@ -1,4 +1,4 @@
-import 'dotenv/config'; // CRITICAL: Loads .env BEFORE any other imports
+﻿import 'dotenv/config'; // CRITICAL: Loads .env BEFORE any other imports
 
 import express from 'express';
 import cors from 'cors';

@@ -11,7 +11,7 @@
     "adm-zip": "^0.5.17",
     "bcryptjs": "^2.4.3",
     "compromise": "^14.14.5",
-    "cors": "^2.8.5",
+    "cors": "^2.8.6",
     "docx-merger": "^1.2.2",
     "docxtemplater": "^3.68.3",
     "dotenv": "^16.6.1",
@@ -26,7 +26,7 @@
     "jszip": "^3.10.1",
     "mammoth": "^1.12.0",
     "mongodb": "^7.1.1",
-    "mongoose": "^7.5.0",
+    "mongoose": "^7.8.9",
     "multer": "^2.0.2",
     "multer-storage-cloudinary": "^4.0.0",
     "nodemailer": "^8.0.4",
@@ -40,6 +40,6 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
-    "nodemon": "^3.0.1"
+    "nodemon": "^3.1.14"
   }
 }

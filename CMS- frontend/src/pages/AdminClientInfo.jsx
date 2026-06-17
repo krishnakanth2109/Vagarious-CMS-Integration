@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useCallback } from "react";
+﻿import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/AuthContext";
 import {
@@ -351,7 +351,6 @@ export default function AdminClientInfo() {
     setLoading(true);
     try {
       const headers = await getAuthHeader();
-      const nextActive = client.active === false;
       const res = await fetch(`${API_URL}/clients`, { headers });
       if (!res.ok) throw new Error();
       const data = await res.json();

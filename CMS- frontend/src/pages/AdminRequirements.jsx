@@ -1,4 +1,4 @@
-// --- START OF FILE AdminRequirements.jsx ---
+﻿// --- START OF FILE AdminRequirements.jsx ---
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/AuthContext";
