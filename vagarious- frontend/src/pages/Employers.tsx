@@ -1,15 +1,13 @@
-// import { useState } from "react";
-import { useState, useEffect } from "react";
-import { useLocation } from "react-router-dom";
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
 import axios from "axios";
-import { 
-  ArrowRight, 
-  CheckCircle2, 
-  Building2, 
-  Users, 
-  Zap, 
+import {
+  ArrowRight,
+  CheckCircle2,
+  Building2,
+  Users,
+  Zap,
   Shield,
   Clock,
   Award,
@@ -20,7 +18,7 @@ import {
   ShoppingBag,
   Headphones,
   Send,
-  Loader2 
+  Loader2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -81,21 +79,11 @@ const hiringProcess = [
 ];
 
 const Employers = () => {
-  const location = useLocation();
-
-useEffect(() => {
-  if (location.hash === "#hiring-form") {
-    const element = document.getElementById("hiring-form");
-    if (element) {
-      element.scrollIntoView({ behavior: "smooth" });
-    }
-  }
-}, [location]);
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
-  
-  const API_URL = import.meta.env.VITE_API_URL;
+
+  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
   const [formData, setFormData] = useState<FormData>({
     companyName: "",
@@ -117,7 +105,7 @@ useEffect(() => {
     if (!formData.contactPerson || formData.contactPerson.trim().length < 2) {
       newErrors.contactPerson = "Contact person name is required.";
     }
-    
+
     const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
     if (!formData.email || !emailRegex.test(formData.email)) {
       newErrors.email = "Please enter a valid professional email address.";
@@ -141,7 +129,7 @@ useEffect(() => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!validate()) {
       toast({
         title: "Validation Error",
@@ -154,7 +142,10 @@ useEffect(() => {
     setLoading(true);
 
     try {
-      const response = await axios.post(`${API_URL}/employer-requirements`, formData);
+      const response = await axios.post(`${API_URL}/externalclients`, {
+        ...formData,
+        source: "Vagarious",
+      });
 
       if (response.data.success) {
         toast({
@@ -191,7 +182,7 @@ useEffect(() => {
     // --- STRICT INPUT FILTERING ---
     // 1. Prevent numbers in Name, Location, and Company Name
     if (["contactPerson", "location", "companyName"].includes(name)) {
-      filteredValue = value.replace(/[0-9]/g, ""); 
+      filteredValue = value.replace(/[0-9]/g, "");
     }
 
     // 2. Prevent letters/symbols in Phone and Positions
@@ -372,7 +363,7 @@ useEffect(() => {
                 Submit Your Hiring Requirement
               </h2>
               <p className="text-muted-foreground mb-8">
-                Fill in the form and our recruitment specialist will get back to you within 24 hours 
+                Fill in the form and our recruitment specialist will get back to you within 24 hours
                 to discuss your requirements in detail.
               </p>
               <div className="space-y-4">

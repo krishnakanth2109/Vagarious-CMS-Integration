@@ -25,10 +25,10 @@ const AdminReports = lazy(() => import('@/pages/AdminReports'));
 const AdminSettings = lazy(() => import('@/pages/AdminSettings'));
 const AgreementGenerator = lazy(() => import('@/pages/AgreementGenerator'));
 const MockInterviewsDashboard = lazy(() => import('@/pages/MockInterviewsDashboard'));
-const InterviewSession        = lazy(() => import('@/pages/InterviewSession'));
-const JobApplications         = lazy(() => import('@/pages/JobApplications'));
-const AdminContactInquiries   = lazy(() => import('@/pages/AdminContactInquiries'));
-
+const InterviewSession = lazy(() => import('@/pages/InterviewSession'));
+const JobApplications = lazy(() => import('@/pages/JobApplications'));
+const ExternalContacts = lazy(() => import('@/pages/ExternalContacts'));
+const ExternalClients = lazy(() => import('@/pages/ExternalClients'));
 // Manager Specific Pages (Lazy)
 const ManagerDashboard = lazy(() => import('@/pages/ManagerDashboard'));
 const ManagerMessages = lazy(() => import('@/pages/ManagerMessages'));
@@ -68,12 +68,12 @@ function ProtectedRoute({ children, allowedRoles }) {
 function PublicRoute({ children }) {
   const { isAuthenticated, userRole, loading } = useAuth();
   if (loading) return null;
-  
+
   if (isAuthenticated) {
     const destination = (userRole === 'admin' || userRole === 'manager') ? '/admin' : '/recruiter';
     return <Navigate to={destination} replace />;
   }
-  
+
   return children;
 }
 
@@ -109,7 +109,9 @@ function AppRoutes() {
           <Route path="settings" element={<AdminSettings />} />
           <Route path="agreements" element={<AgreementGenerator />} />
           <Route path="job-applications" element={<JobApplications />} />
-          <Route path="contact-inquiries" element={<AdminContactInquiries />} />
+          <Route path="externalcontacts" element={<Navigate to="external-imports/contacts" replace />} />
+          <Route path="external-imports/contacts" element={<ExternalContacts />} />
+          <Route path="external-imports/clients" element={<ExternalClients />} />
         </Route>
 
         {/* ===================== RECRUITER ROUTES ===================== */}
