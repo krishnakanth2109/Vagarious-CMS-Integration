@@ -27,6 +27,7 @@ const AgreementGenerator = lazy(() => import('@/pages/AgreementGenerator'));
 const MockInterviewsDashboard = lazy(() => import('@/pages/MockInterviewsDashboard'));
 const InterviewSession        = lazy(() => import('@/pages/InterviewSession'));
 const JobApplications         = lazy(() => import('@/pages/JobApplications'));
+const AdminContactInquiries   = lazy(() => import('@/pages/AdminContactInquiries'));
 
 // Manager Specific Pages (Lazy)
 const ManagerDashboard = lazy(() => import('@/pages/ManagerDashboard'));
@@ -108,6 +109,7 @@ function AppRoutes() {
           <Route path="settings" element={<AdminSettings />} />
           <Route path="agreements" element={<AgreementGenerator />} />
           <Route path="job-applications" element={<JobApplications />} />
+          <Route path="contact-inquiries" element={<AdminContactInquiries />} />
         </Route>
 
         {/* ===================== RECRUITER ROUTES ===================== */}

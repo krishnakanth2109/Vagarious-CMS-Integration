@@ -5,7 +5,7 @@ import {
   LayoutDashboard, UserPlus, Briefcase,
   Building2, Receipt, ClipboardList, MessageSquare,
   BarChart3, Settings, Power, User, Users, Calendar,
-  Video, FileText, Handshake, FileInput // <-- Added FileInput icon
+  Video, FileText, Handshake, FileInput, Mail // <-- Added FileInput and Mail icons
 } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -33,6 +33,7 @@ export default function Sidebar({ isOpen, toggleSidebar }) {
     { name: 'Messages', path: '/admin/messages', icon: MessageSquare },
     { name: 'Agreements', path: '/admin/agreements', icon: Handshake },
     { name: 'Mock Interviews', path: '/admin/mock', icon: Video },
+    { name: 'Contact Inquiries', path: '/admin/contact-inquiries', icon: Mail },
     { name: 'Offer Letters', isExternal: true, url: 'https://automated-offer-letter-generator-mocha.vercel.app/?jr_id=l_4387424181', icon: FileText },
 
     { name: 'Reports', path: '/admin/reports', icon: BarChart3 },
@@ -67,6 +68,7 @@ export default function Sidebar({ isOpen, toggleSidebar }) {
       { name: 'Messages', path: '/admin/messages', icon: MessageSquare },
       { name: 'Agreements', path: '/admin/agreements', icon: Handshake },
       { name: 'Mock Interviews', path: '/admin/mock', icon: Video },
+      { name: 'Contact Inquiries', path: '/admin/contact-inquiries', icon: Mail },
       // { name: 'Offer Letters',      isExternal: true, url: 'https://automated-offer-letter-generator-mocha.vercel.app/?jr_id=l_4387424181',     icon: FileText }, 
 
       { name: 'Reports', path: '/admin/reports', icon: BarChart3 },
