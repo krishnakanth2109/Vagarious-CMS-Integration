@@ -4,8 +4,11 @@ import path from 'path';
 import fs from 'fs';
 import Candidate from '../models/Candidate.js';
 import User from '../models/User.js';
+import Job from '../models/Job.js';
+import CandidateSubmission from '../models/CandidateSubmission.js';
 import { parseResume } from './resumeParser.js';
 import { protect } from '../middleware/authMiddleware.js';
+import { bulkImportCandidates } from '../controllers/bulkImportController.js';
 import { updateCandidateStatus, updateCandidateRemarks, inlineUpdateCandidate } from '../controllers/candidateStatusController.js';
 
 const router = express.Router();
@@ -18,6 +21,8 @@ const resolveUserName = (u) => {
   const full = `${u.firstName || ''} ${u.lastName || ''}`.trim();
   return full || u.username || u.email || 'Unknown';
 };
+
+const normalizeName = (value) => String(value || '').trim().toLowerCase();
 
 // ─── Multer Setup ─────────────────────────────────────────────────────────────
 const UPLOAD_DIR = 'uploads/';
@@ -58,6 +63,18 @@ const sanitizeBody = (body) => {
   if (typeof data.skills === 'string') {
     data.skills = data.skills.split(',').map(s => s.trim()).filter(Boolean);
   }
+  // status may arrive as a JSON string from FormData
+  if (typeof data.status === 'string') {
+    try { data.status = JSON.parse(data.status); } catch (_) {
+      data.status = data.status ? [data.status] : ['Submitted'];
+    }
+  }
+  // customFields may arrive as a JSON string from FormData
+  if (typeof data.customFields === 'string') {
+    try { data.customFields = JSON.parse(data.customFields); } catch (_) {
+      data.customFields = {};
+    }
+  }
   if (data.offersInHand      === 'true')  data.offersInHand      = true;
   if (data.offersInHand      === 'false') data.offersInHand      = false;
   if (data.servingNoticePeriod === 'true')  data.servingNoticePeriod = true;
@@ -90,7 +107,6 @@ router.post('/parse-resume', upload.single('resume'), async (req, res) => {
           contact:          parsedResult.data.contact         || '',
           skills:           parsedResult.data.skills          || '',
           totalExperience:  parsedResult.data.totalExperience || '',
-          position:         parsedResult.data.position        || '',
         },
       });
     }
@@ -108,6 +124,8 @@ router.post('/parse-resume', upload.single('resume'), async (req, res) => {
 // FIX 2: Added .lean() — returns plain JS objects instead of full Mongoose
 //         documents. For a large candidate list this is ~3× faster to serialise
 //         and send, because Mongoose doesn't attach getters/setters/virtuals.
+router.post('/bulk-import', express.json({ limit: '10mb' }), bulkImportCandidates);
+
 router.get('/', async (req, res) => {
   try {
     const query = {};
@@ -144,9 +162,23 @@ router.get('/', async (req, res) => {
       .populate('recruiterId', 'name firstName lastName email')
       .sort({ createdAt: -1 })
       .lean(); // FIX 2: plain objects — faster serialisation on large lists
-    console.log(`[getCandidates] Found ${candidates.length} candidates for query:`, query);
-    if (candidates.length > 0) {
-      console.log(`- Sample: ${candidates[0].firstName} ${candidates[0].lastName} recId: ${candidates[0].recruiterId}`);
+    if (req.query.includeSubmissions === 'true' && candidates.length > 0) {
+      const candidateIds = candidates.map((candidate) => candidate._id);
+      const submissions = await CandidateSubmission.find({ candidateId: { $in: candidateIds } })
+        .populate('submittedBy', 'name firstName lastName email')
+        .sort({ submittedAt: -1, createdAt: -1 })
+        .lean();
+
+      const submissionsByCandidate = submissions.reduce((map, submission) => {
+        const key = String(submission.candidateId);
+        if (!map.has(key)) map.set(key, []);
+        map.get(key).push(submission);
+        return map;
+      }, new Map());
+
+      candidates.forEach((candidate) => {
+        candidate.submissions = submissionsByCandidate.get(String(candidate._id)) || [];
+      });
     }
 
     res.json(candidates);
@@ -203,19 +235,32 @@ router.post('/', upload.single('resume'), async (req, res) => {
   try {
     let candidateData = sanitizeBody(req.body);
 
+    // ── Extract and remove submissions from candidateData before saving ────────
+    let submissionsPayload = [];
+    if (candidateData.submissions) {
+      try {
+        submissionsPayload = typeof candidateData.submissions === 'string'
+          ? JSON.parse(candidateData.submissions)
+          : candidateData.submissions;
+      } catch (_) {
+        submissionsPayload = [];
+      }
+      delete candidateData.submissions;
+    }
+
     if (req.file) {
       candidateData.resumeUrl          = `/uploads/${req.file.filename}`;
       candidateData.resumeOriginalName = req.file.originalname;
     }
 
     let targetRecruiterId   = req.user._id;
-    let targetRecruiterName = resolveUserName(req.user); // FIX 4: shared helper
+    let targetRecruiterName = resolveUserName(req.user);
 
     if ((req.user.role === 'admin' || req.user.role === 'manager') && candidateData.recruiterId) {
       const assignedRecruiter = await User.findById(candidateData.recruiterId);
       if (assignedRecruiter) {
         targetRecruiterId   = assignedRecruiter._id;
-        targetRecruiterName = resolveUserName(assignedRecruiter); // FIX 4
+        targetRecruiterName = resolveUserName(assignedRecruiter);
       }
     }
 
@@ -224,9 +269,84 @@ router.post('/', upload.single('resume'), async (req, res) => {
 
     const newCandidate = new Candidate(candidateData);
     await newCandidate.save();
-    res.status(201).json(newCandidate);
+
+    // ── Create CandidateSubmission records for each client/job row ─────────────
+    const submissionResults = [];
+    const submissionErrors  = [];
+
+    if (Array.isArray(submissionsPayload) && submissionsPayload.length > 0) {
+      // Deduplicate inside payload before saving (same jobId cannot appear twice)
+      const seenJobIds = new Set();
+
+      for (const sub of submissionsPayload) {
+        if (!sub.jobId) {
+          submissionErrors.push({ jobId: sub.jobId, error: 'jobId is required' });
+          continue;
+        }
+
+        if (seenJobIds.has(String(sub.jobId))) {
+          submissionErrors.push({ jobId: sub.jobId, error: 'Duplicate jobId in request — skipped' });
+          continue;
+        }
+        seenJobIds.add(String(sub.jobId));
+
+        try {
+          const job = await Job.findById(sub.jobId).lean();
+          if (!job) {
+            submissionErrors.push({ jobId: sub.jobId, error: 'Job not found' });
+            continue;
+          }
+
+          if (sub.clientName && normalizeName(sub.clientName) !== normalizeName(job.clientName)) {
+            submissionErrors.push({ jobId: sub.jobId, error: 'Selected job does not belong to the selected client.' });
+            continue;
+          }
+
+          // Check for duplicate in DB (shouldn't happen on new candidate, but be safe)
+          const existing = await CandidateSubmission.findOne({
+            tenantOwnerId: targetRecruiterId,
+            candidateId: newCandidate._id,
+            jobId: sub.jobId,
+          }).lean();
+
+          if (existing) {
+            submissionErrors.push({ jobId: sub.jobId, error: 'Candidate already submitted to this job.' });
+            continue;
+          }
+
+          const created = await CandidateSubmission.create({
+            candidateId:     newCandidate._id,
+            tenantOwnerId:   targetRecruiterId,
+            jobId:           sub.jobId,
+            jobCode:         job.jobCode,
+            clientName:      job.clientName,
+            position:        job.position,
+            pipelineStage:   sub.pipelineStage || 'Pipeline',
+            status:          sub.status || sub.pipelineStage || 'Pipeline',
+            submittedBy:     targetRecruiterId,
+            submittedByName: targetRecruiterName,
+            submittedAt:     new Date(),
+            notes:           sub.notes || '',
+          });
+
+          submissionResults.push(created);
+        } catch (subErr) {
+          console.error('[candidateRoutes] Submission create error:', subErr.message);
+          submissionErrors.push({ jobId: sub.jobId, error: subErr.message });
+        }
+      }
+    }
+
+    return res.status(201).json({
+      ...newCandidate.toObject(),
+      submissions:       submissionResults,
+      submissionErrors,
+    });
   } catch (error) {
     console.error('Create Error:', error);
+    if (error.code === 11000) {
+      return res.status(409).json({ message: 'Candidate already submitted to this job.' });
+    }
     res.status(400).json({ message: error.message });
   }
 });

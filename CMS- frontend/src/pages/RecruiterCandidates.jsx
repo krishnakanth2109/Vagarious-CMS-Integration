@@ -7,9 +7,14 @@ import {
   Building, Briefcase, Loader2, Ban, List, LayoutGrid,
   Calendar, GraduationCap, Award, UserCircle, Target,
   MessageCircle, Eye, IndianRupee, Upload, FileUp, X,
-  Trash2, AlertTriangle, FileSpreadsheet, Linkedin
+  Trash2, AlertTriangle, FileSpreadsheet, Linkedin, SlidersHorizontal
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import CandidateProfileLink from '@/components/CandidateProfileLink';
+import BulkCandidateImportModal from '@/components/BulkCandidateImportModal';
+import CandidateExportModal from '@/components/CandidateExportModal';
+import ClientJobSubmissions from '@/components/ClientJobSubmissions';
+import CandidatePipelinePanel from '@/components/CandidatePipelinePanel';
 
 const BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/$/, '');
 const API_URL = `${BASE_URL}/api`;
@@ -25,7 +30,200 @@ const getRecruiterName = (r) => {
   return r.email || '-';
 };
 
+const normalizeSkills = (skills) => {
+  const raw = Array.isArray(skills) ? skills : String(skills || '').split(/[,;\n]+/);
+  const seen = new Set();
+  return raw
+    .map((skill) => String(skill || '').trim())
+    .filter(Boolean)
+    .filter((skill) => {
+      const key = skill.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+};
+
 // ── UI Components ─────────────────────────────────────────────────────────────
+
+const normalizeSkillSearchText = (value) =>
+  String(value || '')
+    .toLowerCase()
+    .replace(/[._-]+/g, ' ')
+    .replace(/[^a-z0-9+#\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const getSkillTokens = (value) => normalizeSkillSearchText(value).split(' ').filter(Boolean);
+
+const parseSkillQuery = (query) => {
+  const seen = new Set();
+  return String(query || '')
+    .split(/[,\s]+/)
+    .map(normalizeSkillSearchText)
+    .filter(Boolean)
+    .filter((skill) => {
+      if (seen.has(skill)) return false;
+      seen.add(skill);
+      return true;
+    });
+};
+
+const normalizeCandidateSkills = (candidate) =>
+  normalizeSkills(candidate?.skills).map((skill) => ({
+    text: normalizeSkillSearchText(skill),
+    tokens: getSkillTokens(skill),
+  }));
+
+const skillMatchesCandidateSkill = (candidateSkill, searchedSkill) => {
+  if (!searchedSkill) return true;
+  if (candidateSkill.text === searchedSkill) return true;
+  const searchedTokens = searchedSkill.split(' ').filter(Boolean);
+  if (searchedTokens.length > 1) {
+    return searchedTokens.every((token) => candidateSkill.tokens.includes(token));
+  }
+  return candidateSkill.tokens.includes(searchedSkill);
+};
+
+const matchesAllSkills = (candidateSkills, searchedSkills) => {
+  if (searchedSkills.length === 0) return true;
+  return searchedSkills.every((skill) =>
+    candidateSkills.some((candidateSkill) => skillMatchesCandidateSkill(candidateSkill, skill))
+  );
+};
+
+const matchesRoleQuery = (candidate, query) => {
+  const normalizedQuery = String(query || '').trim().toLowerCase();
+  if (!normalizedQuery) return true;
+  const roleText = [
+    candidate?.position,
+    candidate?.currentRole,
+    candidate?.role,
+  ].filter(Boolean).join(' ').toLowerCase();
+  const terms = parseSkillQuery(normalizedQuery);
+  return roleText.includes(normalizedQuery) || terms.every((term) => roleText.includes(term));
+};
+
+const STATUS_BADGE_CLASSES = {
+  Pipeline: 'bg-gray-100 text-gray-700 border-gray-200',
+  Submitted: 'bg-blue-100 text-blue-700 border-blue-200',
+  'Shared Profiles': 'bg-indigo-100 text-indigo-700 border-indigo-200',
+  'Yet to attend': 'bg-amber-100 text-amber-800 border-amber-200',
+  Turnups: 'bg-cyan-100 text-cyan-700 border-cyan-200',
+  Selected: 'bg-green-100 text-green-700 border-green-200',
+  Rejected: 'bg-red-100 text-red-700 border-red-200',
+  Hold: 'bg-yellow-100 text-yellow-800 border-yellow-200',
+  Joined: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+  Backout: 'bg-rose-100 text-rose-700 border-rose-200',
+  'No Show': 'bg-slate-100 text-slate-700 border-slate-200',
+};
+
+const getStatusBadgeClass = (status) =>
+  STATUS_BADGE_CLASSES[status] || 'bg-slate-100 text-slate-700 border-slate-200';
+
+const StatusBadge = ({ status, className = '' }) => (
+  <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold leading-none whitespace-nowrap ${getStatusBadgeClass(status)} ${className}`}>
+    {status || 'Pipeline'}
+  </span>
+);
+
+const getSubmissionDateValue = (submission) =>
+  submission?.submittedAt || submission?.createdAt || submission?.updatedAt || '';
+
+const formatSubmissionDate = (submission) => {
+  const value = getSubmissionDateValue(submission);
+  return value ? new Date(value).toLocaleDateString('en-GB') : 'N/A';
+};
+
+const getSubmissionStatus = (submission) =>
+  submission?.pipelineStage || submission?.status || 'Pipeline';
+
+const getCandidateSubmissions = (candidate) => {
+  if (!Array.isArray(candidate?.submissions)) return [];
+  return [...candidate.submissions].sort((a, b) => {
+    const aTime = new Date(getSubmissionDateValue(a) || 0).getTime();
+    const bTime = new Date(getSubmissionDateValue(b) || 0).getTime();
+    return bTime - aTime;
+  });
+};
+
+const getCandidateStatuses = (candidate) => {
+  const submissions = getCandidateSubmissions(candidate);
+  const statuses = submissions.length
+    ? submissions.map(getSubmissionStatus)
+    : (Array.isArray(candidate?.status) ? candidate.status : [candidate?.status || 'Submitted']);
+
+  return [...new Set(statuses.filter(Boolean))];
+};
+
+const CandidateClientCell = ({ candidate, onShowMore }) => {
+  const submissions = getCandidateSubmissions(candidate);
+  if (submissions.length === 0) {
+    return <span className="font-medium text-slate-600">{candidate.client || 'N/A'}</span>;
+  }
+
+  const [latest, ...more] = submissions;
+  return (
+    <div className="flex items-center gap-2 whitespace-nowrap">
+      <span className="font-semibold text-slate-800">{latest.clientName || candidate.client || 'N/A'}</span>
+      {more.length > 0 && (
+        <button
+          type="button"
+          onClick={() => onShowMore(candidate)}
+          className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700 hover:bg-blue-100"
+        >
+          +{more.length} more
+        </button>
+      )}
+    </div>
+  );
+};
+
+const ClientSubmissionsModal = ({ candidate, onClose }) => {
+  const submissions = getCandidateSubmissions(candidate);
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-3xl overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl">
+        <div className="flex items-start justify-between gap-4 border-b border-slate-200 bg-slate-50 p-5">
+          <div>
+            <h3 className="text-lg font-bold text-slate-900">Submitted Clients & Jobs</h3>
+            <p className="mt-1 text-sm text-slate-500">{candidate?.name || 'Candidate'}</p>
+          </div>
+          <button onClick={onClose} className="rounded-lg p-1 text-slate-400 hover:bg-white hover:text-slate-700">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="max-h-[60vh] overflow-auto p-5">
+          <div className="overflow-hidden rounded-lg border border-slate-200">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-slate-50 text-xs font-semibold uppercase text-slate-500">
+                <tr>
+                  <th className="px-4 py-3">Client Name</th>
+                  <th className="px-4 py-3">Job Code</th>
+                  <th className="px-4 py-3">Job Position</th>
+                  <th className="px-4 py-3">Pipeline/Status</th>
+                  <th className="px-4 py-3">Submitted Date</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {submissions.map((submission) => (
+                  <tr key={submission._id || `${submission.jobId}-${submission.jobCode}`} className="align-top">
+                    <td className="px-4 py-3 font-semibold text-slate-800">{submission.clientName || 'N/A'}</td>
+                    <td className="px-4 py-3 font-mono text-xs text-blue-700">{submission.jobCode || 'N/A'}</td>
+                    <td className="px-4 py-3 text-slate-700">{submission.position || 'N/A'}</td>
+                    <td className="px-4 py-3"><StatusBadge status={getSubmissionStatus(submission)} /></td>
+                    <td className="px-4 py-3 text-slate-600">{formatSubmissionDate(submission)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const Button = ({ children, onClick, disabled, className = '', variant = 'default', size = 'md', type = 'button' }) => {
   const base = 'inline-flex items-center justify-center font-medium rounded-lg transition-colors focus:outline-none disabled:opacity-50 disabled:pointer-events-none';
@@ -72,17 +270,17 @@ const Modal = ({ open, onClose, children, maxWidth = 'max-w-2xl' }) => {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className={`relative bg-white dark:bg-slate-900 rounded-xl shadow-2xl w-full ${maxWidth} max-h-[90vh] overflow-y-auto`}>
+      <div className={`relative flex max-h-[90vh] w-full ${maxWidth} flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl dark:bg-slate-900`}>
         {children}
       </div>
     </div>
   );
 };
-const ModalHeader = ({ children }) => <div className="px-6 pt-6 pb-2">{children}</div>;
+const ModalHeader = ({ children }) => <div className="border-b border-slate-200 bg-slate-50 px-6 py-5">{children}</div>;
 const ModalTitle = ({ children, className = '' }) => <h2 className={`text-xl font-bold text-slate-900 dark:text-white ${className}`}>{children}</h2>;
 const ModalDesc = ({ children }) => <p className="text-sm text-slate-500 mt-1">{children}</p>;
-const ModalFooter = ({ children }) => <div className="px-6 pb-6 pt-4 flex justify-end gap-3">{children}</div>;
-const ModalBody = ({ children }) => <div className="px-6 py-4">{children}</div>;
+const ModalFooter = ({ children }) => <div className="flex justify-end gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4">{children}</div>;
+const ModalBody = ({ children }) => <div className="flex-1 overflow-y-auto bg-slate-100/60 px-6 py-5">{children}</div>;
 
 const NativeSelect = ({ value, onChange, children, className = '', disabled }) => (
   <select
@@ -97,6 +295,245 @@ const NativeSelect = ({ value, onChange, children, className = '', disabled }) =
 
 // ── Main Component ────────────────────────────────────────────────────────────
 
+const SkillsBadgeInput = ({ value, onChange, error }) => {
+  const [draft, setDraft] = useState('');
+  const skills = normalizeSkills(value);
+
+  const addFromText = (text) => {
+    const nextSkills = normalizeSkills([...skills, ...normalizeSkills(text)]);
+    onChange(nextSkills);
+    setDraft('');
+  };
+
+  const removeSkill = (skillToRemove) => {
+    onChange(skills.filter((skill) => skill !== skillToRemove));
+  };
+
+  const handleKeyDown = (event) => {
+    if (event.key === 'Enter' || event.key === ',') {
+      event.preventDefault();
+      if (draft.trim()) addFromText(draft);
+    } else if (event.key === 'Backspace' && !draft && skills.length > 0) {
+      removeSkill(skills[skills.length - 1]);
+    }
+  };
+
+  return (
+    <div className={`min-h-[42px] w-full rounded-lg border bg-white px-2 py-2 text-sm transition-colors focus-within:ring-2 focus-within:ring-blue-500 ${error ? 'border-red-500' : 'border-slate-300'}`}>
+      <div className="flex flex-wrap items-center gap-2">
+        {skills.map((skill) => (
+          <span key={skill} className="inline-flex items-center gap-1 rounded-full bg-blue-50 border border-blue-200 px-2 py-1 text-xs font-medium text-blue-700">
+            {skill}
+            <button
+              type="button"
+              onClick={() => removeSkill(skill)}
+              className="rounded-full p-0.5 text-blue-500 hover:bg-blue-100 hover:text-blue-700"
+              aria-label={`Remove ${skill}`}
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </span>
+        ))}
+        <input
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          onKeyDown={handleKeyDown}
+          onBlur={() => { if (draft.trim()) addFromText(draft); }}
+          placeholder={skills.length ? 'Add skill' : 'Type skill and press Enter'}
+          className="min-w-[160px] flex-1 border-0 bg-transparent px-1 py-1 text-sm outline-none placeholder:text-slate-400"
+        />
+      </div>
+    </div>
+  );
+};
+
+const DEFAULT_CANDIDATE_FIELD_CONFIG = [
+  { fieldName: 'firstName', label: 'First Name', fieldType: 'text', visible: true, isDefault: true },
+  { fieldName: 'lastName', label: 'Last Name', fieldType: 'text', visible: true, isDefault: true },
+  { fieldName: 'email', label: 'Email', fieldType: 'email', visible: true, isDefault: true },
+  { fieldName: 'contact', label: 'Phone', fieldType: 'tel', visible: true, isDefault: true },
+  { fieldName: 'dateOfBirth', label: 'Date of Birth', fieldType: 'date', visible: true, isDefault: true },
+  { fieldName: 'gender', label: 'Gender', fieldType: 'select', visible: true, isDefault: true },
+  { fieldName: 'linkedin', label: 'LinkedIn URL', fieldType: 'url', visible: true, isDefault: true },
+  { fieldName: 'currentLocation', label: 'Current Location', fieldType: 'text', visible: true, isDefault: true },
+  { fieldName: 'preferredLocation', label: 'Preferred Location', fieldType: 'text', visible: true, isDefault: true },
+  { fieldName: 'position', label: 'Current Role', fieldType: 'text', visible: true, isDefault: true },
+  { fieldName: 'client', label: 'Client', fieldType: 'select', visible: true, isDefault: true },
+  { fieldName: 'currentCompany', label: 'Current Company', fieldType: 'text', visible: true, isDefault: true },
+  { fieldName: 'industry', label: 'Industry', fieldType: 'text', visible: true, isDefault: true },
+  { fieldName: 'skills', label: 'Skills', fieldType: 'textarea', visible: true, isDefault: true },
+  { fieldName: 'education', label: 'Qualification', fieldType: 'text', visible: true, isDefault: true },
+  { fieldName: 'totalExperience', label: 'Total Experience', fieldType: 'number', visible: true, isDefault: true },
+  { fieldName: 'relevantExperience', label: 'Relevant Experience', fieldType: 'number', visible: true, isDefault: true },
+  { fieldName: 'ctc', label: 'Current CTC', fieldType: 'text', visible: true, isDefault: true },
+  { fieldName: 'ectc', label: 'Expected CTC', fieldType: 'text', visible: true, isDefault: true },
+  { fieldName: 'currentTakeHome', label: 'Current Take Home', fieldType: 'text', visible: true, isDefault: true },
+  { fieldName: 'expectedTakeHome', label: 'Expected Take Home', fieldType: 'text', visible: true, isDefault: true },
+  { fieldName: 'noticePeriod', label: 'Notice Period', fieldType: 'text', visible: true, isDefault: true },
+  { fieldName: 'servingNoticePeriod', label: 'Serving Notice', fieldType: 'select', visible: true, isDefault: true },
+  { fieldName: 'reasonForChange', label: 'Reason For Change', fieldType: 'textarea', visible: true, isDefault: true },
+  { fieldName: 'offersInHand', label: 'Offers in Hand', fieldType: 'select', visible: true, isDefault: true },
+  { fieldName: 'source', label: 'Source', fieldType: 'select', visible: true, isDefault: true },
+  { fieldName: 'status', label: 'Status', fieldType: 'select', visible: true, isDefault: true },
+  { fieldName: 'rating', label: 'Rating', fieldType: 'select', visible: true, isDefault: true },
+  { fieldName: 'dateAdded', label: 'Date Added', fieldType: 'date', visible: true, isDefault: true },
+  { fieldName: 'remarks', label: 'Remarks', fieldType: 'textarea', visible: true, isDefault: true },
+];
+
+const REQUIRED_CANDIDATE_FIELD_NAMES = new Set(['firstName', 'lastName', 'email', 'contact', 'position', 'skills', 'status', 'dateAdded']);
+
+const normalizeCandidateFieldConfig = (config = {}) => {
+  const storedFields = Array.isArray(config.fields) ? config.fields : [];
+  const storedCustomFields = Array.isArray(config.customFields) ? config.customFields : [];
+  return {
+    fields: DEFAULT_CANDIDATE_FIELD_CONFIG.map(field => {
+      const stored = storedFields.find(item => item.fieldName === field.fieldName) || {};
+      const isMandatory = field.fieldName === 'client'
+        ? false
+        : REQUIRED_CANDIDATE_FIELD_NAMES.has(field.fieldName) || Boolean(stored.isMandatory);
+      return { ...field, ...stored, isDefault: true, isMandatory, visible: isMandatory ? true : stored.visible !== false };
+    }),
+    customFields: storedCustomFields.map(field => ({ ...field, isDefault: false, isMandatory: Boolean(field.isMandatory), visible: field.visible !== false })),
+  };
+};
+
+const getCandidateFieldConfig = () => {
+  try {
+    const user = JSON.parse(sessionStorage.getItem('currentUser') || '{}');
+    return normalizeCandidateFieldConfig(user?.candidateSettings || { fields: DEFAULT_CANDIDATE_FIELD_CONFIG, customFields: [] });
+  } catch {
+    return normalizeCandidateFieldConfig({ fields: DEFAULT_CANDIDATE_FIELD_CONFIG, customFields: [] });
+  }
+};
+
+const saveCandidateFieldConfig = (config) => {
+  try {
+    const user = JSON.parse(sessionStorage.getItem('currentUser') || '{}');
+    sessionStorage.setItem('currentUser', JSON.stringify({ ...user, candidateSettings: config }));
+  } catch (_) {}
+};
+
+const CandidateCustomFieldInput = ({ field, value, onChange }) => {
+  const common = { value: value ?? '', onChange: e => onChange(field.fieldName, e.target.value) };
+  if (field.fieldType === 'textarea') return <textarea {...common} rows={3} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />;
+  if (field.fieldType === 'select') return <NativeSelect value={value ?? ''} onChange={val => onChange(field.fieldName, val)}><option value="">Select</option><option value="Yes">Yes</option><option value="No">No</option></NativeSelect>;
+  if (field.fieldType === 'checkbox') return <label className="inline-flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" checked={Boolean(value)} onChange={e => onChange(field.fieldName, e.target.checked)} className="h-4 w-4 rounded border-slate-300 text-blue-600" /> Enabled</label>;
+  return <Input type={field.fieldType || 'text'} {...common} />;
+};
+
+const CandidateFormControlModal = ({ isOpen, onClose, config, onConfigChange }) => {
+  const [draftField, setDraftField] = useState({ label: '', fieldType: 'text', visible: true });
+  if (!isOpen) return null;
+
+  const toggleDefault = (fieldName) => {
+    const updated = {
+      ...config,
+      fields: config.fields.map(field => field.fieldName === fieldName && !field.isMandatory ? { ...field, visible: !field.visible } : field),
+    };
+    onConfigChange(updated);
+  };
+  const toggleCustom = (index) => {
+    const updated = { ...config, customFields: [...config.customFields] };
+    updated.customFields[index] = { ...updated.customFields[index], visible: !updated.customFields[index].visible };
+    onConfigChange(updated);
+  };
+  const updateCustomLabel = (index, value) => {
+    const updated = { ...config, customFields: [...config.customFields] };
+    updated.customFields[index] = { ...updated.customFields[index], label: value };
+    onConfigChange(updated);
+  };
+  const deleteCustom = (index) => onConfigChange({ ...config, customFields: config.customFields.filter((_, idx) => idx !== index) });
+  const addCustom = () => {
+    const label = draftField.label.trim();
+    if (!label) return;
+    const fieldName = label.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || `custom_${Date.now()}`;
+    const existing = new Set([...config.fields, ...config.customFields].map(field => field.fieldName));
+    let uniqueName = fieldName;
+    let i = 2;
+    while (existing.has(uniqueName)) uniqueName = `${fieldName}_${i++}`;
+    onConfigChange({
+      ...config,
+      customFields: [...config.customFields, { ...draftField, label, fieldName: uniqueName, isDefault: false, isMandatory: false }],
+    });
+    setDraftField({ label: '', fieldType: 'text', visible: true });
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full max-w-5xl max-h-[92vh] overflow-hidden rounded-2xl bg-white shadow-2xl border border-slate-200 flex flex-col">
+        <div className="px-6 py-5 border-b border-slate-200 bg-slate-50 flex items-center justify-between gap-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-blue-600">Candidate Form Control</p>
+            <h2 className="text-xl font-bold text-slate-900">Manage form fields</h2>
+          </div>
+          <button onClick={onClose} className="h-9 w-9 rounded-lg text-slate-500 hover:bg-white hover:text-slate-900 text-xl leading-none">x</button>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-[0.9fr_1.1fr] min-h-0 flex-1">
+          <div className="border-r border-slate-200 bg-white p-5 overflow-y-auto">
+            <div className="rounded-xl border border-blue-100 bg-blue-50 p-4 space-y-3">
+              <p className="text-sm font-semibold text-slate-900">Create additional field</p>
+              <Input value={draftField.label} onChange={e => setDraftField(prev => ({ ...prev, label: e.target.value }))} placeholder="Field label" />
+              <NativeSelect value={draftField.fieldType} onChange={value => setDraftField(prev => ({ ...prev, fieldType: value }))}>
+                <option value="text">Text</option>
+                <option value="number">Number</option>
+                <option value="date">Date</option>
+                <option value="email">Email</option>
+                <option value="textarea">Long Text</option>
+                <option value="select">Select</option>
+                <option value="checkbox">Checkbox</option>
+              </NativeSelect>
+              <Button onClick={addCustom} className="w-full"><Plus className="h-4 w-4 mr-2" /> Add Field</Button>
+            </div>
+          </div>
+          <div className="p-5 overflow-y-auto bg-slate-50 space-y-5">
+            <section>
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Standard Fields</p>
+                <span className="text-xs text-slate-400">{config.fields.filter(field => field.visible).length}/{config.fields.length} visible</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {config.fields.map(field => (
+                  <button key={field.fieldName} onClick={() => toggleDefault(field.fieldName)} disabled={field.isMandatory} className={`text-left rounded-xl border p-3 transition ${field.visible ? 'border-blue-200 bg-white shadow-sm' : 'border-slate-200 bg-slate-100 opacity-70'} ${field.isMandatory ? 'cursor-not-allowed' : 'hover:border-blue-300'}`}>
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-sm font-semibold text-slate-800">{field.label}</span>
+                      <span className={`h-5 w-9 rounded-full p-0.5 transition ${field.visible ? 'bg-blue-600' : 'bg-slate-300'}`}><span className={`block h-4 w-4 rounded-full bg-white transition ${field.visible ? 'translate-x-4' : ''}`} /></span>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-1">{field.isMandatory ? 'Required' : field.fieldType}</p>
+                  </button>
+                ))}
+              </div>
+            </section>
+            <section>
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Additional Fields</p>
+                <span className="text-xs text-slate-400">{config.customFields.length} fields</span>
+              </div>
+              {config.customFields.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center"><p className="text-sm font-medium text-slate-800">No additional fields yet</p></div>
+              ) : (
+                <div className="space-y-3">
+                  {config.customFields.map((field, index) => (
+                    <div key={field.fieldName} className="rounded-xl border border-slate-200 bg-white p-3 flex flex-col sm:flex-row gap-3 sm:items-center">
+                      <Input value={field.label} onChange={e => updateCustomLabel(index, e.target.value)} className="sm:flex-1" />
+                      <Badge variant="outline">{field.fieldType}</Badge>
+                      <button onClick={() => toggleCustom(index)} className={`px-3 py-2 rounded-lg text-xs font-semibold ${field.visible ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-500'}`}>{field.visible ? 'Visible' : 'Hidden'}</button>
+                      <button onClick={() => deleteCustom(index)} className="px-3 py-2 rounded-lg text-xs font-semibold bg-red-50 text-red-600">Delete</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          </div>
+        </div>
+        <div className="px-6 py-4 border-t border-slate-200 bg-white flex justify-end">
+          <Button onClick={onClose}>Done</Button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export default function RecruiterCandidates() {
   const { currentUser, userRole, authHeaders } = useAuth(); 
   const { toast } = useToast();
@@ -110,6 +547,7 @@ export default function RecruiterCandidates() {
   const [isParsingResume, setIsParsingResume] = useState(false);
 
   const [searchTerm, setSearchTerm] = useState('');
+  const [roleSkillSearchTerm, setRoleSkillSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [viewMode, setViewMode] = useState('table');
   const [activeStatFilter, setActiveStatFilter] = useState(null);
@@ -122,18 +560,21 @@ export default function RecruiterCandidates() {
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, statusFilter, activeStatFilter]);
+  }, [searchTerm, roleSkillSearchTerm, statusFilter, activeStatFilter]);
 
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
+  const [clientPopoverCandidate, setClientPopoverCandidate] = useState(null);
   const [selectedCandidateId, setSelectedCandidateId] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoadingSubmissions, setIsLoadingSubmissions] = useState(false);
 
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
+  const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
   const [importFile, setImportFile] = useState(null);
   const [isImporting, setIsImporting] = useState(false);
   const [importResult, setImportResult] = useState(null);
@@ -171,7 +612,7 @@ export default function RecruiterCandidates() {
   const initialFormState = {
     firstName: '', lastName: '', email: '', contact: '', dateOfBirth: '', gender: '', linkedin: '',
     currentLocation: '', preferredLocation: '',
-    position: '', client: '', industry: '', currentCompany: '', skills: '',
+    position: '', client: '', industry: '', currentCompany: '', skills: [],
     totalExperience: '', relevantExperience: '',
     education: '',
     ctc: '', ectc: '',
@@ -189,10 +630,34 @@ export default function RecruiterCandidates() {
     rating: '0', assignedJobId: '',
     dateAdded: todayStr,
     notes: '', remarks: '',
-    active: true
+    customFields: {},
+    active: true,
+    submissions: [],   // ← multi client/job submission rows
   };
 
   const [formData, setFormData] = useState(initialFormState);
+  const [candidateFieldConfig, setCandidateFieldConfig] = useState(getCandidateFieldConfig);
+  const [candidateFormControlOpen, setCandidateFormControlOpen] = useState(false);
+
+  const handleCandidateConfigChange = (updated) => {
+    const normalized = normalizeCandidateFieldConfig(updated);
+    setCandidateFieldConfig(normalized);
+    saveCandidateFieldConfig(normalized);
+  };
+
+  const isCandidateFieldVisible = (fieldName) => {
+    const field = candidateFieldConfig.fields.find(item => item.fieldName === fieldName);
+    return field ? field.visible !== false : true;
+  };
+
+  const visibleCustomCandidateFields = useMemo(
+    () => candidateFieldConfig.customFields.filter(field => field.visible),
+    [candidateFieldConfig]
+  );
+
+  const handleCustomCandidateFieldChange = (fieldName, value) => {
+    setFormData(prev => ({ ...prev, customFields: { ...prev.customFields, [fieldName]: value } }));
+  };
 
   const checkEmailDuplicate = async (email) => {
     if (!email || !/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email.trim())) return;
@@ -282,7 +747,8 @@ export default function RecruiterCandidates() {
           firstName: prev.firstName || parsedFirst, lastName: prev.lastName || parsedLast,
           email: prev.email || result.data.email || '', contact: prev.contact || cleanContact || '',
           linkedin: prev.linkedin || result.data.linkedin || '', gender: prev.gender || result.data.gender || 'Not Specified',
-          skills: prev.skills || result.data.skills || '', totalExperience: prev.totalExperience || cleanTotalExp || '',
+          skills: normalizeSkills(prev.skills).length ? prev.skills : normalizeSkills(result.data.skills),
+          totalExperience: prev.totalExperience || cleanTotalExp || '',
           education: prev.education || result.data.education || '', currentLocation: prev.currentLocation || result.data.currentLocation || '',
           currentCompany: prev.currentCompany || result.data.currentCompany || '',
         }));
@@ -302,9 +768,9 @@ export default function RecruiterCandidates() {
       const headers = { ...authH };
 
       const isAdminOrManager = currentUser?.role === 'admin' || currentUser?.role === 'manager';
-      const candidateUrl = isAdminOrManager && currentUser?._id
-        ? `${API_URL}/candidates?recruiterId=${currentUser._id}`
-        : `${API_URL}/candidates`;
+      const params = new URLSearchParams({ includeSubmissions: 'true' });
+      if (isAdminOrManager && currentUser?._id) params.set('recruiterId', currentUser._id);
+      const candidateUrl = `${API_URL}/candidates?${params.toString()}`;
 
       const [candRes, jobRes, clientRes] = await Promise.all([
         fetch(candidateUrl, { headers }),
@@ -401,14 +867,12 @@ export default function RecruiterCandidates() {
     if (!pos) newErrors.position = "Position is required";
     else if (pos.length > 100) newErrors.position = "Max 100 characters allowed";
 
-    if (!data.client) newErrors.client = "Client is required";
-
     if (data.currentCompany && trimStr(data.currentCompany).length > 100) newErrors.currentCompany = "Max 100 characters";
     if (data.industry && trimStr(data.industry).length > 100) newErrors.industry = "Max 100 characters";
 
-    const skills = trimStr(data.skills);
-    if (!skills) newErrors.skills = "At least one skill is required";
-    else if (skills.length > 500) newErrors.skills = "Max 500 characters allowed";
+    const skills = normalizeSkills(data.skills);
+    if (skills.length === 0) newErrors.skills = "At least one skill is required";
+    else if (skills.join(', ').length > 500) newErrors.skills = "Max 500 characters allowed";
 
     if (data.education && trimStr(data.education).length > 200) newErrors.education = "Max 200 characters";
 
@@ -449,7 +913,7 @@ export default function RecruiterCandidates() {
   };
 
   const stats = useMemo(() => {
-    const countStatus = (s) => candidates.filter(c => Array.isArray(c.status) ? c.status.includes(s) : c.status === s).length;
+    const countStatus = (s) => candidates.filter(c => getCandidateStatuses(c).includes(s)).length;
     const todayStr2 = new Date().toLocaleDateString('en-CA');
     const todayCount = candidates.filter(c => {
       const d = c.dateAdded || c.createdAt;
@@ -465,13 +929,17 @@ export default function RecruiterCandidates() {
 
   const getFilteredCandidates = useMemo(() => {
     const todayLocal = new Date().toLocaleDateString('en-CA');
+    const searchedSkills = parseSkillQuery(roleSkillSearchTerm);
     return candidates.filter(c => {
       const searchMatch =
         c.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         c.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        c.candidateId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (Array.isArray(c.skills) && c.skills.some(skill => skill.toLowerCase().includes(searchTerm.toLowerCase())));
-      const currentStatusArr = Array.isArray(c.status) ? c.status : [c.status || ''];
+        c.candidateId?.toLowerCase().includes(searchTerm.toLowerCase());
+      const roleSkillMatch =
+        !roleSkillSearchTerm.trim() ||
+        matchesRoleQuery(c, roleSkillSearchTerm) ||
+        matchesAllSkills(normalizeCandidateSkills(c), searchedSkills);
+      const currentStatusArr = getCandidateStatuses(c);
       
       let statCardMatch = true;
       if (activeStatFilter === 'Today') {
@@ -482,9 +950,9 @@ export default function RecruiterCandidates() {
       }
       
       const statusDropdownMatch = statusFilter === 'all' || currentStatusArr.includes(statusFilter);
-      return searchMatch && statusDropdownMatch && statCardMatch;
+      return searchMatch && roleSkillMatch && statusDropdownMatch && statCardMatch;
     });
-  }, [candidates, searchTerm, statusFilter, activeStatFilter]);
+  }, [candidates, searchTerm, roleSkillSearchTerm, statusFilter, activeStatFilter]);
 
   // --- PAGINATION LOGIC ---
   const totalPages = Math.ceil(getFilteredCandidates.length / ITEMS_PER_PAGE);
@@ -493,40 +961,27 @@ export default function RecruiterCandidates() {
     currentPage * ITEMS_PER_PAGE
   );
 
+  const candidateExportColumns = useMemo(() => [
+    { key: 'candidateId', label: 'Candidate ID', value: c => c.candidateId || c._id?.slice(-6).toUpperCase() || '' },
+    { key: 'name', label: 'Name', value: c => c.name || '' },
+    { key: 'email', label: 'Email', value: c => c.email || '' },
+    { key: 'phone', label: 'Phone', value: c => c.contact || '' },
+    { key: 'client', label: 'Client', value: c => getCandidateSubmissions(c)[0]?.clientName || c.client || '' },
+    { key: 'position', label: 'Position', value: c => c.position || '' },
+    { key: 'status', label: 'Status', value: c => getCandidateStatuses(c).join(' | ') },
+    { key: 'totalExperience', label: 'Total Exp', value: c => c.totalExperience || '' },
+    { key: 'ctc', label: 'Current CTC', value: c => c.ctc || '' },
+    { key: 'ectc', label: 'Expected CTC', value: c => c.ectc || '' },
+    { key: 'noticePeriod', label: 'Notice Period', value: c => c.noticePeriod || '' },
+    { key: 'currentCompany', label: 'Current Company', value: c => c.currentCompany || '' },
+    { key: 'currentLocation', label: 'Location', value: c => c.currentLocation || '' },
+    { key: 'skills', label: 'Skills', value: c => Array.isArray(c.skills) ? c.skills.join(', ') : (c.skills || '') },
+    { key: 'dateAdded', label: 'Date Added', value: c => (c.dateAdded || c.createdAt) ? new Date(c.dateAdded || c.createdAt).toLocaleDateString('en-GB') : '' },
+  ], []);
+
   const handleExport = () => {
     if (getFilteredCandidates.length === 0) { toast({ title: "No data to export", variant: "destructive" }); return; }
-    try {
-      const rows = getFilteredCandidates.map(c => ({
-        'Candidate ID':    c.candidateId || c._id?.slice(-6).toUpperCase() || '',
-        'Name':            c.name || '',
-        'Email':           c.email || '',
-        'Phone':           c.contact || '',
-        'Client':          c.client || '',
-        'Position':        c.position || '',
-        'Status':          Array.isArray(c.status) ? c.status.join(' | ') : (c.status || ''),
-        'Total Exp':       c.totalExperience || '',
-        'Current CTC':     c.ctc || '',
-        'Expected CTC':    c.ectc || '',
-        'Notice Period':   c.noticePeriod || '',
-        'Current Company': c.currentCompany || '',
-        'Location':        c.currentLocation || '',
-        'Skills':          Array.isArray(c.skills) ? c.skills.join(', ') : (c.skills || ''),
-        'Date Added':      (c.dateAdded || c.createdAt) ? new Date(c.dateAdded || c.createdAt).toLocaleDateString('en-GB') : '',
-      }));
-
-      const ws = XLSX.utils.json_to_sheet(rows);
-      ws['!cols'] = Object.keys(rows[0] || {}).map(key => ({ wch: Math.max(key.length, ...rows.map(r => String(r[key] || '').length), 10) }));
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'Candidates');
-      XLSX.writeFile(wb, `Candidates_Export_${new Date().toISOString().split('T')[0]}.xlsx`);
-      toast({ title: 'Exported!', description: `${rows.length} candidate(s) exported to Excel.` });
-    } catch (err) { toast({ title: 'Export failed', variant: 'destructive' }); }
-  };
-
-  const getStatusBadgeVariant = (status) => {
-    if (status === 'Joined' || status === 'Selected') return 'default';
-    if (status === 'Rejected' || status === 'Backout' || status === 'No Show') return 'destructive';
-    return 'secondary';
+    setIsExportDialogOpen(true);
   };
 
   const getCandidateId = (c) => c.candidateId || c._id.substring(c._id.length - 6).toUpperCase();
@@ -547,7 +1002,7 @@ export default function RecruiterCandidates() {
       gender: c.gender || '', linkedin: c.linkedin || '',
       currentLocation: c.currentLocation || '', preferredLocation: c.preferredLocation || '',
       position: c.position || '', client: c.client || '', industry: c.industry || '',
-      currentCompany: c.currentCompany || '', skills: Array.isArray(c.skills) ? c.skills.join(', ') : c.skills || '',
+      currentCompany: c.currentCompany || '', skills: normalizeSkills(c.skills),
       totalExperience: c.totalExperience ? String(c.totalExperience) : '', relevantExperience: c.relevantExperience ? String(c.relevantExperience) : '',
       education: c.education || '', ctc: c.ctc ? String(c.ctc) : '', ectc: c.ectc ? String(c.ectc) : '',
       currentTakeHome: c.currentTakeHome || '', expectedTakeHome: c.expectedTakeHome || '',
@@ -557,9 +1012,34 @@ export default function RecruiterCandidates() {
       source: c.source || 'Portal', status: Array.isArray(c.status) ? c.status : [c.status || 'Submitted'],
       rating: c.rating?.toString() || '0', assignedJobId: typeof c.assignedJobId === 'object' ? c.assignedJobId._id : c.assignedJobId || '',
       dateAdded: c.dateAdded ? new Date(c.dateAdded).toISOString().split('T')[0] : '',
-      notes: c.notes || '', remarks: c.remarks || '', active: c.active !== false
+      notes: c.notes || '', remarks: c.remarks || '',
+      customFields: c.customFields || {},
+      active: c.active !== false,
+      submissions: [],  // will be loaded async below
     });
     setIsEditDialogOpen(true);
+
+    // Fetch existing submissions for this candidate
+    setIsLoadingSubmissions(true);
+    authHeaders().then((headers) =>
+      fetch(`${API_URL}/submissions?candidateId=${c._id}`, { headers })
+        .then((r) => r.ok ? r.json() : [])
+        .then((data) => {
+          const rows = Array.isArray(data) ? data.map((sub) => ({
+            _id: sub._id,
+            clientName: sub.clientName || '',
+            jobId: typeof sub.jobId === 'object' ? sub.jobId._id : sub.jobId || '',
+            jobCode: sub.jobCode || (sub.jobId?.jobCode) || '',
+            position: sub.position || (sub.jobId?.position) || '',
+            pipelineStage: sub.pipelineStage || sub.status || 'Pipeline',
+            _originalStage: sub.pipelineStage || sub.status || 'Pipeline',
+            isExisting: true,
+          })) : [];
+          setFormData((prev) => ({ ...prev, submissions: rows }));
+        })
+        .catch(() => {})
+        .finally(() => setIsLoadingSubmissions(false))
+    ).catch(() => setIsLoadingSubmissions(false));
   };
 
   const handleSave = async (isEdit) => {
@@ -599,40 +1079,181 @@ export default function RecruiterCandidates() {
     }
 
     if (!validateForm()) { toast({ title: "Validation Error", description: "Please fix the highlighted errors", variant: "destructive" }); return; }
+
+    // ── Validate submissions: prevent duplicates inside the selected rows ──────
+    if (!isEdit && Array.isArray(formData.submissions) && formData.submissions.length > 0) {
+      const seenJobIds = new Set();
+      let hasDupRow = false;
+      for (const sub of formData.submissions) {
+        if (sub.jobId && seenJobIds.has(sub.jobId)) { hasDupRow = true; break; }
+        if (sub.jobId) seenJobIds.add(sub.jobId);
+        if (sub.clientName && !sub.jobId) { hasDupRow = false; /* missing jobId — skip */ }
+      }
+      if (hasDupRow) {
+        toast({ title: "Duplicate Submission", description: "You have the same job added twice in submissions. Please remove the duplicate.", variant: "destructive" });
+        return;
+      }
+    }
+
     setIsSubmitting(true);
     try {
       const authH = await authHeaders();
       const headers = { ...authH, 'Content-Type': 'application/json' };
 
       const builtName = `${formData.firstName || ''} ${formData.lastName || ''}`.trim();
+
+      // Build submissions diff
+      const allRows = Array.isArray(formData.submissions) ? formData.submissions : [];
+      const existingRows = allRows.filter((r) => r.isExisting && r._id);
+      const incompleteRow = allRows.some((r) => !r.isExisting && (r.clientName || r.jobId) && !(r.clientName && r.jobId));
+      if (incompleteRow) {
+        toast({ title: 'Incomplete Submission', description: 'Select both client and job, or remove the incomplete submission row.', variant: 'destructive' });
+        setIsSubmitting(false);
+        return;
+      }
+      const newRows = allRows.filter((r) => !r.isExisting && r.clientName && r.jobId);
+
+      // Validate no duplicate jobIds in NEW rows
+      if (newRows.length > 0) {
+        const seenJobIds = new Set();
+        // Also include existing jobIds to prevent duplicating an existing submission
+        existingRows.forEach((r) => seenJobIds.add(r.jobId));
+        for (const sub of newRows) {
+          if (seenJobIds.has(sub.jobId)) {
+            toast({ title: 'Duplicate Submission', description: `Job ${sub.jobCode || sub.jobId} is already submitted. Remove the duplicate row.`, variant: 'destructive' });
+            setIsSubmitting(false);
+            return;
+          }
+          seenJobIds.add(sub.jobId);
+        }
+      }
+
       const payload = {
-        ...formData, firstName: formData.firstName.trim(), lastName: formData.lastName.trim(), name: builtName,
-        email: formData.email.trim(), contact: formData.contact.trim(), linkedin: formData.linkedin.trim(),
-        currentLocation: formData.currentLocation.trim(), preferredLocation: formData.preferredLocation.trim(),
-        position: formData.position.trim(), industry: formData.industry.trim(), currentCompany: formData.currentCompany.trim(),
-        education: formData.education.trim(), ctc: formData.ctc.trim(), ectc: formData.ectc.trim(),
-        currentTakeHome: formData.currentTakeHome.trim(), expectedTakeHome: formData.expectedTakeHome.trim(),
-        noticePeriod: formData.noticePeriod.trim(), reasonForChange: formData.reasonForChange.trim(),
-        offerPackage: formData.offerPackage.trim(), source: formData.source.trim(), remarks: formData.remarks.trim(),
+        ...formData,
+        firstName: formData.firstName.trim(),
+        lastName: formData.lastName.trim(),
+        name: builtName,
+        email: formData.email.trim(),
+        contact: formData.contact.trim(),
+        linkedin: formData.linkedin.trim(),
+        currentLocation: formData.currentLocation.trim(),
+        preferredLocation: formData.preferredLocation.trim(),
+        position: formData.position.trim(),
+        industry: formData.industry.trim(),
+        currentCompany: formData.currentCompany.trim(),
+        education: formData.education.trim(),
+        ctc: formData.ctc.trim(),
+        ectc: formData.ectc.trim(),
+        currentTakeHome: formData.currentTakeHome.trim(),
+        expectedTakeHome: formData.expectedTakeHome.trim(),
+        noticePeriod: formData.noticePeriod.trim(),
+        reasonForChange: formData.reasonForChange.trim(),
+        offerPackage: formData.offerPackage.trim(),
+        source: formData.source.trim(),
+        remarks: formData.remarks.trim(),
         assignedJobId: typeof formData.assignedJobId === 'object' ? formData.assignedJobId._id : formData.assignedJobId,
-        skills: typeof formData.skills === 'string' ? formData.skills.split(',').map((s) => s.trim()).filter(Boolean) : formData.skills,
-        rating: parseInt(formData.rating) || 0, servingNoticePeriod: formData.servingNoticePeriod === 'true', offersInHand: formData.offersInHand === 'true',
-        status: formData.status
+        skills: normalizeSkills(formData.skills),
+        rating: parseInt(formData.rating) || 0,
+        servingNoticePeriod: formData.servingNoticePeriod === 'true',
+        offersInHand: formData.offersInHand === 'true',
+        status: formData.status,
+        customFields: formData.customFields || {},
       };
+      // Remove submissions from the candidate payload — handled separately
+      delete payload.submissions;
+
       const url = isEdit ? `${API_URL}/candidates/${selectedCandidateId}` : `${API_URL}/candidates`;
       const method = isEdit ? 'PUT' : 'POST';
+
+      // For NEW candidate: attach new rows to the payload
+      if (!isEdit) {
+        const cleanNewRows = allRows.filter((s) => s.clientName && s.jobId).map((s) => ({
+          clientName: s.clientName,
+          jobId: s.jobId,
+          jobCode: s.jobCode,
+          position: s.position,
+          pipelineStage: s.pipelineStage || 'Pipeline',
+          status: s.pipelineStage || 'Pipeline',
+        }));
+        if (cleanNewRows.length > 0) payload.submissions = cleanNewRows;
+      }
+
       const res = await fetch(url, { method, headers, body: JSON.stringify(payload) });
       const data = await res.json();
-      if (res.ok) {
-        toast({ title: "Success", description: `Candidate ${isEdit ? 'updated' : 'added'} successfully` });
-        setIsAddDialogOpen(false); setIsEditDialogOpen(false);
-        const fixedData = { ...data, status: Array.isArray(data.status) ? data.status : [data.status || 'Submitted'] };
-        if (isEdit) setCandidates(prev => prev.map(c => c._id === selectedCandidateId ? { ...c, ...fixedData } : c));
-        else setCandidates(prev => [fixedData, ...prev]);
-        setFormData(initialFormState);
-      } else throw new Error(data.message || 'Operation failed');
-    } catch (error) { toast({ variant: "destructive", title: "Error", description: error.message || "Operation failed" }); } 
-    finally { setIsSubmitting(false); }
+      if (!res.ok) throw new Error(data.message || 'Operation failed');
+
+      // ── For EDIT: update existing submission stages + create new submissions ──
+      if (isEdit) {
+        const submissionPromises = [];
+
+        // 1. Update stages for existing submissions that changed
+        for (const row of existingRows) {
+          if (row._originalStage && row.pipelineStage !== row._originalStage) {
+            submissionPromises.push(
+              fetch(`${API_URL}/submissions/${row._id}`, {
+                method: 'PUT',
+                headers,
+                body: JSON.stringify({ pipelineStage: row.pipelineStage, status: row.pipelineStage }),
+              }).catch((e) => console.error('Stage update failed:', e))
+            );
+          }
+        }
+
+        // 2. Create new submission records
+        for (const row of newRows) {
+          submissionPromises.push(
+            fetch(`${API_URL}/submissions`, {
+              method: 'POST',
+              headers,
+              body: JSON.stringify({
+                candidateId: selectedCandidateId,
+                clientName: row.clientName,
+                jobId: row.jobId,
+                pipelineStage: row.pipelineStage || 'Pipeline',
+                status: row.pipelineStage || 'Pipeline',
+              }),
+            })
+              .then(async (r) => {
+                const body = await r.json().catch(() => ({}));
+                if (!r.ok) throw new Error(body.message || 'Submission failed');
+                return body;
+              })
+              .catch((e) => {
+                console.error('New submission failed:', e);
+                throw e;
+              })
+          );
+        }
+
+        const results = await Promise.allSettled(submissionPromises);
+        const failedCount = results.filter((r) => r.status === 'rejected').length;
+        const failedMessage = results.find((r) => r.status === 'rejected')?.reason?.message;
+
+        let desc = 'Candidate updated successfully.';
+        if (existingRows.filter((r) => r._originalStage !== r.pipelineStage).length > 0)
+          desc += ` Pipeline stages updated.`;
+        if (newRows.length > 0) desc += ` ${newRows.length} new submission(s) added.`;
+        if (failedCount > 0) desc += ` ${failedCount} submission update(s) failed.${failedMessage ? ` ${failedMessage}` : ''}`;
+
+        toast({ title: failedCount > 0 ? 'Partial Save' : 'Success', description: desc, variant: failedCount > 0 ? 'destructive' : 'default' });
+      } else {
+        const subCount = Array.isArray(data.submissions) ? data.submissions.length : 0;
+        const subErrCount = Array.isArray(data.submissionErrors) ? data.submissionErrors.length : 0;
+        let desc = 'Candidate added successfully.';
+        if (subCount > 0) desc += ` ${subCount} submission(s) saved.`;
+        if (subErrCount > 0) desc += ` ${subErrCount} submission(s) failed.`;
+        toast({ title: 'Success', description: desc });
+      }
+
+      setIsAddDialogOpen(false);
+      setIsEditDialogOpen(false);
+      await fetchData();
+      setFormData(initialFormState);
+    } catch (error) {
+      toast({ variant: 'destructive', title: 'Error', description: error.message || 'Operation failed' });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const toggleActiveStatus = async (id, currentStatus) => {
@@ -676,6 +1297,20 @@ export default function RecruiterCandidates() {
     finally { setIsImporting(false); }
   };
 
+  // ── Delete an existing submission (from the edit modal) ───────────────────
+  const handleDeleteSubmission = async (submissionId) => {
+    const authH = await authHeaders();
+    const res = await fetch(`${API_URL}/submissions/${submissionId}`, {
+      method: 'DELETE',
+      headers: { ...authH },
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || 'Failed to delete submission');
+    }
+    toast({ title: 'Submission removed', description: 'The client/job submission was deleted.' });
+  };
+
   const handleWhatsApp = (c) => {
     if (!c.contact) return;
     let phone = c.contact.replace(/\D/g, '');
@@ -688,7 +1323,7 @@ export default function RecruiterCandidates() {
   if (loading) return <div className="flex h-screen items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-blue-600" /></div>;
 
   const renderCandidateForm = () => (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 py-4">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="md:col-span-3 font-semibold border-b pb-1 text-slate-500 flex items-center gap-2"><UserCircle className="h-4 w-4" /> Personal Information</div>
 
       <div className="space-y-1">
@@ -714,19 +1349,19 @@ export default function RecruiterCandidates() {
         </div>
         {errors.contact && <span className="text-xs text-red-500">{errors.contact}</span>}
       </div>
-      <div className="space-y-1">
+      <div className={`space-y-1 ${isCandidateFieldVisible('dateOfBirth') ? '' : 'hidden'}`}>
         <Label className={errors.dateOfBirth ? "text-red-500" : ""}>Date of Birth</Label>
         <Input type="date" value={formData.dateOfBirth} onChange={e => handleInputChange('dateOfBirth', e.target.value)} max={new Date(Date.now() - 86400000).toISOString().split('T')[0]} className={errors.dateOfBirth ? "border-red-500" : ""} />
         {errors.dateOfBirth && <span className="text-xs text-red-500">{errors.dateOfBirth}</span>}
       </div>
-      <div className="space-y-1">
+      <div className={`space-y-1 ${isCandidateFieldVisible('gender') ? '' : 'hidden'}`}>
         <Label className={errors.gender ? "text-red-500" : ""}>Gender</Label>
         <NativeSelect value={formData.gender} onChange={val => handleInputChange('gender', val)} className={errors.gender ? "border-red-500" : ""}>
           <option value="">Select</option><option value="Male">Male</option><option value="Female">Female</option><option value="Other">Other</option><option value="Not Specified">Not Specified</option>
         </NativeSelect>
         {errors.gender && <span className="text-xs text-red-500">{errors.gender}</span>}
       </div>
-      <div className="space-y-1">
+      <div className={`space-y-1 ${isCandidateFieldVisible('linkedin') ? '' : 'hidden'}`}>
         <Label className={errors.linkedin ? "text-red-500" : ""}>LinkedIn URL</Label>
         <div className="relative">
           <Linkedin className="absolute left-2 top-2.5 h-4 w-4 text-slate-400" />
@@ -734,12 +1369,12 @@ export default function RecruiterCandidates() {
         </div>
         {errors.linkedin && <span className="text-xs text-red-500">{errors.linkedin}</span>}
       </div>
-      <div className="space-y-1">
+      <div className={`space-y-1 ${isCandidateFieldVisible('currentLocation') ? '' : 'hidden'}`}>
         <Label className={errors.currentLocation ? "text-red-500" : ""}>Current Location</Label>
         <Input value={formData.currentLocation} onChange={e => handleInputChange('currentLocation', e.target.value)} className={errors.currentLocation ? "border-red-500" : ""} />
         {errors.currentLocation && <span className="text-xs text-red-500">{errors.currentLocation}</span>}
       </div>
-      <div className="space-y-1">
+      <div className={`space-y-1 ${isCandidateFieldVisible('preferredLocation') ? '' : 'hidden'}`}>
         <Label className={errors.preferredLocation ? "text-red-500" : ""}>Preferred Location</Label>
         <Input value={formData.preferredLocation} onChange={e => handleInputChange('preferredLocation', e.target.value)} className={errors.preferredLocation ? "border-red-500" : ""} />
         {errors.preferredLocation && <span className="text-xs text-red-500">{errors.preferredLocation}</span>}
@@ -748,36 +1383,46 @@ export default function RecruiterCandidates() {
       <div className="md:col-span-3 font-semibold border-b pb-1 text-slate-500 mt-4 flex items-center gap-2"><Briefcase className="h-4 w-4" /> Professional Information</div>
 
       <div className="space-y-1">
-        <Label className={errors.position ? "text-red-500" : ""}>Role (Position) *</Label>
+        <Label className={errors.position ? "text-red-500" : ""}>Current Role *</Label>
         <Input value={formData.position} onChange={e => handleInputChange('position', e.target.value)} className={errors.position ? "border-red-500" : ""} placeholder="e.g. Frontend Developer" />
         {errors.position && <span className="text-xs text-red-500">{errors.position}</span>}
       </div>
-      <div className="space-y-1">
-        <Label className={errors.client ? "text-red-500" : ""}>Client *</Label>
-        <NativeSelect value={formData.client} onChange={val => handleInputChange('client', val)} className={errors.client ? "border-red-500" : ""}>
-          <option value="">Select Client</option>
-          {clients.map(client => <option key={client._id} value={client.companyName}>{client.companyName}</option>)}
-        </NativeSelect>
-        {errors.client && <span className="text-xs text-red-500">{errors.client}</span>}
-      </div>
-      <div className="space-y-1">
+      <div className={`space-y-1 ${isCandidateFieldVisible('currentCompany') ? '' : 'hidden'}`}>
         <Label className={errors.currentCompany ? "text-red-500" : ""}>Current Company</Label>
         <Input value={formData.currentCompany} onChange={e => handleInputChange('currentCompany', e.target.value)} className={errors.currentCompany ? "border-red-500" : ""} />
         {errors.currentCompany && <span className="text-xs text-red-500">{errors.currentCompany}</span>}
       </div>
-      <div className="space-y-1">
+      <div className={`space-y-1 ${isCandidateFieldVisible('industry') ? '' : 'hidden'}`}>
         <Label className={errors.industry ? "text-red-500" : ""}>Industry</Label>
         <Input value={formData.industry} onChange={e => handleInputChange('industry', e.target.value)} className={errors.industry ? "border-red-500" : ""} />
         {errors.industry && <span className="text-xs text-red-500">{errors.industry}</span>}
       </div>
       <div className="md:col-span-2 space-y-1">
-        <Label className={errors.skills ? "text-red-500" : ""}>Skills (comma separated) *</Label>
-        <Input value={formData.skills} onChange={e => handleInputChange('skills', e.target.value)} className={errors.skills ? "border-red-500" : ""} placeholder="e.g. React, Node.js" />
+        <Label className={errors.skills ? "text-red-500" : ""}>Skills *</Label>
+        <SkillsBadgeInput value={formData.skills} onChange={skills => handleInputChange('skills', skills)} error={errors.skills} />
         {errors.skills && <span className="text-xs text-red-500">{errors.skills}</span>}
       </div>
 
+      <div className="md:col-span-3 rounded-xl border border-blue-200 bg-blue-50/50 p-5 mt-2">
+        <ClientJobSubmissions
+          submissions={formData.submissions || []}
+          clients={clients}
+          jobs={jobs}
+          onChange={(rows) => handleInputChange('submissions', rows)}
+          errors={errors}
+          isEditMode={isEditDialogOpen}
+          onDeleteExisting={handleDeleteSubmission}
+        />
+        {isLoadingSubmissions && (
+          <div className="flex items-center gap-2 mt-3 text-xs text-slate-500">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            Loading existing submissions...
+          </div>
+        )}
+      </div>
+
       <div className="md:col-span-3 font-semibold text-slate-500 border-b pb-1 mt-4 flex items-center gap-2"><GraduationCap className="h-4 w-4" /> Education</div>
-      <div className="md:col-span-3 space-y-1">
+      <div className={`md:col-span-3 space-y-1 ${isCandidateFieldVisible('education') ? '' : 'hidden'}`}>
         <Label className={errors.education ? "text-red-500" : ""}>Qualification</Label>
         <Input value={formData.education} onChange={e => handleInputChange('education', e.target.value)} className={errors.education ? "border-red-500" : ""} placeholder="e.g. B.Tech from IIT Delhi" />
         {errors.education && <span className="text-xs text-red-500">{errors.education}</span>}
@@ -785,46 +1430,46 @@ export default function RecruiterCandidates() {
 
       <div className="md:col-span-3 font-semibold text-slate-500 border-b pb-1 mt-4 flex items-center gap-2"><IndianRupee className="h-4 w-4" /> Experience & Availability</div>
 
-      <div className="space-y-1">
+      <div className={`space-y-1 ${isCandidateFieldVisible('totalExperience') ? '' : 'hidden'}`}>
         <Label className={errors.totalExperience ? "text-red-500" : ""}>Total Exp (Yrs)</Label>
         <Input value={formData.totalExperience} onChange={e => handleInputChange('totalExperience', e.target.value)} className={errors.totalExperience ? "border-red-500" : ""} placeholder="Numbers only (e.g. 3.5)" />
         {errors.totalExperience && <span className="text-xs text-red-500">{errors.totalExperience}</span>}
       </div>
-      <div className="space-y-1">
+      <div className={`space-y-1 ${isCandidateFieldVisible('relevantExperience') ? '' : 'hidden'}`}>
         <Label className={errors.relevantExperience ? "text-red-500" : ""}>Relevant Exp (Yrs)</Label>
         <Input value={formData.relevantExperience} onChange={e => handleInputChange('relevantExperience', e.target.value)} className={errors.relevantExperience ? "border-red-500" : ""} placeholder="Numbers only (e.g. 2)" />
         {errors.relevantExperience && <span className="text-xs text-red-500">{errors.relevantExperience}</span>}
       </div>
 
-      <div className="space-y-1">
+      <div className={`space-y-1 ${isCandidateFieldVisible('ctc') ? '' : 'hidden'}`}>
         <Label className={errors.ctc ? "text-red-500" : ""}>Current CTC (LPA)</Label>
         <Input value={formData.ctc} onChange={e => handleInputChange('ctc', e.target.value)} className={errors.ctc ? "border-red-500" : ""} />
         {errors.ctc && <span className="text-xs text-red-500">{errors.ctc}</span>}
       </div>
-      <div className="space-y-1">
+      <div className={`space-y-1 ${isCandidateFieldVisible('ectc') ? '' : 'hidden'}`}>
         <Label className={errors.ectc ? "text-red-500" : ""}>Expected CTC (LPA)</Label>
         <Input value={formData.ectc} onChange={e => handleInputChange('ectc', e.target.value)} className={errors.ectc ? "border-red-500" : ""} />
         {errors.ectc && <span className="text-xs text-red-500">{errors.ectc}</span>}
       </div>
 
-      <div className="space-y-1">
+      <div className={`space-y-1 ${isCandidateFieldVisible('currentTakeHome') ? '' : 'hidden'}`}>
         <Label className={errors.currentTakeHome ? "text-red-500" : ""}>Current Take Home</Label>
         <Input value={formData.currentTakeHome} onChange={e => handleInputChange('currentTakeHome', e.target.value)} className={errors.currentTakeHome ? "border-red-500" : ""} />
         {errors.currentTakeHome && <span className="text-xs text-red-500">{errors.currentTakeHome}</span>}
       </div>
-      <div className="space-y-1">
+      <div className={`space-y-1 ${isCandidateFieldVisible('expectedTakeHome') ? '' : 'hidden'}`}>
         <Label className={errors.expectedTakeHome ? "text-red-500" : ""}>Expected Take Home</Label>
         <Input value={formData.expectedTakeHome} onChange={e => handleInputChange('expectedTakeHome', e.target.value)} className={errors.expectedTakeHome ? "border-red-500" : ""} />
         {errors.expectedTakeHome && <span className="text-xs text-red-500">{errors.expectedTakeHome}</span>}
       </div>
 
-      <div className="space-y-1">
+      <div className={`space-y-1 ${isCandidateFieldVisible('noticePeriod') ? '' : 'hidden'}`}>
         <Label className={errors.noticePeriod ? "text-red-500" : ""}>Notice Period</Label>
         <Input value={formData.noticePeriod} onChange={e => handleInputChange('noticePeriod', e.target.value)} className={errors.noticePeriod ? "border-red-500" : ""} placeholder="e.g. 30 Days" />
         {errors.noticePeriod && <span className="text-xs text-red-500">{errors.noticePeriod}</span>}
       </div>
 
-      <div className="space-y-1">
+      <div className={`space-y-1 ${isCandidateFieldVisible('servingNoticePeriod') ? '' : 'hidden'}`}>
         <Label className={errors.servingNoticePeriod ? "text-red-500" : ""}>Serving Notice?</Label>
         <NativeSelect value={formData.servingNoticePeriod} onChange={val => handleInputChange('servingNoticePeriod', val)} className={errors.servingNoticePeriod ? "border-red-500" : ""}>
           <option value="false">No</option><option value="true">Yes</option>
@@ -832,7 +1477,7 @@ export default function RecruiterCandidates() {
         {errors.servingNoticePeriod && <span className="text-xs text-red-500">{errors.servingNoticePeriod}</span>}
       </div>
 
-      {formData.servingNoticePeriod === 'true' && (
+      {isCandidateFieldVisible('servingNoticePeriod') && formData.servingNoticePeriod === 'true' && (
         <div className="space-y-1">
           <Label className={errors.lwd ? "text-red-500" : ""}>LWD (Last Working Day) *</Label>
           <Input type="date" value={formData.lwd} onChange={e => handleInputChange('lwd', e.target.value)} className={errors.lwd ? "border-red-500" : ""} />
@@ -840,13 +1485,13 @@ export default function RecruiterCandidates() {
         </div>
       )}
 
-      <div className="space-y-1 md:col-span-2">
+      <div className={`space-y-1 md:col-span-2 ${isCandidateFieldVisible('reasonForChange') ? '' : 'hidden'}`}>
         <Label className={errors.reasonForChange ? "text-red-500" : ""}>Reason For Change</Label>
         <textarea value={formData.reasonForChange} onChange={e => handleInputChange('reasonForChange', e.target.value)} className={`w-full border rounded-lg px-3 py-2 text-sm h-10 ${errors.reasonForChange ? "border-red-500" : "border-slate-300"}`} />
         {errors.reasonForChange && <span className="text-xs text-red-500">{errors.reasonForChange}</span>}
       </div>
 
-      <div className="space-y-1">
+      <div className={`space-y-1 ${isCandidateFieldVisible('offersInHand') ? '' : 'hidden'}`}>
         <Label className={errors.offersInHand ? "text-red-500" : ""}>Offers in Hand?</Label>
         <NativeSelect value={formData.offersInHand} onChange={val => handleInputChange('offersInHand', val)} className={errors.offersInHand ? "border-red-500" : ""}>
           <option value="false">No</option><option value="true">Yes</option>
@@ -854,7 +1499,7 @@ export default function RecruiterCandidates() {
         {errors.offersInHand && <span className="text-xs text-red-500">{errors.offersInHand}</span>}
       </div>
       
-      {formData.offersInHand === 'true' && (
+      {isCandidateFieldVisible('offersInHand') && formData.offersInHand === 'true' && (
         <div className="space-y-1">
           <Label className={errors.offerPackage ? "text-red-500" : ""}>Package Amount *</Label>
           <Input value={formData.offerPackage} onChange={e => handleInputChange('offerPackage', e.target.value)} className={errors.offerPackage ? "border-red-500" : ""} placeholder="e.g. 15 LPA" />
@@ -864,7 +1509,7 @@ export default function RecruiterCandidates() {
 
       <div className="md:col-span-3 font-semibold text-slate-500 border-b pb-1 mt-4 flex items-center gap-2"><Target className="h-4 w-4" /> Recruitment Details</div>
 
-      <div className="space-y-1">
+      <div className={`space-y-1 ${isCandidateFieldVisible('source') ? '' : 'hidden'}`}>
         <Label className={errors.source ? "text-red-500" : ""}>Source *</Label>
         <NativeSelect value={isCustomSource ? 'Other' : formData.source} onChange={v => { if (v === 'Other') { setIsCustomSource(true); handleInputChange('source', '') } else { setIsCustomSource(false); handleInputChange('source', v) } }} className={errors.source ? "border-red-500" : ""}>
           {standardSources.map(s => <option key={s} value={s}>{s}</option>)}
@@ -874,25 +1519,7 @@ export default function RecruiterCandidates() {
         {errors.source && <span className="text-xs text-red-500">{errors.source}</span>}
       </div>
 
-      <div className="space-y-1">
-        <Label className={errors.status ? "text-red-500" : ""}>Status (Multi-select) *</Label>
-        <div className={`border rounded-lg p-2 min-h-[42px] flex flex-wrap gap-2 bg-white ${errors.status ? 'border-red-500' : 'border-slate-300'}`}>
-          {formData.status.length > 0 ? formData.status.map(status => (
-            <Badge key={status} variant="secondary" className="flex items-center gap-1">
-              {status}
-              <X className="h-3 w-3 cursor-pointer hover:text-red-500" onClick={() => removeStatus(status)} />
-            </Badge>
-          )) : <span className="text-sm text-slate-400 p-1">No status selected</span>}
-        </div>
-        <NativeSelect value="" onChange={addStatus}>
-          <option value="">Add a status...</option>
-          <option value="SELECT_ALL">✓ Select All</option>
-          {allStatuses.map(status => <option key={status} value={status} disabled={formData.status.includes(status)}>{status}</option>)}
-        </NativeSelect>
-        {errors.status && <span className="text-xs text-red-500">{errors.status}</span>}
-      </div>
-
-      <div className="space-y-1">
+      <div className={`space-y-1 ${isCandidateFieldVisible('rating') ? '' : 'hidden'}`}>
         <Label className={errors.rating ? "text-red-500" : ""}>Rating</Label>
         <NativeSelect value={formData.rating} onChange={v => handleInputChange('rating', v)} className={errors.rating ? "border-red-500" : ""}>
           {[1, 2, 3, 4, 5].map(r => <option key={r} value={r.toString()}>{r} Stars</option>)}
@@ -905,10 +1532,39 @@ export default function RecruiterCandidates() {
         <p className="text-xs text-slate-400 mt-0.5">Cannot be a future date. Defaults to today.</p>
         {errors.dateAdded && <span className="text-xs text-red-500">{errors.dateAdded}</span>}
       </div>
-      <div className="md:col-span-3 space-y-1 mt-2">
+      <div className={`md:col-span-3 space-y-1 mt-2 ${isCandidateFieldVisible('remarks') ? '' : 'hidden'}`}>
         <Label className={errors.remarks ? "text-red-500" : ""}>Remarks</Label>
         <textarea value={formData.remarks} onChange={e => handleInputChange('remarks', e.target.value)} className={`w-full border rounded-lg px-3 py-2 text-sm min-h-[80px] ${errors.remarks ? "border-red-500" : "border-slate-300"}`} />
         {errors.remarks && <span className="text-xs text-red-500">{errors.remarks}</span>}
+      </div>
+
+      <div className="md:col-span-3 rounded-xl border border-slate-200 bg-white p-5 mt-4 shadow-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Additional Fields</p>
+            <h3 className="text-base font-semibold text-slate-900 mt-1">Custom candidate inputs</h3>
+          </div>
+          {!isEditDialogOpen && (
+            <Button variant="outline" onClick={() => setCandidateFormControlOpen(true)} className="gap-2">
+              <SlidersHorizontal className="h-4 w-4" /> Manage Fields
+            </Button>
+          )}
+        </div>
+        {visibleCustomCandidateFields.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {visibleCustomCandidateFields.map(field => (
+              <div key={field.fieldName} className={field.fieldType === 'textarea' ? 'md:col-span-2' : ''}>
+                <Label>{field.label}</Label>
+                <CandidateCustomFieldInput field={field} value={formData.customFields?.[field.fieldName]} onChange={handleCustomCandidateFieldChange} />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-lg border border-dashed border-slate-300 bg-white p-6 text-center">
+            <p className="text-sm font-medium text-slate-800">No additional fields enabled</p>
+            <p className="text-xs text-slate-500 mt-1">Use Form Control to add or show custom fields here.</p>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -937,8 +1593,8 @@ export default function RecruiterCandidates() {
                 </Button>
               )}
               <Button variant="outline" onClick={handleExport}><Download className="mr-2 h-4 w-4" /> Export</Button>
-              <Button variant="outline" className="border-green-500 text-green-700 hover:bg-green-50" onClick={() => { setIsImportDialogOpen(true); setImportFile(null); setImportResult(null); }}>
-                <FileSpreadsheet className="mr-2 h-4 w-4" /> Import Excel
+              <Button variant="outline" className="border-green-500 text-green-700 hover:bg-green-50" onClick={() => setIsImportDialogOpen(true)}>
+                <FileSpreadsheet className="mr-2 h-4 w-4" /> Import Bulk Candidates
               </Button>
               <Button onClick={() => { setFormData(initialFormState); setErrors({}); setIsAddDialogOpen(true); setIsCustomSource(false); }}>
                 <Plus className="mr-2 h-4 w-4" /> Add Candidate
@@ -963,9 +1619,15 @@ export default function RecruiterCandidates() {
 
           <div className="p-4 border border-slate-200 rounded-xl bg-white shadow-sm">
             <div className="flex flex-col md:flex-row gap-4 justify-between items-center">
-              <div className="relative w-full md:max-w-md">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                <Input placeholder="Search name, ID or skills..." className="pl-10" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+              <div className="grid w-full grid-cols-1 gap-3 md:max-w-3xl md:grid-cols-2">
+                <div className="relative w-full">
+                  <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                  <Input placeholder="Search name, email, ID..." className="pl-10" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+                </div>
+                <div className="relative w-full">
+                  <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                  <Input placeholder="Search role / skills" className="pl-10" value={roleSkillSearchTerm} onChange={e => setRoleSkillSearchTerm(e.target.value)} />
+                </div>
               </div>
               <div className="flex gap-3">
                 <NativeSelect value={statusFilter} onChange={setStatusFilter} className="w-44">
@@ -1017,7 +1679,8 @@ export default function RecruiterCandidates() {
                         <td className="p-3 pl-4 whitespace-nowrap"><input type="checkbox" checked={selectedCandidates.includes(c._id)} onChange={() => toggleSelectCandidate(c._id)} className="h-4 w-4 rounded" /></td>
                         <td className="p-3 font-mono text-xs text-blue-600 font-bold cursor-pointer whitespace-nowrap" onClick={() => { navigator.clipboard.writeText(getCandidateId(c)); toast({ title: "Copied ID" }); }}>{getCandidateId(c)}</td>
                         <td className="p-3 whitespace-nowrap">
-                          <span className="font-semibold text-slate-900">{c.name}</span>
+                          <CandidateProfileLink candidate={c}>{c.name}</CandidateProfileLink>
+                          <div className="mt-0.5 text-xs font-medium text-slate-400">{c.position || '-'}</div>
                         </td>
                         <td className="p-3 text-sm text-slate-600 whitespace-nowrap">
                           <div className="flex items-center gap-2">{c.contact}
@@ -1025,16 +1688,18 @@ export default function RecruiterCandidates() {
                           </div>
                         </td>
                         <td className="p-3 text-sm text-slate-600 whitespace-nowrap"><span className="truncate max-w-[150px] block" title={c.email}>{c.email}</span></td>
-                        <td className="p-3 text-slate-600 whitespace-nowrap">{c.client}</td>
+                        <td className="p-3 whitespace-nowrap">
+                          <CandidateClientCell candidate={c} onShowMore={setClientPopoverCandidate} />
+                        </td>
                         <td className="p-3 text-xs text-slate-600 max-w-[150px] truncate whitespace-nowrap" title={Array.isArray(c.skills) ? c.skills.join(', ') : c.skills}>{formatSkills(c.skills)}</td>
                         <td className="p-3 text-sm text-slate-600 whitespace-nowrap">{formatDate(c.dateAdded || c.createdAt)}</td>
                         <td className="p-3 text-sm whitespace-nowrap">{c.totalExperience ? `${c.totalExperience} Yrs` : '-'}</td>
                         <td className="p-3 text-xs whitespace-nowrap"><div>{c.ctc || '-'}</div><div className="text-green-600">{c.ectc || '-'}</div></td>
                         <td className="p-3 whitespace-nowrap">
-                          <div className="flex flex-wrap gap-1">
-                            {Array.isArray(c.status) ? c.status.map(s => (
-                              <Badge key={s} variant={getStatusBadgeVariant(s)} className="text-[10px] px-1 py-0 whitespace-nowrap">{s}</Badge>
-                            )) : <Badge variant={getStatusBadgeVariant(c.status)} className="whitespace-nowrap">{c.status}</Badge>}
+                          <div className="flex flex-wrap gap-1.5 min-w-[140px] max-w-[240px]">
+                            {getCandidateStatuses(c).map((status) => (
+                              <StatusBadge key={status} status={status} />
+                            ))}
                           </div>
                         </td>
                         <td className="p-3 text-xs text-slate-500 truncate max-w-[150px] whitespace-nowrap">{c.remarks || '-'}</td>
@@ -1089,19 +1754,21 @@ export default function RecruiterCandidates() {
                     <div className="flex justify-between mb-4">
                       <div className="flex gap-3">
                         <div>
-                          <h3 className="font-bold text-slate-900">{c.name}</h3>
+                          <h3 className="font-bold text-slate-900">
+                            <CandidateProfileLink candidate={c}>{c.name}</CandidateProfileLink>
+                          </h3>
                           <p className="text-sm text-blue-600 font-mono">{getCandidateId(c)}</p>
                         </div>
                       </div>
                       <div className="flex flex-wrap gap-1 justify-end max-w-[50%]">
-                        {Array.isArray(c.status) ? c.status.slice(0, 2).map(s => (
-                          <Badge key={s} variant={getStatusBadgeVariant(s)} className="text-[10px]">{s}</Badge>
-                        )) : <Badge variant={getStatusBadgeVariant(c.status)}>{c.status}</Badge>}
-                        {Array.isArray(c.status) && c.status.length > 2 && <span className="text-xs text-slate-500">+{c.status.length - 2}</span>}
+                        {getCandidateStatuses(c).slice(0, 2).map((status) => (
+                          <StatusBadge key={status} status={status} />
+                        ))}
+                        {getCandidateStatuses(c).length > 2 && <span className="text-xs text-slate-500">+{getCandidateStatuses(c).length - 2}</span>}
                       </div>
                     </div>
                     <div className="space-y-2 text-sm text-slate-600">
-                      <div className="flex items-center gap-2"><Building className="h-4 w-4" /> {c.client}</div>
+                      <div className="flex items-center gap-2"><Building className="h-4 w-4" /> <CandidateClientCell candidate={c} onShowMore={setClientPopoverCandidate} /></div>
                       <div className="flex items-center gap-2"><Award className="h-4 w-4" /> {formatSkills(c.skills)}</div>
                       <div className="flex items-center gap-2"><Mail className="h-4 w-4" /> {c.email}</div>
                       <div className="flex items-center gap-2"><Phone className="h-4 w-4" /> {c.contact}</div>
@@ -1147,6 +1814,13 @@ export default function RecruiterCandidates() {
         </div>
       </main>
 
+      {clientPopoverCandidate && (
+        <ClientSubmissionsModal
+          candidate={clientPopoverCandidate}
+          onClose={() => setClientPopoverCandidate(null)}
+        />
+      )}
+
       {/* Delete Confirm Modal */}
       <Modal open={isDeleteConfirmOpen} onClose={() => setIsDeleteConfirmOpen(false)}>
         <ModalHeader>
@@ -1162,9 +1836,14 @@ export default function RecruiterCandidates() {
       </Modal>
 
       {/* Add / Edit Modal */}
-      <Modal open={isAddDialogOpen || isEditDialogOpen} onClose={() => { setIsAddDialogOpen(false); setIsEditDialogOpen(false); }} maxWidth="max-w-6xl">
+      <Modal open={isAddDialogOpen || isEditDialogOpen} onClose={() => { setIsAddDialogOpen(false); setIsEditDialogOpen(false); }} maxWidth="max-w-7xl">
         <ModalHeader>
-          <ModalTitle>{isEditDialogOpen ? 'Edit Candidate' : 'Add New Candidate'}</ModalTitle>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <ModalTitle>{isEditDialogOpen ? 'Edit Candidate' : 'Add New Candidate'}</ModalTitle>
+            <Button variant="outline" onClick={() => setCandidateFormControlOpen(true)} className="gap-2">
+              <SlidersHorizontal className="h-4 w-4" /> Form Control
+            </Button>
+          </div>
         </ModalHeader>
         <ModalBody>
           {!isEditDialogOpen && (
@@ -1194,8 +1873,31 @@ export default function RecruiterCandidates() {
         </ModalFooter>
       </Modal>
 
+      <CandidateFormControlModal
+        isOpen={candidateFormControlOpen}
+        onClose={() => setCandidateFormControlOpen(false)}
+        config={candidateFieldConfig}
+        onConfigChange={handleCandidateConfigChange}
+      />
+
+      <BulkCandidateImportModal
+        open={isImportDialogOpen}
+        onClose={() => setIsImportDialogOpen(false)}
+        apiUrl={API_URL}
+        getHeaders={async () => ({ ...(await authHeaders()), 'Content-Type': 'application/json' })}
+        onImported={fetchData}
+      />
+
+      <CandidateExportModal
+        open={isExportDialogOpen}
+        onClose={() => setIsExportDialogOpen(false)}
+        candidates={getFilteredCandidates}
+        standardColumns={candidateExportColumns}
+        customFields={candidateFieldConfig.customFields}
+      />
+
       {/* Import Modal */}
-      <Modal open={isImportDialogOpen} onClose={() => { setIsImportDialogOpen(false); setImportFile(null); setImportResult(null); }}>
+      <Modal open={false} onClose={() => { setIsImportDialogOpen(false); setImportFile(null); setImportResult(null); }}>
         <ModalHeader>
           <ModalTitle className="flex items-center gap-2"><FileSpreadsheet className="h-5 w-5 text-green-600" /> Import Candidates from Excel</ModalTitle>
           <ModalDesc>Upload an Excel file (.xlsx / .xls) to bulk-import candidates.</ModalDesc>
@@ -1249,7 +1951,7 @@ export default function RecruiterCandidates() {
 
       {/* View Modal */}
       {viewingCandidate && (
-        <Modal open={isViewDialogOpen} onClose={() => setIsViewDialogOpen(false)} maxWidth="max-w-4xl">
+        <Modal open={isViewDialogOpen} onClose={() => setIsViewDialogOpen(false)} maxWidth="max-w-7xl">
           <ModalHeader>
             <div className="flex items-center gap-3">
               <div>
@@ -1257,13 +1959,15 @@ export default function RecruiterCandidates() {
                 <p className="text-sm font-mono text-blue-600">ID: {getCandidateId(viewingCandidate)}</p>
               </div>
               <div className="ml-auto flex flex-wrap gap-2">
-                {Array.isArray(viewingCandidate.status) ? viewingCandidate.status.map(s => <Badge key={s} variant={getStatusBadgeVariant(s)}>{s}</Badge>) : <Badge variant={getStatusBadgeVariant(viewingCandidate.status)}>{viewingCandidate.status}</Badge>}
+                {getCandidateStatuses(viewingCandidate).map((status) => (
+                  <StatusBadge key={status} status={status} />
+                ))}
               </div>
             </div>
           </ModalHeader>
           <ModalBody>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="bg-slate-50 p-4 rounded-lg space-y-3">
+              <div className="rounded-xl border border-slate-200 bg-white p-5 space-y-3 shadow-sm">
                 <h3 className="font-semibold text-slate-800 border-b pb-2 flex items-center gap-2"><UserCircle className="h-4 w-4" /> Personal Information</h3>
                 <div className="grid grid-cols-2 gap-y-3 text-sm">
                   <div><Label className="text-xs text-slate-500">Email</Label><div>{viewingCandidate.email}</div></div><br /><br />
@@ -1280,11 +1984,10 @@ export default function RecruiterCandidates() {
                   <div><Label className="text-xs text-slate-500">Preferred Location</Label><div>{viewingCandidate.preferredLocation || '-'}</div></div>
                 </div>
               </div>
-              <div className="bg-slate-50 p-4 rounded-lg space-y-3">
+              <div className="rounded-xl border border-slate-200 bg-white p-5 space-y-3 shadow-sm">
                 <h3 className="font-semibold text-slate-800 border-b pb-2 flex items-center gap-2"><Briefcase className="h-4 w-4" /> Professional Details</h3>
                 <div className="grid grid-cols-2 gap-y-3 text-sm">
-                  <div><Label className="text-xs text-slate-500">Position</Label><div>{viewingCandidate.position}</div></div>
-                  <div><Label className="text-xs text-slate-500">Client</Label><div>{viewingCandidate.client}</div></div>
+                  <div><Label className="text-xs text-slate-500">Current Role</Label><div>{viewingCandidate.position}</div></div>
                   <div><Label className="text-xs text-slate-500">Industry</Label><div>{viewingCandidate.industry || '-'}</div></div>
                   <div><Label className="text-xs text-slate-500">Current Company</Label><div>{viewingCandidate.currentCompany || '-'}</div></div>
                   <div className="col-span-2"><Label className="text-xs text-slate-500">Skills</Label>
@@ -1294,6 +1997,15 @@ export default function RecruiterCandidates() {
                   </div>
                 </div>
               </div>
+            </div>
+
+            {/* Client-wise Pipeline */}
+            <div className="mt-6 rounded-xl border border-slate-200 bg-white p-5">
+              <CandidatePipelinePanel
+                candidateId={viewingCandidate._id}
+                apiUrl={API_URL}
+                authHeaders={authHeaders}
+              />
             </div>
           </ModalBody>
           <ModalFooter>

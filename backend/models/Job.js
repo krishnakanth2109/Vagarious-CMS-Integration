@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 const jobSchema = mongoose.Schema({
   jobCode: { type: String, required: true, unique: true, trim: true },
   clientName: { type: String, required: true, trim: true },
+  jobType: { type: String, enum: ['Full-Time', 'Internship', 'Contract'], required: true },
   position: { type: String, required: true, trim: true },
   location: { type: String, default: '' },
   experience: { type: String, default: '' },
@@ -16,6 +17,7 @@ const jobSchema = mongoose.Schema({
   primaryRecruiter: { type: String, default: '' },
   secondaryRecruiter: { type: String, default: '' },
   skills: { type: String, default: '' },
+  jobDescription: { type: String, default: '' },
   jdLink: { type: String, default: '' },
   active: { type: Boolean, default: true },
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true }

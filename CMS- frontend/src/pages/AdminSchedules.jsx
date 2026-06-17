@@ -2,11 +2,13 @@ import React, { useEffect, useState, useMemo } from "react";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { 
-  Bell, Calendar, Clock, User, Trash2, Loader2, Plus, 
-  Briefcase, AlertCircle, Filter 
+  Calendar, Clock, Trash2, Loader2, Plus, Briefcase, Filter
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import CandidateProfileLink from "@/components/CandidateProfileLink";
+import CandidateSearchSelect from "@/components/CandidateSearchSelect";
+import { RecruiterDetailsTrigger } from "@/components/RecruiterDetailsModal";
 
 const BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/$/, '');
 const API_URL  = BASE_URL.endsWith('/api') ? BASE_URL : `${BASE_URL}/api`;
@@ -190,7 +192,7 @@ export default function AdminSchedules() {
           
           {/* Left Column: Scheduling Form */}
           <div className="lg:col-span-4 space-y-6">
-            <div className="border border-slate-200 dark:border-slate-800 rounded-xl shadow-lg bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm sticky top-6 overflow-hidden">
+            <div className="border border-slate-200 dark:border-slate-800 rounded-xl shadow-lg bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm sticky top-6 overflow-visible">
               <div className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white p-5">
                 <h3 className="flex items-center gap-2 text-xl font-semibold">
                   <Plus className="w-5 h-5" /> Schedule New
@@ -201,24 +203,12 @@ export default function AdminSchedules() {
                 {/* Candidate Select */}
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Candidate</label>
-                  <div className="relative">
-                     <User className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
-                     <select 
-                       value={selectedCandidateId}
-                       onChange={(e) => setSelectedCandidateId(e.target.value)}
-                       className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all dark:text-white"
-                     >
-                       <option value="">Select Candidate...</option>
-                       {candidates.map(c => {
-                         const label = `${c.name || `${c.firstName || ''} ${c.lastName || ''}`} - ${c.position || 'N/A'}`;
-                         return (
-                           <option key={c._id} value={c._id}>
-                             {label.length > 35 ? label.substring(0, 35) + '...' : label}
-                           </option>
-                         );
-                       })}
-                     </select>
-                  </div>
+                  <CandidateSearchSelect
+                    candidates={candidates}
+                    value={selectedCandidateId}
+                    onChange={setSelectedCandidateId}
+                    placeholder="Select Candidate..."
+                  />
                 </div>
 
                 {/* Date Picker */}
@@ -369,7 +359,9 @@ export default function AdminSchedules() {
 
                             <td className="px-5 py-4">
                               <div className="font-semibold text-slate-900 dark:text-white">
-                                {schedule.candidateId?.name || "Unknown"}
+                                <CandidateProfileLink candidate={schedule.candidateId} className="text-slate-900 dark:text-white">
+                                  {schedule.candidateId?.name || "Unknown"}
+                                </CandidateProfileLink>
                               </div>
                             </td>
 
@@ -410,7 +402,9 @@ export default function AdminSchedules() {
                             </td>
 
                             <td className="px-5 py-4 text-slate-600 dark:text-slate-400 font-medium">
-                              {schedule.recruiterId?.name || schedule.recruiterId?.firstName || "Admin"}
+                              <RecruiterDetailsTrigger recruiter={schedule.recruiterId || { name: "Admin" }} className="text-slate-600 dark:text-slate-400 font-medium">
+                                {schedule.recruiterId?.name || schedule.recruiterId?.firstName || "Admin"}
+                              </RecruiterDetailsTrigger>
                             </td>
 
                             <td className="px-5 py-4 text-right">

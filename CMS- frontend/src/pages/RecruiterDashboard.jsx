@@ -11,6 +11,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import clsx from 'clsx';
 import { useToast } from '@/hooks/use-toast';
+import CandidateProfileLink from '@/components/CandidateProfileLink';
 
 // ─── API base — module level, computed once ───────────────────────────────────
 const BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/$/, '');
@@ -333,7 +334,9 @@ export default function RecruiterDashboard() {
               <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                 {candidates.slice(0, 6).map((c) => (
                   <tr key={c.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                    <td className="px-6 py-4 font-bold text-gray-900 dark:text-white">{c.name}</td>
+                    <td className="px-6 py-4">
+                      <CandidateProfileLink candidate={c} className="text-gray-900 dark:text-white">{c.name}</CandidateProfileLink>
+                    </td>
                     <td className="px-6 py-4 text-gray-600 dark:text-gray-300">{c.position}</td>
                     <td className="px-6 py-4 font-medium text-blue-600 dark:text-blue-400">{c.status || 'Submitted'}</td>
                     <td className="px-6 py-4 text-gray-600 dark:text-gray-300">{c.client}</td>

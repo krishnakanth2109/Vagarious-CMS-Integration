@@ -24,6 +24,7 @@ import messageRoutes from './routes/messageRoutes.js';
 import channelRoutes from './routes/channelRoutes.js';
 import aiMockRoutes from './routes/aiMockRoutes.js';
 import jobApplicationRoutes from './routes/jobApplicationRoutes.js';
+import submissionRoutes from './routes/submissionRoutes.js';
 
 // ── Agreement Module Routes ───────────────────────────────────────────────────
 import { connectAgreementDB } from './config/agreementDatabase.js';
@@ -178,6 +179,7 @@ app.use('/api/messages', messageRoutes);
 app.use('/api/channels', channelRoutes);
 app.use('/api/ai-mock', aiMockRoutes);
 app.use('/api/job-applications', jobApplicationRoutes);
+app.use('/api/submissions', submissionRoutes);
 
 // ── Agreement Module Routes ────────────────────────────────────────────────────
 app.use('/agreement-companies', agreementCompanyRoutes);

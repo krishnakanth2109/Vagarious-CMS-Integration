@@ -27,6 +27,7 @@ const AgreementGenerator = lazy(() => import('@/pages/AgreementGenerator'));
 const MockInterviewsDashboard = lazy(() => import('@/pages/MockInterviewsDashboard'));
 const InterviewSession        = lazy(() => import('@/pages/InterviewSession'));
 const JobApplications         = lazy(() => import('@/pages/JobApplications'));
+const CandidateProfile        = lazy(() => import('@/pages/CandidateProfile'));
 
 // Manager Specific Pages (Lazy)
 const ManagerDashboard = lazy(() => import('@/pages/ManagerDashboard'));
@@ -96,6 +97,7 @@ function AppRoutes() {
         }>
           <Route index element={userRole === 'manager' ? <ManagerDashboard /> : <AdminDashboard />} />
           <Route path="add-candidate" element={<AddCandidate />} />
+          <Route path="candidates/:candidateId" element={<CandidateProfile />} />
           <Route path="my-candidates" element={<RecruiterCandidates />} />
           <Route path="recruiters" element={<AdminRecruiters />} />
           <Route path="clients" element={<AdminClientInfo />} />
@@ -118,6 +120,7 @@ function AppRoutes() {
         }>
           <Route index element={<RecruiterDashboard />} />
           <Route path="candidates" element={<RecruiterCandidates />} />
+          <Route path="candidates/:candidateId" element={<CandidateProfile />} />
           <Route path="assignments" element={<RecruiterAssignments />} />
           <Route path="schedules" element={<RecruiterSchedules />} />
           <Route path="messages" element={<MessagesRecruiters />} />

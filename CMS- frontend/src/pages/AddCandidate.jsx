@@ -4,13 +4,19 @@ import * as XLSX from 'xlsx';
 import {
   Search, Plus, Eye, Loader2, MessageCircle,
   ArrowUpDown, ArrowUp, ArrowDown, Users, Download,
-  X, Edit, Trash2, Ban, List, LayoutGrid, Calendar, 
-  GraduationCap, Award, UserCircle, Target, IndianRupee, 
-  Upload, FileUp, AlertTriangle, FileSpreadsheet, Linkedin, 
+  X, Edit, Trash2, Ban, List, LayoutGrid, Calendar,
+  GraduationCap, Award, UserCircle, Target, IndianRupee,
+  Upload, FileUp, AlertTriangle, FileSpreadsheet, Linkedin,
   Building, Mail, Phone, Briefcase, UserPlus,
-  CheckCircle2, FileText, Sparkles
+  CheckCircle2, FileText, Sparkles, SlidersHorizontal
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import CandidateProfileLink from '@/components/CandidateProfileLink';
+import BulkCandidateImportModal from '@/components/BulkCandidateImportModal';
+import CandidateExportModal from '@/components/CandidateExportModal';
+import ClientJobSubmissions from '@/components/ClientJobSubmissions';
+import CandidatePipelinePanel from '@/components/CandidatePipelinePanel';
+import { RecruiterDetailsTrigger } from '@/components/RecruiterDetailsModal';
 
 // ── ENV Config ────────────────────────────────────────────────────────────────
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
@@ -32,6 +38,276 @@ const getAuthHeader = () => {
 const inputCls = (err) =>
   `w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 ${err ? 'border-red-500' : 'border-slate-200 dark:border-slate-700'
   } bg-white dark:bg-slate-800`;
+
+const normalizeSkills = (skills) => {
+  const raw = Array.isArray(skills) ? skills : String(skills || '').split(/[,;\n]+/);
+  const seen = new Set();
+  return raw
+    .map((skill) => String(skill || '').trim())
+    .filter(Boolean)
+    .filter((skill) => {
+      const key = skill.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+};
+
+const normalizeSkillSearchText = (value) =>
+  String(value || '')
+    .toLowerCase()
+    .replace(/[._-]+/g, ' ')
+    .replace(/[^a-z0-9+#\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const getSkillTokens = (value) => normalizeSkillSearchText(value).split(' ').filter(Boolean);
+
+const parseSkillQuery = (query) => {
+  const seen = new Set();
+  return String(query || '')
+    .split(/[,\s]+/)
+    .map(normalizeSkillSearchText)
+    .filter(Boolean)
+    .filter((skill) => {
+      if (seen.has(skill)) return false;
+      seen.add(skill);
+      return true;
+    });
+};
+
+const normalizeCandidateSkills = (candidate) =>
+  normalizeSkills(candidate?.skills).map((skill) => ({
+    text: normalizeSkillSearchText(skill),
+    tokens: getSkillTokens(skill),
+  }));
+
+const skillMatchesCandidateSkill = (candidateSkill, searchedSkill) => {
+  if (!searchedSkill) return true;
+  if (candidateSkill.text === searchedSkill) return true;
+  const searchedTokens = searchedSkill.split(' ').filter(Boolean);
+  if (searchedTokens.length > 1) {
+    return searchedTokens.every((token) => candidateSkill.tokens.includes(token));
+  }
+  return candidateSkill.tokens.includes(searchedSkill);
+};
+
+const matchesAllSkills = (candidateSkills, searchedSkills) => {
+  if (searchedSkills.length === 0) return true;
+  return searchedSkills.every((skill) =>
+    candidateSkills.some((candidateSkill) => skillMatchesCandidateSkill(candidateSkill, skill))
+  );
+};
+
+const matchesRoleQuery = (candidate, query) => {
+  const normalizedQuery = String(query || '').trim().toLowerCase();
+  if (!normalizedQuery) return true;
+  const roleText = [
+    candidate?.position,
+    candidate?.currentRole,
+    candidate?.role,
+  ].filter(Boolean).join(' ').toLowerCase();
+  const terms = parseSkillQuery(normalizedQuery);
+  return roleText.includes(normalizedQuery) || terms.every((term) => roleText.includes(term));
+};
+
+const DEFAULT_CANDIDATE_FIELD_CONFIG = [
+  { fieldName: 'firstName', label: 'First Name', fieldType: 'text', visible: true, isDefault: true },
+  { fieldName: 'lastName', label: 'Last Name', fieldType: 'text', visible: true, isDefault: true },
+  { fieldName: 'contact', label: 'Contact Number', fieldType: 'text', visible: true, isDefault: true },
+  { fieldName: 'alternateNumber', label: 'Alternate Number', fieldType: 'text', visible: true, isDefault: true },
+  { fieldName: 'email', label: 'Email Address', fieldType: 'text', visible: true, isDefault: true },
+  { fieldName: 'currentLocation', label: 'Current Location', fieldType: 'text', visible: true, isDefault: true },
+  { fieldName: 'preferredLocation', label: 'Preferred Location', fieldType: 'text', visible: true, isDefault: true },
+  { fieldName: 'dateOfBirth', label: 'Date of Birth', fieldType: 'date', visible: true, isDefault: true },
+  { fieldName: 'dateAdded', label: 'Date Added', fieldType: 'date', visible: true, isDefault: true },
+  { fieldName: 'position', label: 'Current Role', fieldType: 'text', visible: true, isDefault: true },
+  { fieldName: 'client', label: 'Client / Target Company', fieldType: 'select', visible: true, isDefault: true },
+  { fieldName: 'currentCompany', label: 'Current Company', fieldType: 'text', visible: true, isDefault: true },
+  { fieldName: 'reasonForChange', label: 'Reason for Change', fieldType: 'text', visible: true, isDefault: true },
+  { fieldName: 'totalExperience', label: 'Total Experience', fieldType: 'number', visible: true, isDefault: true },
+  { fieldName: 'relevantExperience', label: 'Relevant Experience', fieldType: 'number', visible: true, isDefault: true },
+  { fieldName: 'skills', label: 'Skills', fieldType: 'textarea', visible: true, isDefault: true },
+  { fieldName: 'ctc', label: 'Current CTC', fieldType: 'text', visible: true, isDefault: true },
+  { fieldName: 'currentTakeHome', label: 'Current Take Home', fieldType: 'text', visible: true, isDefault: true },
+  { fieldName: 'ectc', label: 'Expected CTC', fieldType: 'text', visible: true, isDefault: true },
+  { fieldName: 'expectedTakeHome', label: 'Expected Take Home', fieldType: 'text', visible: true, isDefault: true },
+  { fieldName: 'noticePeriod', label: 'Notice Period', fieldType: 'text', visible: true, isDefault: true },
+  { fieldName: 'servingNoticePeriod', label: 'Serving Notice Period', fieldType: 'boolean', visible: true, isDefault: true },
+  { fieldName: 'offersInHand', label: 'Offer in Hand', fieldType: 'boolean', visible: true, isDefault: true },
+  { fieldName: 'source', label: 'Source', fieldType: 'select', visible: true, isDefault: true },
+  { fieldName: 'status', label: 'Status', fieldType: 'select', visible: true, isDefault: true },
+  { fieldName: 'recruiterId', label: 'Assign to User', fieldType: 'select', visible: true, isDefault: true },
+  { fieldName: 'remarks', label: 'Remarks', fieldType: 'textarea', visible: true, isDefault: true },
+];
+
+const REQUIRED_CANDIDATE_FIELD_NAMES = new Set(['firstName', 'lastName', 'contact', 'email', 'position', 'skills', 'status']);
+
+const normalizeCandidateFieldConfig = (config = {}) => {
+  const storedFields = Array.isArray(config.fields) ? config.fields : [];
+  const storedCustomFields = Array.isArray(config.customFields) ? config.customFields : [];
+  return {
+    fields: DEFAULT_CANDIDATE_FIELD_CONFIG.map((field) => {
+      const stored = storedFields.find(item => item.fieldName === field.fieldName) || {};
+      const isMandatory = field.fieldName === 'client'
+        ? false
+        : REQUIRED_CANDIDATE_FIELD_NAMES.has(field.fieldName) || Boolean(stored.isMandatory);
+      return { ...field, ...stored, isDefault: true, isMandatory, visible: isMandatory ? true : stored.visible ?? field.visible };
+    }),
+    customFields: storedCustomFields.map(field => ({ ...field, isDefault: false, isMandatory: Boolean(field.isMandatory), visible: field.visible !== false })),
+  };
+};
+
+const getCandidateFieldConfig = () => {
+  try {
+    const user = JSON.parse(sessionStorage.getItem('currentUser') || '{}');
+    return normalizeCandidateFieldConfig(user?.candidateSettings || { fields: DEFAULT_CANDIDATE_FIELD_CONFIG, customFields: [] });
+  } catch {
+    return normalizeCandidateFieldConfig({ fields: DEFAULT_CANDIDATE_FIELD_CONFIG, customFields: [] });
+  }
+};
+
+const saveCandidateFieldConfig = (updated) => {
+  try {
+    const user = JSON.parse(sessionStorage.getItem('currentUser') || '{}');
+    user.candidateSettings = normalizeCandidateFieldConfig(updated);
+    sessionStorage.setItem('currentUser', JSON.stringify(user));
+    // TODO: PATCH /api/user/settings or /api/tenant/settings if route exists.
+  } catch (e) {
+    console.error('Candidate config save failed', e);
+  }
+};
+
+const CandidateCustomFieldInput = ({ field, value, onChange }) => {
+  const handle = (e) => onChange(field.fieldName, e.target.value);
+  if (field.fieldType === 'boolean') {
+    return (
+      <select value={value ?? ''} onChange={handle} className={inputCls(false)}>
+        <option value="">Select</option><option value="true">Yes</option><option value="false">No</option>
+      </select>
+    );
+  }
+  if (field.fieldType === 'textarea') {
+    return <Textarea value={value ?? ''} onChange={handle} className={inputCls(false)} rows={3} />;
+  }
+  if (field.fieldType === 'select') {
+    return (
+      <select value={value ?? ''} onChange={handle} className={inputCls(false)}>
+        <option value="">Select</option>
+        {(field.options || []).map(option => <option key={option} value={option}>{option}</option>)}
+      </select>
+    );
+  }
+  return <input type={field.fieldType === 'date' ? 'date' : field.fieldType === 'number' ? 'number' : 'text'} value={value ?? ''} onChange={handle} className={inputCls(false)} />;
+};
+
+const CandidateFormControlModal = ({ isOpen, onClose, config, onConfigChange }) => {
+  const [editingIndex, setEditingIndex] = useState(null);
+  const [newField, setNewField] = useState({ label: '', fieldType: 'text', options: '' });
+  if (!isOpen) return null;
+
+  const toggleDefault = (i) => {
+    const updated = { ...config, fields: [...config.fields] };
+    if (updated.fields[i].isMandatory) return;
+    updated.fields[i] = { ...updated.fields[i], visible: !updated.fields[i].visible };
+    onConfigChange(updated);
+  };
+  const toggleCustom = (i) => {
+    const updated = { ...config, customFields: [...config.customFields] };
+    updated.customFields[i] = { ...updated.customFields[i], visible: !updated.customFields[i].visible };
+    onConfigChange(updated);
+  };
+  const editCustomLabel = (i, value) => {
+    const updated = { ...config, customFields: [...config.customFields] };
+    updated.customFields[i] = { ...updated.customFields[i], label: value };
+    onConfigChange(updated);
+  };
+  const deleteCustom = (i) => onConfigChange({ ...config, customFields: config.customFields.filter((_, idx) => idx !== i) });
+  const addCustomField = () => {
+    if (!newField.label.trim()) return;
+    const baseName = newField.label.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'custom_field';
+    const existing = new Set([...config.fields, ...config.customFields].map(field => field.fieldName));
+    let fieldName = baseName;
+    let suffix = 2;
+    while (existing.has(fieldName)) { fieldName = `${baseName}_${suffix}`; suffix += 1; }
+    const entry = {
+      fieldName, label: newField.label.trim(), fieldType: newField.fieldType,
+      isDefault: false, isMandatory: false, visible: true,
+      ...(newField.fieldType === 'select' && { options: newField.options.split(',').map(option => option.trim()).filter(Boolean) }),
+    };
+    onConfigChange({ ...config, customFields: [...config.customFields, entry] });
+    setNewField({ label: '', fieldType: 'text', options: '' });
+  };
+
+  const visibleDefaultCount = config.fields.filter(field => field.visible).length;
+  const visibleCustomCount = config.customFields.filter(field => field.visible).length;
+
+  return (
+    <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-[60] flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-slate-50 rounded-2xl shadow-2xl max-w-5xl w-full max-h-[92vh] overflow-hidden border border-slate-200" onClick={(e) => e.stopPropagation()}>
+        <div className="bg-white px-6 py-5 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <span className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center"><SlidersHorizontal className="w-5 h-5" /></span>
+            <div><h2 className="text-xl font-bold text-slate-900">Candidate Form Control</h2><p className="text-sm text-slate-500 mt-0.5">Configure fields for admin and recruiter candidate forms.</p></div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600">{visibleDefaultCount} standard active</span>
+            <span className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600">{visibleCustomCount} additional active</span>
+            <button onClick={onClose} className="p-2 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-900"><X className="w-5 h-5" /></button>
+          </div>
+        </div>
+        <div className="grid lg:grid-cols-[320px_1fr] h-[calc(92vh-82px)] min-h-0 overflow-hidden">
+          <aside className="bg-white border-r border-slate-200 p-5 min-h-0 overflow-y-auto">
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3">Add Custom Field</p>
+            <div className="space-y-3">
+              <div><label className="block text-xs font-medium text-slate-500 mb-1">Field Label</label><input placeholder="Example: Portfolio Link" value={newField.label} onChange={(e) => setNewField(prev => ({ ...prev, label: e.target.value }))} className={inputCls(false)} /></div>
+              <div><label className="block text-xs font-medium text-slate-500 mb-1">Field Type</label><select value={newField.fieldType} onChange={(e) => setNewField(prev => ({ ...prev, fieldType: e.target.value }))} className={inputCls(false)}><option value="text">Text</option><option value="number">Number</option><option value="date">Date</option><option value="boolean">Yes/No</option><option value="textarea">Textarea</option><option value="select">Select</option></select></div>
+              {newField.fieldType === 'select' && <div><label className="block text-xs font-medium text-slate-500 mb-1">Options</label><input placeholder="Option 1, Option 2" value={newField.options} onChange={(e) => setNewField(prev => ({ ...prev, options: e.target.value }))} className={inputCls(false)} /></div>}
+              <button onClick={addCustomField} className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 shadow-sm"><Plus className="w-4 h-4" />Add Field</button>
+            </div>
+            <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="text-sm font-semibold text-slate-900">Additional fields</p><p className="text-xs text-slate-500 mt-1">New fields appear in a separate section in the add candidate modal.</p></div>
+          </aside>
+          <div className="p-5 min-h-0 overflow-y-auto lg:overflow-hidden">
+            <div className="grid md:grid-cols-2 gap-5 md:h-full md:min-h-0">
+              <section className="space-y-3 md:min-h-0 md:flex md:flex-col">
+                <div className="flex items-center justify-between"><p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Standard Fields</p><span className="text-xs text-slate-400">{config.fields.length} fields</span></div>
+                <div className="space-y-2 md:min-h-0 md:overflow-y-auto md:pr-1">
+                  {config.fields.map((field, i) => (
+                    <div key={field.fieldName} className="rounded-xl border border-slate-200 bg-white p-3">
+                      <div className="flex items-center gap-3">
+                        <button type="button" disabled={field.isMandatory} onClick={() => toggleDefault(i)} className={`relative h-6 w-11 rounded-full transition-colors ${field.visible ? 'bg-blue-600' : 'bg-slate-200'} disabled:opacity-60`}><span className={`absolute top-1 h-4 w-4 rounded-full bg-white transition-all ${field.visible ? 'left-6' : 'left-1'}`} /></button>
+                        <div className="min-w-0 flex-1"><p className="text-sm font-medium text-slate-900 truncate">{field.label}</p><p className="text-xs text-slate-400 mt-0.5">{field.fieldName}</p></div>
+                        <span className="rounded-md bg-slate-100 px-2 py-1 text-xs text-slate-500">{field.fieldType}</span>
+                      </div>
+                      {field.isMandatory && <p className="text-xs text-red-500 mt-2">Required fields stay visible.</p>}
+                    </div>
+                  ))}
+                </div>
+              </section>
+              <section className="space-y-3 md:min-h-0 md:flex md:flex-col">
+                <div className="flex items-center justify-between"><p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Additional Fields</p><span className="text-xs text-slate-400">{config.customFields.length} fields</span></div>
+                {config.customFields.length === 0 ? <div className="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center"><p className="text-sm font-medium text-slate-800">No additional fields yet</p><p className="text-xs text-slate-500 mt-1">Create one from the panel on the left.</p></div> : (
+                  <div className="space-y-2 md:min-h-0 md:overflow-y-auto md:pr-1">
+                    {config.customFields.map((field, i) => (
+                      <div key={field.fieldName} className="rounded-xl border border-slate-200 bg-white p-3">
+                        <div className="flex items-center gap-3">
+                          <button type="button" onClick={() => toggleCustom(i)} className={`relative h-6 w-11 rounded-full transition-colors ${field.visible ? 'bg-blue-600' : 'bg-slate-200'}`}><span className={`absolute top-1 h-4 w-4 rounded-full bg-white transition-all ${field.visible ? 'left-6' : 'left-1'}`} /></button>
+                          <div className="min-w-0 flex-1">{editingIndex === i ? <input autoFocus value={field.label} onChange={(e) => editCustomLabel(i, e.target.value)} onBlur={() => setEditingIndex(null)} className={inputCls(false)} /> : <><p className="text-sm font-medium text-slate-900 truncate">{field.label}</p><p className="text-xs text-slate-400 mt-0.5">{field.fieldName}</p></>}</div>
+                          <span className="rounded-md bg-slate-100 px-2 py-1 text-xs text-slate-500">{field.fieldType}</span>
+                        </div>
+                        <div className="flex justify-end gap-1 mt-3"><button onClick={() => setEditingIndex(i)} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-100"><Edit className="w-3.5 h-3.5" />Edit</button><button onClick={() => deleteCustom(i)} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium text-red-600 hover:bg-red-50"><Trash2 className="w-3.5 h-3.5" />Delete</button></div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 // ── StatCard Component ────────────────────────────────────────────────────────
 const StatCard = ({ title, value, colorTheme, active, onClick, hasDot }) => {
@@ -70,7 +346,7 @@ const formatSkills = (skills) => !skills ? 'N/A' : Array.isArray(skills) ? skill
 const getSafeDate = (d) => {
   if (!d) return '';
   if (typeof d === 'string' && d.length >= 10) return d.substring(0, 10);
-  try { return new Date(d).toISOString().split('T')[0]; } catch(e) { return ''; }
+  try { return new Date(d).toISOString().split('T')[0]; } catch (e) { return ''; }
 };
 
 // ✅ Returns firstName only for recruiter column display
@@ -82,11 +358,73 @@ const getRecruiterName = (r) => {
   return r.email || 'Unknown';
 };
 
+const getCandidateRecruiterDetails = (candidate, recruiters = []) => {
+  const recruiter = candidate?.recruiterId;
+  if (recruiter && typeof recruiter === 'object') return recruiter;
+  const recruiterId = recruiter ? String(recruiter) : '';
+  const found = recruiterId
+    ? recruiters.find(r => String(r._id || r.id || '') === recruiterId)
+    : null;
+  return found || { name: candidate?.recruiterName || 'Unassigned' };
+};
+
 // ✅ Returns a display label with role indicator for dropdowns
 const getRecruiterLabel = (r) => {
   const name = getRecruiterName(r);
   const roleTag = r.role === 'admin' ? ' (Admin)' : r.role === 'manager' ? ' (Manager)' : '';
   return `${name}${roleTag}`;
+};
+
+const SkillsBadgeInput = ({ value, onChange, error }) => {
+  const [draft, setDraft] = useState('');
+  const skills = normalizeSkills(value);
+
+  const addFromText = (text) => {
+    const nextSkills = normalizeSkills([...skills, ...normalizeSkills(text)]);
+    onChange(nextSkills);
+    setDraft('');
+  };
+
+  const removeSkill = (skillToRemove) => {
+    onChange(skills.filter((skill) => skill !== skillToRemove));
+  };
+
+  const handleKeyDown = (event) => {
+    if (event.key === 'Enter' || event.key === ',') {
+      event.preventDefault();
+      if (draft.trim()) addFromText(draft);
+    } else if (event.key === 'Backspace' && !draft && skills.length > 0) {
+      removeSkill(skills[skills.length - 1]);
+    }
+  };
+
+  return (
+    <div className={`min-h-[42px] w-full rounded-lg border bg-white px-2 py-2 text-sm transition-colors focus-within:ring-2 focus-within:ring-blue-500 ${error ? 'border-red-500' : 'border-slate-200 dark:border-slate-700'}`}>
+      <div className="flex flex-wrap items-center gap-2">
+        {skills.map((skill) => (
+          <span key={skill} className="inline-flex items-center gap-1 rounded-full bg-blue-50 border border-blue-200 px-2 py-1 text-xs font-medium text-blue-700">
+            {skill}
+            <button
+              type="button"
+              onClick={() => removeSkill(skill)}
+              className="rounded-full p-0.5 text-blue-500 hover:bg-blue-100 hover:text-blue-700"
+              aria-label={`Remove ${skill}`}
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </span>
+        ))}
+        <input
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          onKeyDown={handleKeyDown}
+          onBlur={() => { if (draft.trim()) addFromText(draft); }}
+          placeholder={skills.length ? 'Add skill' : 'Type skill and press Enter'}
+          className="min-w-[160px] flex-1 border-0 bg-transparent px-1 py-1 text-sm outline-none placeholder:text-slate-400"
+        />
+      </div>
+    </div>
+  );
 };
 
 const ALL_STATUSES = [
@@ -96,7 +434,145 @@ const ALL_STATUSES = [
 
 const SOURCES = ['LinkedIn', 'Naukri', 'Indeed', 'Portal', 'Referral', 'Other'];
 
+const STATUS_BADGE_CLASSES = {
+  Pipeline: 'bg-gray-100 text-gray-700 border-gray-200',
+  Submitted: 'bg-blue-100 text-blue-700 border-blue-200',
+  'Shared Profiles': 'bg-indigo-100 text-indigo-700 border-indigo-200',
+  'Yet to attend': 'bg-amber-100 text-amber-800 border-amber-200',
+  Turnups: 'bg-cyan-100 text-cyan-700 border-cyan-200',
+  Selected: 'bg-green-100 text-green-700 border-green-200',
+  Rejected: 'bg-red-100 text-red-700 border-red-200',
+  Hold: 'bg-yellow-100 text-yellow-800 border-yellow-200',
+  Joined: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+  Backout: 'bg-rose-100 text-rose-700 border-rose-200',
+  'No Show': 'bg-slate-100 text-slate-700 border-slate-200',
+};
+
+const getStatusBadgeClass = (status) =>
+  STATUS_BADGE_CLASSES[status] || 'bg-slate-100 text-slate-700 border-slate-200';
+
+const StatusBadge = ({ status }) => (
+  <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold leading-none whitespace-nowrap ${getStatusBadgeClass(status)}`}>
+    {status || 'Pipeline'}
+  </span>
+);
+
+const getSubmissionDateValue = (submission) =>
+  submission?.submittedAt || submission?.createdAt || submission?.updatedAt || '';
+
+const formatSubmissionDate = (submission) => {
+  const value = getSubmissionDateValue(submission);
+  return value ? new Date(value).toLocaleDateString('en-GB') : 'N/A';
+};
+
+const getSubmissionStatus = (submission) =>
+  submission?.pipelineStage || submission?.status || 'Pipeline';
+
+const getSubmittedByLabel = (submission) => {
+  if (submission?.submittedByName) return submission.submittedByName;
+  const submittedBy = submission?.submittedBy;
+  if (!submittedBy || typeof submittedBy !== 'object') return 'N/A';
+  const fullName = `${submittedBy.firstName || ''} ${submittedBy.lastName || ''}`.trim();
+  return fullName || submittedBy.name || submittedBy.email || 'N/A';
+};
+
+const getCandidateSubmissions = (candidate) => {
+  if (!Array.isArray(candidate?.submissions)) return [];
+  return [...candidate.submissions].sort((a, b) => {
+    const aTime = new Date(getSubmissionDateValue(a) || 0).getTime();
+    const bTime = new Date(getSubmissionDateValue(b) || 0).getTime();
+    return bTime - aTime;
+  });
+};
+
+const getCandidateStatuses = (candidate) => {
+  const submissions = getCandidateSubmissions(candidate);
+  const statuses = submissions.length
+    ? submissions.map(getSubmissionStatus)
+    : (Array.isArray(candidate?.status) ? candidate.status : [candidate?.status || 'Submitted']);
+
+  return [...new Set(statuses.filter(Boolean))];
+};
+
+const candidateMatchesClient = (candidate, clientFilter) => {
+  if (clientFilter === 'all') return true;
+  const submissions = getCandidateSubmissions(candidate);
+  if (submissions.length > 0) {
+    return submissions.some((submission) => submission.clientName === clientFilter);
+  }
+  return candidate?.client === clientFilter;
+};
+
+const CandidateClientCell = ({ candidate, onShowMore }) => {
+  const submissions = getCandidateSubmissions(candidate);
+  if (submissions.length === 0) {
+    return <span className="text-slate-600 font-medium">{candidate.client || 'N/A'}</span>;
+  }
+
+  const [latest, ...more] = submissions;
+  return (
+    <div className="flex items-center gap-2 whitespace-nowrap">
+      <span className="font-semibold text-slate-800">{latest.clientName || candidate.client || 'N/A'}</span>
+      {more.length > 0 && (
+        <button
+          type="button"
+          onClick={() => onShowMore(candidate)}
+          className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700 hover:bg-blue-100"
+        >
+          +{more.length} more
+        </button>
+      )}
+    </div>
+  );
+};
+
 // ── Main Component ────────────────────────────────────────────────────────────
+const ClientSubmissionsModal = ({ candidate, onClose }) => {
+  const submissions = getCandidateSubmissions(candidate);
+
+  return (
+    <div className="fixed inset-0 bg-slate-900/40 flex items-center justify-center z-[60] p-4 backdrop-blur-sm">
+      <div className="w-full max-w-3xl overflow-hidden rounded-xl bg-white shadow-2xl border border-slate-200">
+        <div className="flex items-start justify-between gap-4 border-b border-slate-200 bg-slate-50 p-5">
+          <div>
+            <h3 className="text-lg font-bold text-slate-900">Submitted Clients & Jobs</h3>
+            <p className="mt-1 text-sm text-slate-500">{candidate?.name || 'Candidate'}</p>
+          </div>
+          <button onClick={onClose} className="rounded-lg p-1 text-slate-400 hover:bg-white hover:text-slate-700">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="max-h-[60vh] overflow-auto p-5">
+          <div className="overflow-hidden rounded-lg border border-slate-200">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-slate-50 text-xs font-semibold uppercase text-slate-500">
+                <tr>
+                  <th className="px-4 py-3">Client Name</th>
+                  <th className="px-4 py-3">Job Code</th>
+                  <th className="px-4 py-3">Job Position</th>
+                  <th className="px-4 py-3">Pipeline/Status</th>
+                  <th className="px-4 py-3">Submitted Date</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {submissions.map((submission) => (
+                  <tr key={submission._id || `${submission.jobId}-${submission.jobCode}`} className="align-top">
+                    <td className="px-4 py-3 font-semibold text-slate-800">{submission.clientName || 'N/A'}</td>
+                    <td className="px-4 py-3 font-mono text-xs text-blue-700">{submission.jobCode || 'N/A'}</td>
+                    <td className="px-4 py-3 text-slate-700">{submission.position || 'N/A'}</td>
+                    <td className="px-4 py-3"><StatusBadge status={getSubmissionStatus(submission)} /></td>
+                    <td className="px-4 py-3 text-slate-600">{formatSubmissionDate(submission)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export default function AdminCandidates() {
   const { toast } = useToast();
 
@@ -106,10 +582,12 @@ export default function AdminCandidates() {
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoadingSubmissions, setIsLoadingSubmissions] = useState(false);
   const [isParsingResume, setIsParsingResume] = useState(false);
   const [resumeSuccess, setResumeSuccess] = useState({ show: false, fileName: '', fieldsCount: 0 });
 
   const [searchTerm, setSearchTerm] = useState('');
+  const [roleSkillSearchTerm, setRoleSkillSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [recruiterFilter, setRecruiterFilter] = useState('all');
   const [clientFilter, setClientFilter] = useState('all');
@@ -124,7 +602,7 @@ export default function AdminCandidates() {
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, statusFilter, recruiterFilter, clientFilter, activeStatFilter]);
+  }, [searchTerm, roleSkillSearchTerm, statusFilter, recruiterFilter, clientFilter, activeStatFilter]);
 
   // Bulk Assign States
   const [bulkRecruiterId, setBulkRecruiterId] = useState('');
@@ -135,7 +613,12 @@ export default function AdminCandidates() {
   const [isEditMode, setIsEditMode] = useState(false);
   const [selectedCandidateId, setSelectedCandidateId] = useState(null);
   const [viewCandidate, setViewCandidate] = useState(null);
+  const [clientPopoverCandidate, setClientPopoverCandidate] = useState(null);
   const [errors, setErrors] = useState({});
+  const [candidateFieldConfig, setCandidateFieldConfig] = useState(getCandidateFieldConfig);
+  const [candidateFormControlOpen, setCandidateFormControlOpen] = useState(false);
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
+  const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
 
   // Today Submissions modal (Admin)
   const [isTodaySubOpen, setIsTodaySubOpen] = useState(false);
@@ -170,16 +653,37 @@ export default function AdminCandidates() {
     noticePeriod: '', servingNoticePeriod: 'false', lwd: '',
     reasonForChange: '', offersInHand: 'false', offerPackage: '', source: 'Portal',
     recruiterId: '', status: ['Submitted'], // 🔴 Multi-Select Array
-    skills: '', remarks: '' 
+    skills: [], remarks: '', customFields: {},
+    submissions: [],  // ← multi client/job submission rows
   };
   const [formData, setFormData] = useState(initialFormData);
+
+  const handleCandidateConfigChange = (updated) => {
+    const normalized = normalizeCandidateFieldConfig(updated);
+    setCandidateFieldConfig(normalized);
+    saveCandidateFieldConfig(normalized);
+  };
+
+  const isCandidateFieldVisible = (fieldName) => {
+    const field = candidateFieldConfig.fields.find(item => item.fieldName === fieldName);
+    return field?.visible !== false;
+  };
+
+  const visibleCustomCandidateFields = useMemo(
+    () => candidateFieldConfig.customFields.filter(field => field.visible),
+    [candidateFieldConfig]
+  );
+
+  const handleCustomCandidateFieldChange = (fieldName, value) => {
+    setFormData(prev => ({ ...prev, customFields: { ...prev.customFields, [fieldName]: value } }));
+  };
 
   const fetchData = async () => {
     setLoading(true);
     try {
       const headers = getAuthHeader();
       const [resCand, resRec, resCli, resJobs] = await Promise.all([
-        fetch(`${API_URL}/candidates`, { headers }),
+        fetch(`${API_URL}/candidates?includeSubmissions=true`, { headers }),
         fetch(`${API_URL}/recruiters`, { headers }),
         fetch(`${API_URL}/clients`, { headers }),
         fetch(`${API_URL}/jobs`, { headers }),
@@ -307,7 +811,7 @@ export default function AdminCandidates() {
       uploadFormData.append('resume', file);
 
       const headers = getAuthHeader();
-      delete headers['Content-Type']; 
+      delete headers['Content-Type'];
 
       const res = await fetch(`${API_URL}/candidates/parse-resume`, {
         method: 'POST',
@@ -336,7 +840,7 @@ export default function AdminCandidates() {
         lastName: prev.lastName || lName,
         email: prev.email || data.email || '',
         contact: prev.contact || data.contact || '',
-        skills: prev.skills || data.skills || '',
+        skills: normalizeSkills(prev.skills).length ? prev.skills : normalizeSkills(data.skills),
         totalExperience: prev.totalExperience || data.totalExperience || '',
         currentCompany: prev.currentCompany || data.currentCompany || '',
         currentLocation: prev.currentLocation || data.currentLocation || '',
@@ -403,18 +907,17 @@ export default function AdminCandidates() {
     }
 
     if (!d.position.trim()) {
-      e.position = 'Role / Position is required';
-    } else if (d.position === 'Other') {
-      if (!d.positionOther.trim()) {
-        e.positionOther = 'Please enter the job opening name';
-      } else if (d.positionOther.trim().length < 2) {
-        e.positionOther = 'Position must be at least 2 characters';
-      }
+      e.position = 'Current Role is required';
     } else if (d.position.trim().length < 2) {
-      e.position = 'Position must be at least 2 characters';
+      e.position = 'Current Role must be at least 2 characters';
     }
 
-    if (!d.client.trim()) e.client = 'Please select a Client';
+    const skills = normalizeSkills(d.skills);
+    if (skills.length === 0) {
+      e.skills = 'At least one skill is required';
+    } else if (skills.join(', ').length > 500) {
+      e.skills = 'Max 500 characters allowed';
+    }
 
     if (d.totalExperience.trim() !== '') {
       const totalExp = Number(d.totalExperience);
@@ -497,7 +1000,7 @@ export default function AdminCandidates() {
             return;
           }
         }
-      } catch (_) {}
+      } catch (_) { }
     }
 
     if (formData.contact) {
@@ -516,7 +1019,7 @@ export default function AdminCandidates() {
               return;
             }
           }
-        } catch (_) {}
+        } catch (_) { }
       }
     }
 
@@ -527,9 +1030,30 @@ export default function AdminCandidates() {
       const method = isEditMode ? 'PUT' : 'POST';
 
       const computedName = `${formData.firstName || ''} ${formData.lastName || ''}`.trim();
-      const resolvedPosition = formData.position === 'Other'
-        ? formData.positionOther.trim()
-        : formData.position;
+      const resolvedPosition = formData.position.trim();
+
+      const allRows = Array.isArray(formData.submissions) ? formData.submissions : [];
+      const existingRows = allRows.filter((r) => r.isExisting && r._id);
+      const incompleteRow = allRows.some((r) => !r.isExisting && (r.clientName || r.jobId) && !(r.clientName && r.jobId));
+      if (incompleteRow) {
+        toast({ title: 'Incomplete Submission', description: 'Select both client and job, or remove the incomplete submission row.', variant: 'destructive' });
+        setIsSubmitting(false);
+        return;
+      }
+      const newRows = allRows.filter((r) => !r.isExisting && r.clientName && r.jobId);
+
+      // Validate: no duplicate jobIds in new rows (also vs existing)
+      if (newRows.length > 0) {
+        const seenJobIds = new Set(existingRows.map((r) => r.jobId));
+        for (const sub of newRows) {
+          if (seenJobIds.has(sub.jobId)) {
+            toast({ title: 'Duplicate Submission', description: `Job ${sub.jobCode || sub.jobId} is already submitted. Remove the duplicate.`, variant: 'destructive' });
+            setIsSubmitting(false);
+            return;
+          }
+          seenJobIds.add(sub.jobId);
+        }
+      }
 
       const payload = {
         ...formData,
@@ -537,40 +1061,99 @@ export default function AdminCandidates() {
         position: resolvedPosition,
         offersInHand: formData.offersInHand === 'true',
         servingNoticePeriod: formData.servingNoticePeriod === 'true',
-        status: formData.status // Sending array directly for multi-select
+        status: formData.status,
+        customFields: formData.customFields || {},
+        skills: normalizeSkills(formData.skills),
       };
-      delete payload.positionOther; 
+      delete payload.positionOther;
+      delete payload.submissions; // handled separately below
 
-      const fd = new FormData();
-      Object.entries(payload).forEach(([key, val]) => {
-        if (val !== undefined && val !== null && val !== '') {
-          fd.append(key, String(val));
-        }
-      });
-
-      const headers = getAuthHeader();
-      delete headers['Content-Type'];
-
-      const res = await fetch(url, { method, headers, body: fd });
-      if (!res.ok) throw new Error(await res.text());
-
-      const savedCandidate = await res.json();
-
-      if (isEditMode) {
-        setCandidates(prev =>
-          prev.map(c => c._id === selectedCandidateId ? { ...c, ...savedCandidate } : c)
-        );
-      } else {
-        // Prepend new candidate to top of list — no full refetch needed
-        setCandidates(prev => [savedCandidate, ...prev]);
+      // For new candidate: attach new submission rows in body
+      if (!isEditMode) {
+        const cleanNewRows = allRows.filter((s) => s.clientName && s.jobId).map((s) => ({
+          clientName: s.clientName,
+          jobId: s.jobId,
+          jobCode: s.jobCode,
+          position: s.position,
+          pipelineStage: s.pipelineStage || 'Pipeline',
+          status: s.pipelineStage || 'Pipeline',
+        }));
+        if (cleanNewRows.length > 0) payload.submissions = cleanNewRows;
       }
 
-      toast({ title: 'Success', description: `Candidate ${isEditMode ? 'updated' : 'added'}` });
+      const headers = getAuthHeader();
+      const res = await fetch(url, { method, headers, body: JSON.stringify(payload) });
+      if (!res.ok) throw new Error(await res.text());
+      const savedCandidate = await res.json();
+
+      // ── For EDIT: sync submissions ──────────────────────────────────────────
+      if (isEditMode) {
+        const subPromises = [];
+
+        // 1. Update existing submission stages that changed
+        for (const row of existingRows) {
+          if (row._originalStage && row.pipelineStage !== row._originalStage) {
+            subPromises.push(
+              fetch(`${API_URL}/submissions/${row._id}`, {
+                method: 'PUT',
+                headers: { ...headers, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ pipelineStage: row.pipelineStage, status: row.pipelineStage }),
+              }).catch((e) => console.error('Stage update failed:', e))
+            );
+          }
+        }
+
+        // 2. Create new submission records
+        for (const row of newRows) {
+          subPromises.push(
+            fetch(`${API_URL}/submissions`, {
+              method: 'POST',
+              headers: { ...headers, 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                candidateId: selectedCandidateId,
+                clientName: row.clientName,
+                jobId: row.jobId,
+                pipelineStage: row.pipelineStage || 'Pipeline',
+                status: row.pipelineStage || 'Pipeline',
+              }),
+            })
+              .then(async (r) => {
+                const body = await r.json().catch(() => ({}));
+                if (!r.ok) throw new Error(body.message || 'Submission failed');
+                return body;
+              })
+              .catch((e) => {
+                console.error('New submission failed:', e);
+                throw e;
+              })
+          );
+        }
+
+        const subResults = await Promise.allSettled(subPromises);
+        const failedCount = subResults.filter((r) => r.status === 'rejected').length;
+        const failedMessage = subResults.find((r) => r.status === 'rejected')?.reason?.message;
+
+        const stageChanges = existingRows.filter((r) => r._originalStage !== r.pipelineStage).length;
+        let desc = 'Candidate updated successfully.';
+        if (stageChanges > 0) desc += ` ${stageChanges} pipeline stage(s) updated.`;
+        if (newRows.length > 0) desc += ` ${newRows.length} new submission(s) added.`;
+        if (failedCount > 0) desc += ` ${failedCount} submission update(s) failed.${failedMessage ? ` ${failedMessage}` : ''}`;
+        toast({ title: failedCount > 0 ? 'Partial Save' : 'Success', description: desc, variant: failedCount > 0 ? 'destructive' : 'default' });
+      } else {
+        const subCount = Array.isArray(savedCandidate.submissions) ? savedCandidate.submissions.length : 0;
+        const subErrCount = Array.isArray(savedCandidate.submissionErrors) ? savedCandidate.submissionErrors.length : 0;
+        let desc = 'Candidate added successfully.';
+        if (subCount > 0) desc += ` ${subCount} submission(s) saved.`;
+        if (subErrCount > 0) desc += ` ${subErrCount} submission(s) failed.`;
+        toast({ title: 'Success', description: desc });
+      }
+
+      await fetchData();
       setIsDialogOpen(false);
     } catch (err) {
       const msg = err.message || '';
       if (msg.toLowerCase().includes('email') || msg.toLowerCase().includes('duplicate') || msg.toLowerCase().includes('e11000')) {
-        setErrors(prev => ({ ...prev, email: 'A candidate with this email already exists in the database.' }));
+        setErrors((prev) => ({ ...prev, email: 'A candidate with this email already exists in the database.' }));
         toast({ title: 'Duplicate Email', description: 'This email is already registered to another candidate.', variant: 'destructive' });
       } else {
         toast({ title: 'Error', description: 'Failed to save', variant: 'destructive' });
@@ -591,6 +1174,20 @@ export default function AdminCandidates() {
     }
   };
 
+  // ── Delete an existing submission from the edit modal ─────────────────────
+  const handleDeleteSubmission = async (submissionId) => {
+    const headers = getAuthHeader();
+    const res = await fetch(`${API_URL}/submissions/${submissionId}`, {
+      method: 'DELETE',
+      headers,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || 'Failed to delete submission');
+    }
+    toast({ title: 'Submission removed', description: 'The client/job submission was deleted.' });
+  };
+
   const openAddDialog = () => {
     setIsEditMode(false);
     setSelectedCandidateId(null);
@@ -604,12 +1201,6 @@ export default function AdminCandidates() {
     setIsEditMode(true);
     setSelectedCandidateId(c._id);
 
-    const savedPosition = c.position || '';
-    const jobTitles = jobs.map(j => j.title || j.jobTitle || j.position || '').filter(Boolean);
-    const isKnownJob = jobTitles.includes(savedPosition);
-    const positionValue = isKnownJob || !savedPosition ? savedPosition : 'Other';
-    const positionOtherValue = !isKnownJob && savedPosition ? savedPosition : '';
-
     setFormData({
       firstName: c.firstName || '',
       lastName: c.lastName || '',
@@ -619,8 +1210,8 @@ export default function AdminCandidates() {
       dateOfBirth: c.dateOfBirth ? new Date(c.dateOfBirth).toISOString().split('T')[0] : '',
       currentLocation: c.currentLocation || '',
       preferredLocation: c.preferredLocation || '',
-      position: positionValue,
-      positionOther: positionOtherValue,
+      position: c.position || '',   // always plain text in edit mode
+      positionOther: '',
       client: c.client || '',
       currentCompany: c.currentCompany || '',
       totalExperience: c.totalExperience || '',
@@ -636,15 +1227,37 @@ export default function AdminCandidates() {
       offersInHand: c.offersInHand ? 'true' : 'false',
       offerPackage: c.offerPackage || '',
       source: c.source || 'Portal',
-      // 🔴 Array for Multi-select
       status: Array.isArray(c.status) ? c.status : [c.status || 'Submitted'],
       recruiterId: typeof c.recruiterId === 'object' ? c.recruiterId?._id : c.recruiterId || '',
-      skills: Array.isArray(c.skills) ? c.skills.join(', ') : c.skills || '',
+      skills: normalizeSkills(c.skills),
       remarks: c.remarks || '',
       dateAdded: c.dateAdded ? new Date(c.dateAdded).toISOString().split('T')[0] : '',
+      customFields: c.customFields || {},
+      submissions: [],  // will be loaded async
     });
     setErrors({});
     setIsDialogOpen(true);
+
+    // Fetch existing submissions
+    setIsLoadingSubmissions(true);
+    const headers = getAuthHeader();
+    fetch(`${API_URL}/submissions?candidateId=${c._id}`, { headers })
+      .then((r) => r.ok ? r.json() : [])
+      .then((data) => {
+        const rows = Array.isArray(data) ? data.map((sub) => ({
+          _id: sub._id,
+          clientName: sub.clientName || '',
+          jobId: typeof sub.jobId === 'object' ? sub.jobId._id : sub.jobId || '',
+          jobCode: sub.jobCode || (sub.jobId?.jobCode) || '',
+          position: sub.position || (sub.jobId?.position) || '',
+          pipelineStage: sub.pipelineStage || sub.status || 'Pipeline',
+          _originalStage: sub.pipelineStage || sub.status || 'Pipeline',
+          isExisting: true,
+        })) : [];
+        setFormData((prev) => ({ ...prev, submissions: rows }));
+      })
+      .catch(() => { })
+      .finally(() => setIsLoadingSubmissions(false));
   };
 
   const handleSort = (key) => {
@@ -659,22 +1272,28 @@ export default function AdminCandidates() {
   };
 
   const filteredCandidates = useMemo(() => {
+    const searchedSkills = parseSkillQuery(roleSkillSearchTerm);
     let result = candidates.filter((c) => {
       const matchSearch = (c.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
         (c.email || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
         (c.candidateId || '').toLowerCase().includes(searchTerm.toLowerCase());
 
-      const statusArr = Array.isArray(c.status) ? c.status : [c.status || ''];
+      const matchRoleSkill =
+        !roleSkillSearchTerm.trim() ||
+        matchesRoleQuery(c, roleSkillSearchTerm) ||
+        matchesAllSkills(normalizeCandidateSkills(c), searchedSkills);
+
+      const statusArr = getCandidateStatuses(c);
       const matchStatus = statusFilter === 'all' || statusArr.includes(statusFilter);
 
       const recId = typeof c.recruiterId === 'object' ? c.recruiterId?._id : c.recruiterId;
       const matchRec = recruiterFilter === 'all' || recId === recruiterFilter;
 
-      const matchClient = clientFilter === 'all' || c.client === clientFilter;
+      const matchClient = candidateMatchesClient(c, clientFilter);
 
       const statMatch = activeStatFilter ? statusArr.includes(activeStatFilter) : true;
 
-      return matchSearch && matchStatus && matchRec && matchClient && statMatch;
+      return matchSearch && matchRoleSkill && matchStatus && matchRec && matchClient && statMatch;
     });
 
     if (sortConfig) {
@@ -687,10 +1306,10 @@ export default function AdminCandidates() {
       });
     }
     return result;
-  }, [candidates, searchTerm, statusFilter, recruiterFilter, clientFilter, activeStatFilter, sortConfig]);
+  }, [candidates, searchTerm, roleSkillSearchTerm, statusFilter, recruiterFilter, clientFilter, activeStatFilter, sortConfig]);
 
   const stats = useMemo(() => {
-    const count = (s) => candidates.filter((c) => (Array.isArray(c.status) ? c.status : [c.status || '']).includes(s)).length;
+    const count = (s) => candidates.filter((c) => getCandidateStatuses(c).includes(s)).length;
     const todayDate = getSafeDate(new Date());
     const todayCount = candidates.filter(c => {
       const d = c.dateAdded || c.createdAt;
@@ -712,66 +1331,46 @@ export default function AdminCandidates() {
     currentPage * ITEMS_PER_PAGE
   );
 
+  const candidateExportColumns = useMemo(() => [
+    { key: 'candidateId', label: 'Candidate ID', value: c => c.candidateId || c._id?.slice(-6).toUpperCase() || '' },
+    { key: 'firstName', label: 'First Name', value: c => c.firstName || '' },
+    { key: 'lastName', label: 'Last Name', value: c => c.lastName || '' },
+    { key: 'fullName', label: 'Full Name', value: c => c.name || '' },
+    {
+      key: 'recruiter',
+      label: 'Recruiter',
+      value: c => typeof c.recruiterId === 'object' ? getRecruiterName(c.recruiterId) : c.recruiterName || '',
+    },
+    { key: 'email', label: 'Email', value: c => c.email || '' },
+    { key: 'contact', label: 'Contact', value: c => c.contact || '' },
+    { key: 'status', label: 'Status', value: c => Array.isArray(c.status) ? c.status.join(' | ') : (c.status || '') },
+    { key: 'currentLocation', label: 'Current Location', value: c => c.currentLocation || '' },
+    { key: 'preferredLocation', label: 'Preferred Location', value: c => c.preferredLocation || '' },
+    { key: 'totalExperience', label: 'Total Experience', value: c => c.totalExperience || '' },
+    { key: 'relevantExperience', label: 'Relevant Experience', value: c => c.relevantExperience || '' },
+    { key: 'currentCompany', label: 'Current Company', value: c => c.currentCompany || '' },
+    { key: 'reasonForChange', label: 'Reason For Change', value: c => c.reasonForChange || '' },
+    { key: 'ctc', label: 'Current CTC', value: c => c.ctc || '' },
+    { key: 'currentTakeHome', label: 'Current Take Home', value: c => c.currentTakeHome || '' },
+    { key: 'ectc', label: 'Expected CTC', value: c => c.ectc || '' },
+    { key: 'expectedTakeHome', label: 'Expected Take Home', value: c => c.expectedTakeHome || '' },
+    { key: 'noticePeriod', label: 'Notice Period', value: c => c.noticePeriod || '' },
+    { key: 'servingNoticePeriod', label: 'Serving Notice', value: c => c.servingNoticePeriod ? 'Yes' : 'No' },
+    { key: 'lwd', label: 'LWD', value: c => c.lwd ? new Date(c.lwd).toLocaleDateString('en-GB') : '' },
+    { key: 'offersInHand', label: 'Offers In Hand', value: c => c.offersInHand ? 'Yes' : 'No' },
+    { key: 'offerPackage', label: 'Offer Package', value: c => c.offerPackage || '' },
+    { key: 'source', label: 'Source', value: c => c.source || '' },
+    { key: 'skills', label: 'Skills', value: c => Array.isArray(c.skills) ? c.skills.join(' | ') : (c.skills || '') },
+    { key: 'dateAdded', label: 'Date Added', value: c => (c.dateAdded || c.createdAt) ? new Date(c.dateAdded || c.createdAt).toLocaleDateString('en-GB') : '' },
+  ], []);
+
   // ── Export functionality ──────────────────────────────────────────────────
   const handleExportExcel = () => {
     if (filteredCandidates.length === 0) {
       toast({ title: 'No Data', description: 'No candidates available to export.', variant: 'destructive' });
       return;
     }
-
-    try {
-      const rows = filteredCandidates.map(c => {
-        const recruiterName = typeof c.recruiterId === 'object'
-          ? getRecruiterName(c.recruiterId)
-          : c.recruiterName || '';
-
-        return {
-          'Candidate ID':      c.candidateId || c._id?.slice(-6).toUpperCase() || '',
-          'First Name':        c.firstName || '',
-          'Last Name':         c.lastName || '',
-          'Full Name':         c.name || '',
-          'Recruiter':         recruiterName,
-          'Email':             c.email || '',
-          'Contact':           c.contact || '',
-          'Status':            Array.isArray(c.status) ? c.status.join(' | ') : (c.status || ''),
-          'Current Location':  c.currentLocation || '',
-          'Preferred Location': c.preferredLocation || '',
-          'Total Experience':  c.totalExperience || '',
-          'Relevant Experience': c.relevantExperience || '',
-          'Current Company':   c.currentCompany || '',
-          'Reason For Change': c.reasonForChange || '',
-          'Current CTC':       c.ctc || '',
-          'Current Take Home': c.currentTakeHome || '',
-          'Expected CTC':      c.ectc || '',
-          'Expected Take Home': c.expectedTakeHome || '',
-          'Notice Period':     c.noticePeriod || '',
-          'Serving Notice':    c.servingNoticePeriod ? 'Yes' : 'No',
-          'LWD':               c.lwd ? new Date(c.lwd).toLocaleDateString('en-GB') : '',
-          'Offers In Hand':    c.offersInHand ? 'Yes' : 'No',
-          'Offer Package':     c.offerPackage || '',
-          'Source':            c.source || '',
-          'Skills':            Array.isArray(c.skills) ? c.skills.join(' | ') : (c.skills || ''),
-          'Date Added':        (c.dateAdded || c.createdAt) ? new Date(c.dateAdded || c.createdAt).toLocaleDateString('en-GB') : '',
-        };
-      });
-
-      const ws = XLSX.utils.json_to_sheet(rows);
-
-      // Auto-size columns based on content
-      const colWidths = Object.keys(rows[0] || {}).map(key => ({
-        wch: Math.max(key.length, ...rows.map(r => String(r[key] || '').length), 10)
-      }));
-      ws['!cols'] = colWidths;
-
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'Candidates');
-      XLSX.writeFile(wb, `Candidates_Export_${new Date().toISOString().split('T')[0]}.xlsx`);
-
-      toast({ title: 'Exported!', description: `${rows.length} candidate(s) exported to Excel.` });
-    } catch (err) {
-      console.error('Export error:', err);
-      toast({ title: 'Export failed', description: 'Could not export file.', variant: 'destructive' });
-    }
+    setIsExportDialogOpen(true);
   };
 
   const handleSelectAll = (e) => {
@@ -853,6 +1452,9 @@ export default function AdminCandidates() {
             <button onClick={openAddDialog} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition shadow-sm">
               <Plus className="h-4 w-4" /> Add Candidate
             </button>
+            <button onClick={() => setIsImportDialogOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-white border border-green-500 text-green-700 rounded-lg text-sm font-medium hover:bg-green-50 transition shadow-sm">
+              <FileSpreadsheet className="h-4 w-4" /> Import Bulk Candidates
+            </button>
           </div>
         </div>
 
@@ -876,9 +1478,15 @@ export default function AdminCandidates() {
 
         {/* Filters */}
         <div className="p-4 border border-slate-200 dark:border-slate-800 rounded-xl bg-white shadow-sm flex flex-col md:flex-row gap-4 justify-between">
-          <div className="relative w-full md:max-w-md">
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-            <input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search name, email, ID..." className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          <div className="grid w-full grid-cols-1 gap-3 md:max-w-3xl md:grid-cols-2">
+            <div className="relative w-full">
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+              <input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search name, email, ID..." className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div className="relative w-full">
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+              <input value={roleSkillSearchTerm} onChange={(e) => setRoleSkillSearchTerm(e.target.value)} placeholder="Search role / skills" className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
           </div>
           <div className="flex flex-col sm:flex-row flex-wrap gap-3 w-full md:w-auto">
             <select value={clientFilter} onChange={(e) => setClientFilter(e.target.value)} className="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500">
@@ -948,9 +1556,9 @@ export default function AdminCandidates() {
           ) : (
             <>
               {/* TOP SCROLLBAR */}
-              <div 
-                ref={topScrollRef} 
-                onScroll={handleTopScroll} 
+              <div
+                ref={topScrollRef}
+                onScroll={handleTopScroll}
                 className="tbl-scroll rounded-t-xl bg-slate-100 border-b border-slate-200 w-full"
                 style={{ overflowX: 'auto', overflowY: 'hidden', height: '18px' }}
               >
@@ -986,7 +1594,7 @@ export default function AdminCandidates() {
                   <tbody className="divide-y divide-slate-100">
                     {/* Render Paginated Candidates */}
                     {paginatedCandidates.map((c) => {
-                      const statusArr = Array.isArray(c.status) ? c.status : [c.status || 'Submitted'];
+                      const statusArr = getCandidateStatuses(c);
                       const isSelected = selectedIds.includes(c._id);
                       return (
                         <tr key={c._id} className={`transition-colors ${isSelected ? 'bg-blue-50/50 hover:bg-blue-50' : 'hover:bg-slate-50'}`}>
@@ -999,9 +1607,18 @@ export default function AdminCandidates() {
                             />
                           </td>
                           <td className="px-4 py-3 font-mono text-xs text-blue-600 font-bold cursor-pointer whitespace-nowrap" onClick={() => { navigator.clipboard.writeText(getCandidateId(c)); toast({ title: "Copied ID" }); }}>{getCandidateId(c)}</td>
-                          <td className="px-4 py-3 font-semibold text-slate-900 whitespace-nowrap">{c.name}</td>
-                          <td className="px-4 py-3 text-[#283086] font-bold whitespace-nowrap italic">{typeof c.recruiterId === 'object' ? getRecruiterName(c.recruiterId) : c.recruiterName || '-'}</td>
-                          <td className="px-4 py-3 text-slate-600 font-medium whitespace-nowrap">{c.client || '-'}</td>
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <CandidateProfileLink candidate={c} className="text-slate-900">{c.name}</CandidateProfileLink>
+                            <div className="mt-0.5 text-xs font-medium text-slate-400">{c.position || '-'}</div>
+                          </td>
+                          <td className="px-4 py-3 text-[#283086] font-bold whitespace-nowrap italic">
+                            <RecruiterDetailsTrigger recruiter={getCandidateRecruiterDetails(c, recruiters)} className="text-[#283086] font-bold italic">
+                              {typeof c.recruiterId === 'object' ? getRecruiterName(c.recruiterId) : c.recruiterName || '-'}
+                            </RecruiterDetailsTrigger>
+                          </td>
+                          <td className="px-4 py-3">
+                            <CandidateClientCell candidate={c} onShowMore={setClientPopoverCandidate} />
+                          </td>
                           <td className="px-4 py-3 text-xs text-slate-500 max-w-[150px] truncate" title={Array.isArray(c.skills) ? c.skills.join(', ') : c.skills}>
                             {!c.skills ? 'N/A' : Array.isArray(c.skills) ? c.skills.slice(0, 3).join(', ') + (c.skills.length > 3 ? '...' : '') : c.skills.length > 50 ? c.skills.substring(0, 50) + '...' : c.skills}
                           </td>
@@ -1009,9 +1626,9 @@ export default function AdminCandidates() {
                           <td className="px-4 py-3 text-sm whitespace-nowrap">{c.totalExperience ? `${c.totalExperience} Yrs` : '-'}</td>
                           <td className="px-4 py-3 text-xs whitespace-nowrap"><div>{c.ctc || '-'}</div><div className="text-green-600">{c.ectc || '-'}</div></td>
                           <td className="px-4 py-3">
-                            <div className="flex flex-wrap gap-1 min-w-[120px]">
+                            <div className="flex flex-wrap gap-1.5 min-w-[140px] max-w-[240px]">
                               {statusArr.map((s) => (
-                                <span key={s} className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-100 text-blue-800 mr-1 whitespace-nowrap">{s}</span>
+                                <StatusBadge key={s} status={s} />
                               ))}
                             </div>
                           </td>
@@ -1032,7 +1649,7 @@ export default function AdminCandidates() {
                   <div className="text-center py-12 text-slate-500">No candidates match your search filters.</div>
                 )}
               </div>
-              
+
               {/* --- PAGINATION CONTROLS --- */}
               {totalPages > 1 && (
                 <div className="flex flex-col sm:flex-row justify-between items-center p-4 border-t border-slate-200 bg-white gap-4">
@@ -1066,18 +1683,32 @@ export default function AdminCandidates() {
       </div>
 
       {/* ── Add / Edit Full Screen Dialog ──────────────────────────────────── */}
+      {clientPopoverCandidate && (
+        <ClientSubmissionsModal
+          candidate={clientPopoverCandidate}
+          onClose={() => setClientPopoverCandidate(null)}
+        />
+      )}
+
       {isDialogOpen && (
         <div className="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden">
-            <div className="p-5 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
+          <div className="bg-white rounded-xl shadow-2xl max-w-7xl w-full max-h-[90vh] flex flex-col overflow-hidden border border-slate-200">
+            <div className="p-6 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
               <div>
                 <h2 className="text-xl font-bold text-slate-900">{isEditMode ? 'Edit Candidate' : 'Add New Candidate'}</h2>
                 <p className="text-sm text-slate-500 mt-0.5">Fill out all the details required for the candidate profile.</p>
               </div>
-              <button onClick={() => setIsDialogOpen(false)} className="text-slate-400 hover:text-slate-600 font-bold text-xl px-2">×</button>
+              <div className="flex items-center gap-2">
+                {!isEditMode && (
+                  <button onClick={() => setCandidateFormControlOpen(true)} className="inline-flex items-center gap-2 px-3 py-2 border border-slate-300 bg-white rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-100 transition">
+                    <SlidersHorizontal className="h-4 w-4" /> Form Control
+                  </button>
+                )}
+                <button onClick={() => setIsDialogOpen(false)} className="text-slate-400 hover:text-slate-600 font-bold text-xl px-2">×</button>
+              </div>
             </div>
 
-            <div className="p-6 overflow-y-auto flex-1 space-y-8 pb-48">
+            <div className="p-6 overflow-y-auto flex-1 space-y-6 bg-slate-100/60 pb-48">
               {/* ── Resume Extracted Success Banner (inline, top of form) ── */}
               {resumeSuccess.show && (
                 <div style={{
@@ -1088,31 +1719,31 @@ export default function AdminCandidates() {
                   overflow: 'hidden',
                   animation: 'resumeSlideIn 0.35s cubic-bezier(0.16,1,0.3,1)'
                 }}>
-                  <div style={{display:'flex', alignItems:'flex-start', gap:'12px', padding:'14px 16px'}}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '14px 16px' }}>
                     {/* Icon */}
                     <div style={{
-                      flexShrink:0, width:'40px', height:'40px', borderRadius:'50%',
-                      background:'#dcfce7', border:'2px solid #86efac',
-                      display:'flex', alignItems:'center', justifyContent:'center'
+                      flexShrink: 0, width: '40px', height: '40px', borderRadius: '50%',
+                      background: '#dcfce7', border: '2px solid #86efac',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center'
                     }}>
-                      <CheckCircle2 style={{width:'20px',height:'20px',color:'#16a34a'}} />
+                      <CheckCircle2 style={{ width: '20px', height: '20px', color: '#16a34a' }} />
                     </div>
                     {/* Text */}
-                    <div style={{flex:1, minWidth:0}}>
-                      <div style={{display:'flex', alignItems:'center', gap:'6px', marginBottom:'2px'}}>
-                        <Sparkles style={{width:'14px',height:'14px',color:'#22c55e'}} />
-                        <p style={{fontSize:'14px', fontWeight:700, color:'#14532d', margin:0}}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
+                        <Sparkles style={{ width: '14px', height: '14px', color: '#22c55e' }} />
+                        <p style={{ fontSize: '14px', fontWeight: 700, color: '#14532d', margin: 0 }}>
                           Resume Extracted Successfully!
                         </p>
                       </div>
-                      <p style={{fontSize:'12px', color:'#15803d', margin:'3px 0 0 0', display:'flex', alignItems:'center', gap:'4px'}}>
-                        <FileText style={{width:'12px',height:'12px',flexShrink:0}} />
-                        <span style={{overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', fontWeight:500}}>
+                      <p style={{ fontSize: '12px', color: '#15803d', margin: '3px 0 0 0', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <FileText style={{ width: '12px', height: '12px', flexShrink: 0 }} />
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 500 }}>
                           {resumeSuccess.fileName}
                         </span>
                       </p>
                       {resumeSuccess.fieldsCount > 0 && (
-                        <p style={{fontSize:'12px', color:'#16a34a', margin:'5px 0 0 0'}}>
+                        <p style={{ fontSize: '12px', color: '#16a34a', margin: '5px 0 0 0' }}>
                           ✓ {resumeSuccess.fieldsCount} field{resumeSuccess.fieldsCount !== 1 ? 's' : ''} auto-filled — please review and complete any missing details.
                         </p>
                       )}
@@ -1121,20 +1752,20 @@ export default function AdminCandidates() {
                     <button
                       onClick={() => setResumeSuccess(s => ({ ...s, show: false }))}
                       style={{
-                        flexShrink:0, background:'none', border:'none', cursor:'pointer',
-                        padding:'4px', borderRadius:'6px', color:'#4ade80', lineHeight:1
+                        flexShrink: 0, background: 'none', border: 'none', cursor: 'pointer',
+                        padding: '4px', borderRadius: '6px', color: '#4ade80', lineHeight: 1
                       }}
-                      onMouseEnter={e => e.currentTarget.style.background='#bbf7d0'}
-                      onMouseLeave={e => e.currentTarget.style.background='none'}
+                      onMouseEnter={e => e.currentTarget.style.background = '#bbf7d0'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'none'}
                     >
-                      <X style={{width:'16px',height:'16px'}} />
+                      <X style={{ width: '16px', height: '16px' }} />
                     </button>
                   </div>
                   {/* Progress bar */}
-                  <div style={{height:'3px', background:'#bbf7d0'}}>
+                  <div style={{ height: '3px', background: '#bbf7d0' }}>
                     <div style={{
-                      height:'100%', background:'#22c55e',
-                      animation:'resumeBarShrink 5s linear forwards'
+                      height: '100%', background: '#22c55e',
+                      animation: 'resumeBarShrink 5s linear forwards'
                     }} />
                   </div>
                 </div>
@@ -1152,7 +1783,7 @@ export default function AdminCandidates() {
               `}</style>
 
               {!isEditMode && (
-                <section>
+                <section className="rounded-xl border border-blue-100 bg-white p-5 shadow-sm">
                   <h3 className="text-base font-semibold text-blue-700 border-b border-blue-100 pb-2 mb-4">Upload Resume (Auto Fill)</h3>
                   <div className="border-2 border-dashed border-blue-200 rounded-xl p-6 flex flex-col items-center justify-center bg-blue-50/50 hover:bg-blue-50 transition-colors">
                     {isParsingResume ? (
@@ -1188,7 +1819,7 @@ export default function AdminCandidates() {
                 </section>
               )}
 
-              <section>
+              <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
                 <h3 className="text-base font-semibold text-blue-700 border-b border-blue-100 pb-2 mb-4">Personal Information</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
@@ -1219,11 +1850,11 @@ export default function AdminCandidates() {
                     </div>
                     {errors.contact && <p className="text-xs text-red-500 mt-1">{errors.contact}</p>}
                   </div>
-                  <div>
+                  {isCandidateFieldVisible('alternateNumber') && <div>
                     <label className="block text-sm font-medium mb-1 text-slate-700">Alternate Number</label>
                     <input type="text" value={formData.alternateNumber} onChange={(e) => handleInputChange('alternateNumber', e.target.value)} className={inputCls(errors.alternateNumber)} placeholder="e.g. 9876543210" />
                     {errors.alternateNumber && <p className="text-xs text-red-500 mt-1">{errors.alternateNumber}</p>}
-                  </div>
+                  </div>}
                   <div className="md:col-span-2">
                     <label className="block text-sm font-medium mb-1 text-slate-700">Email Address *</label>
                     <div className="relative">
@@ -1242,15 +1873,15 @@ export default function AdminCandidates() {
                     </div>
                     {errors.email && <p className="text-xs text-red-500 mt-1">{errors.email}</p>}
                   </div>
-                  <div>
+                  {isCandidateFieldVisible('currentLocation') && <div>
                     <label className="block text-sm font-medium mb-1 text-slate-700">Current Location</label>
                     <input type="text" value={formData.currentLocation} onChange={(e) => handleInputChange('currentLocation', e.target.value)} className={inputCls(false)} />
-                  </div>
-                  <div>
+                  </div>}
+                  {isCandidateFieldVisible('preferredLocation') && <div>
                     <label className="block text-sm font-medium mb-1 text-slate-700">Preferred Location</label>
                     <input type="text" value={formData.preferredLocation} onChange={(e) => handleInputChange('preferredLocation', e.target.value)} className={inputCls(false)} />
-                  </div>
-                  <div>
+                  </div>}
+                  {isCandidateFieldVisible('dateOfBirth') && <div>
                     <label className="block text-sm font-medium mb-1 text-slate-700">Date of Birth</label>
                     <input
                       type="date"
@@ -1260,8 +1891,8 @@ export default function AdminCandidates() {
                       className={inputCls(errors.dateOfBirth)}
                     />
                     {errors.dateOfBirth && <p className="text-xs text-red-500 mt-1">{errors.dateOfBirth}</p>}
-                  </div>
-                  <div>
+                  </div>}
+                  {isCandidateFieldVisible('dateAdded') && <div>
                     <label className="block text-sm font-medium mb-1 text-slate-700">Date Added</label>
                     <input
                       type="date"
@@ -1272,118 +1903,111 @@ export default function AdminCandidates() {
                     />
                     <p className="text-xs text-slate-400 mt-1">Cannot be a future date. Defaults to today.</p>
                     {errors.dateAdded && <p className="text-xs text-red-500 mt-1">{errors.dateAdded}</p>}
-                  </div>
+                  </div>}
                 </div>
               </section>
 
-              <section>
+              <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
                 <h3 className="text-base font-semibold text-blue-700 border-b border-blue-100 pb-2 mb-4">Professional Details</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium mb-1 text-slate-700">Role (Position) *</label>
-                    <select
+                    <label className="block text-sm font-medium mb-1 text-slate-700">Current Role *</label>
+                    <input
+                      type="text"
                       value={formData.position}
-                      onChange={(e) => {
-                        handleInputChange('position', e.target.value);
-                        if (e.target.value !== 'Other') handleInputChange('positionOther', '');
-                      }}
+                      onChange={(e) => handleInputChange('position', e.target.value)}
                       className={inputCls(errors.position)}
-                    >
-                      <option value="">Select Job Opening</option>
-                      {jobs.map((j) => {
-                        const title = j.title || j.jobTitle || j.position || '';
-                        return title ? (
-                          <option key={j._id} value={title}>{title}{j.client ? ` — ${j.client}` : ''}</option>
-                        ) : null;
-                      })}
-                      <option value="Other">Other (type manually)</option>
-                    </select>
+                      placeholder="e.g. React Developer"
+                    />
                     {errors.position && <p className="text-xs text-red-500 mt-1">{errors.position}</p>}
-                    {formData.position === 'Other' && (
-                      <div className="mt-2">
-                        <input
-                          type="text"
-                          value={formData.positionOther}
-                          onChange={(e) => handleInputChange('positionOther', e.target.value)}
-                          className={inputCls(errors.positionOther)}
-                          placeholder="Enter job opening name..."
-                          autoFocus
-                        />
-                        {errors.positionOther && <p className="text-xs text-red-500 mt-1">{errors.positionOther}</p>}
-                      </div>
-                    )}
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1 text-slate-700">Client / Target Company *</label>
-                    <select value={formData.client} onChange={(e) => handleInputChange('client', e.target.value)} className={inputCls(errors.client)}>
-                      <option value="">Select Client</option>
-                      {clients.map(c => (
-                        <option key={c._id} value={c.companyName || c.name}>{c.companyName || c.name}</option>
-                      ))}
-                    </select>
-                    {errors.client && <p className="text-xs text-red-500 mt-1">{errors.client}</p>}
-                  </div>
-                  <div>
+                  {isCandidateFieldVisible('currentCompany') && <div>
                     <label className="block text-sm font-medium mb-1 text-slate-700">Current Company</label>
                     <input type="text" value={formData.currentCompany} onChange={(e) => handleInputChange('currentCompany', e.target.value)} className={inputCls(false)} />
-                  </div>
-                  <div>
+                  </div>}
+                  {isCandidateFieldVisible('reasonForChange') && <div>
                     <label className="block text-sm font-medium mb-1 text-slate-700">Reason for Change</label>
                     <input type="text" value={formData.reasonForChange} onChange={(e) => handleInputChange('reasonForChange', e.target.value)} className={inputCls(false)} />
-                  </div>
-                  <div>
+                  </div>}
+                  {isCandidateFieldVisible('totalExperience') && <div>
                     <label className="block text-sm font-medium mb-1 text-slate-700">Total Experience (Years)</label>
                     <input type="text" value={formData.totalExperience} onChange={(e) => handleInputChange('totalExperience', e.target.value)} className={inputCls(errors.totalExperience)} placeholder="e.g. 5" />
                     {errors.totalExperience && <p className="text-xs text-red-500 mt-1">{errors.totalExperience}</p>}
-                  </div>
-                  <div>
+                  </div>}
+                  {isCandidateFieldVisible('relevantExperience') && <div>
                     <label className="block text-sm font-medium mb-1 text-slate-700">Relevant Experience (Years)</label>
                     <input type="text" value={formData.relevantExperience} onChange={(e) => handleInputChange('relevantExperience', e.target.value)} className={inputCls(errors.relevantExperience)} placeholder="e.g. 3" />
                     {errors.relevantExperience && <p className="text-xs text-red-500 mt-1">{errors.relevantExperience}</p>}
-                  </div>
-                  <div className="md:col-span-2">
-                    <label className="block text-sm font-medium mb-1 text-slate-700">Skills (Comma Separated)</label>
-                    <input type="text" value={formData.skills} onChange={(e) => handleInputChange('skills', e.target.value)} className={inputCls(false)} placeholder="React, Node, Python..." />
+                  </div>}
+                  {isCandidateFieldVisible('skills') && <div className="md:col-span-2">
+                    <label className="block text-sm font-medium mb-1 text-slate-700">Skills *</label>
+                    <SkillsBadgeInput value={formData.skills} onChange={(skills) => handleInputChange('skills', skills)} error={errors.skills} />
+                    {errors.skills && <p className="text-xs text-red-500 mt-1">{errors.skills}</p>}
+                  </div>}
+                  <div className="md:col-span-2 rounded-xl border border-blue-200 bg-blue-50/40 p-5">
+                    <ClientJobSubmissions
+                      submissions={formData.submissions || []}
+                      clients={clients}
+                      jobs={jobs}
+                      onChange={(rows) => handleInputChange('submissions', rows)}
+                      errors={errors}
+                      isEditMode={isEditMode}
+                      onDeleteExisting={handleDeleteSubmission}
+                    />
+                    {isLoadingSubmissions && (
+                      <div className="flex items-center gap-2 mt-3 text-xs text-slate-500">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        Loading existing submissions...
+                      </div>
+                    )}
                   </div>
                 </div>
               </section>
 
-              <section>
+              <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
                 <h3 className="text-base font-semibold text-blue-700 border-b border-blue-100 pb-2 mb-4">Financial & Availability</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="flex flex-col sm:flex-row gap-2">
-                    <div className="w-full sm:w-1/2">
-                      <label className="block text-sm font-medium mb-1 text-slate-700">Current CTC</label>
-                      <input type="text" value={formData.ctc} onChange={(e) => handleInputChange('ctc', e.target.value)} className={inputCls(false)} placeholder="e.g. 10 LPA" />
-                    </div>
-                    <div className="w-full sm:w-1/2">
-                      <label className="block text-sm font-medium mb-1 text-slate-700">Current Take Home</label>
-                      <input type="text" value={formData.currentTakeHome} onChange={(e) => handleInputChange('currentTakeHome', e.target.value)} className={inputCls(false)} placeholder="e.g. 60k/mo" />
-                    </div>
-                  </div>
+                  {(isCandidateFieldVisible('ctc') || isCandidateFieldVisible('currentTakeHome')) && <div className="flex flex-col sm:flex-row gap-2">
+                    {isCandidateFieldVisible('ctc') && (
+                      <div className="w-full sm:w-1/2">
+                        <label className="block text-sm font-medium mb-1 text-slate-700">Current CTC</label>
+                        <input type="text" value={formData.ctc} onChange={(e) => handleInputChange('ctc', e.target.value)} className={inputCls(false)} placeholder="e.g. 10 LPA" />
+                      </div>
+                    )}
+                    {isCandidateFieldVisible('currentTakeHome') && (
+                      <div className="w-full sm:w-1/2">
+                        <label className="block text-sm font-medium mb-1 text-slate-700">Current Take Home</label>
+                        <input type="text" value={formData.currentTakeHome} onChange={(e) => handleInputChange('currentTakeHome', e.target.value)} className={inputCls(false)} placeholder="e.g. 60k/mo" />
+                      </div>
+                    )}
+                  </div>}
 
-                  <div className="flex flex-col sm:flex-row gap-2">
-                    <div className="w-full sm:w-1/2">
-                      <label className="block text-sm font-medium mb-1 text-slate-700">Expected CTC</label>
-                      <input type="text" value={formData.ectc} onChange={(e) => handleInputChange('ectc', e.target.value)} className={inputCls(false)} placeholder="e.g. 15 LPA" />
-                    </div>
-                    <div className="w-full sm:w-1/2">
-                      <label className="block text-sm font-medium mb-1 text-slate-700">Expected Take Home</label>
-                      <input type="text" value={formData.expectedTakeHome} onChange={(e) => handleInputChange('expectedTakeHome', e.target.value)} className={inputCls(false)} placeholder="e.g. 90k/mo" />
-                    </div>
-                  </div>
+                  {(isCandidateFieldVisible('ectc') || isCandidateFieldVisible('expectedTakeHome')) && <div className="flex flex-col sm:flex-row gap-2">
+                    {isCandidateFieldVisible('ectc') && (
+                      <div className="w-full sm:w-1/2">
+                        <label className="block text-sm font-medium mb-1 text-slate-700">Expected CTC</label>
+                        <input type="text" value={formData.ectc} onChange={(e) => handleInputChange('ectc', e.target.value)} className={inputCls(false)} placeholder="e.g. 15 LPA" />
+                      </div>
+                    )}
+                    {isCandidateFieldVisible('expectedTakeHome') && (
+                      <div className="w-full sm:w-1/2">
+                        <label className="block text-sm font-medium mb-1 text-slate-700">Expected Take Home</label>
+                        <input type="text" value={formData.expectedTakeHome} onChange={(e) => handleInputChange('expectedTakeHome', e.target.value)} className={inputCls(false)} placeholder="e.g. 90k/mo" />
+                      </div>
+                    )}
+                  </div>}
 
-                  <div>
+                  {isCandidateFieldVisible('noticePeriod') && <div>
                     <label className="block text-sm font-medium mb-1 text-slate-700">Notice Period (N/P)</label>
                     <input type="text" value={formData.noticePeriod} onChange={(e) => handleInputChange('noticePeriod', e.target.value)} className={inputCls(false)} placeholder="e.g. 30 Days" />
-                  </div>
-                  <div>
+                  </div>}
+                  {isCandidateFieldVisible('servingNoticePeriod') && <div>
                     <label className="block text-sm font-medium mb-1 text-slate-700">Serving Notice Period?</label>
                     <select value={formData.servingNoticePeriod} onChange={(e) => handleInputChange('servingNoticePeriod', e.target.value)} className={inputCls(false)}>
                       <option value="false">No</option>
                       <option value="true">Yes</option>
                     </select>
-                  </div>
+                  </div>}
 
                   {formData.servingNoticePeriod === 'true' && (
                     <div>
@@ -1393,13 +2017,13 @@ export default function AdminCandidates() {
                     </div>
                   )}
 
-                  <div>
+                  {isCandidateFieldVisible('offersInHand') && <div>
                     <label className="block text-sm font-medium mb-1 text-slate-700">Offer in Hand?</label>
                     <select value={formData.offersInHand} onChange={(e) => handleInputChange('offersInHand', e.target.value)} className={inputCls(false)}>
                       <option value="false">No</option>
                       <option value="true">Yes</option>
                     </select>
-                  </div>
+                  </div>}
 
                   {formData.offersInHand === 'true' && (
                     <div>
@@ -1411,47 +2035,57 @@ export default function AdminCandidates() {
                 </div>
               </section>
 
-              <section>
-                <h3 className="text-base font-semibold text-blue-700 border-b border-blue-100 pb-2 mb-4">Tracking & Assignment</h3>
+              <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                <h3 className="text-base font-semibold text-blue-700 border-b border-blue-100 pb-2 mb-4">Tracking &amp; Assignment</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
+                  {isCandidateFieldVisible('source') && <div>
                     <label className="block text-sm font-medium mb-1 text-slate-700">Source</label>
                     <select value={formData.source} onChange={(e) => handleInputChange('source', e.target.value)} className={inputCls(false)}>
                       {SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
-                  </div>
+                  </div>}
 
-                  {/* 🔴 Multi-Select Status UI */}
-                  <div className="space-y-1">
-                    <label className="block text-sm font-medium mb-1 text-slate-700">Status (Multi-select) *</label>
-                    <div className={`border rounded-lg p-2 min-h-[42px] flex flex-wrap gap-2 bg-white ${errors.status ? 'border-red-500' : 'border-slate-200 dark:border-slate-700'}`}>
-                      {formData.status.length > 0 ? formData.status.map(status => (
-                        <span key={status} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700">
-                          {status}
-                          <X className="h-3 w-3 cursor-pointer hover:text-red-500" onClick={() => removeStatus(status)} />
-                        </span>
-                      )) : <span className="text-sm text-slate-400 p-1">No status selected</span>}
-                    </div>
-                    <select value="" onChange={(e) => addStatus(e.target.value)} className={inputCls(errors.status)}>
-                      <option value="">Add a status...</option>
-                      <option value="SELECT_ALL">✓ Select All</option>
-                      {ALL_STATUSES.map(status => <option key={status} value={status} disabled={formData.status.includes(status)}>{status}</option>)}
-                    </select>
-                    {errors.status && <p className="text-xs text-red-500 mt-1">{errors.status}</p>}
-                  </div>
+                  {/* 🔴 Multi-Select Status UI — removed from add/edit form */}
 
-                  <div className="md:col-span-2">
+                  {isCandidateFieldVisible('recruiterId') && <div className="md:col-span-2">
                     <label className="block text-sm font-medium mb-1 text-slate-700">Assign to User</label>
                     <select value={formData.recruiterId} onChange={(e) => handleInputChange('recruiterId', e.target.value)} className={inputCls(false)}>
                       <option value="">Select User</option>
                       {recruiters.map((r) => <option key={r._id || r.id} value={r._id || r.id}>{getRecruiterLabel(r)}</option>)}
                     </select>
-                  </div>
-                  <div className="md:col-span-2">
+                  </div>}
+                  {isCandidateFieldVisible('remarks') && <div className="md:col-span-2">
                     <label className="block text-sm font-medium mb-1 text-slate-700">Remarks</label>
                     <Textarea value={formData.remarks} onChange={(e) => handleInputChange('remarks', e.target.value)} className={inputCls(false)} placeholder="Add any comments or remarks here..." rows={3} />
-                  </div>
+                  </div>}
                 </div>
+              </section>
+
+              <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Additional Fields</p>
+                    <h3 className="text-base font-semibold text-slate-900 mt-1">Custom candidate inputs</h3>
+                  </div>
+                  <button onClick={() => setCandidateFormControlOpen(true)} className="inline-flex items-center justify-center gap-2 px-3 py-2 border border-slate-300 bg-white rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-100 transition">
+                    <SlidersHorizontal className="h-4 w-4" /> Manage Fields
+                  </button>
+                </div>
+                {visibleCustomCandidateFields.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {visibleCustomCandidateFields.map(field => (
+                      <div key={field.fieldName} className={field.fieldType === 'textarea' ? 'md:col-span-2' : ''}>
+                        <label className="block text-sm font-medium mb-1 text-slate-700">{field.label}</label>
+                        <CandidateCustomFieldInput field={field} value={formData.customFields?.[field.fieldName]} onChange={handleCustomCandidateFieldChange} />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-dashed border-slate-300 bg-white p-6 text-center">
+                    <p className="text-sm font-medium text-slate-800">No additional fields enabled</p>
+                    <p className="text-xs text-slate-500 mt-1">Use Form Control to add or show custom fields here.</p>
+                  </div>
+                )}
               </section>
 
             </div>
@@ -1468,53 +2102,136 @@ export default function AdminCandidates() {
       )}
 
       {/* ── View Full Details Dialog ────────────────────────────────────────── */}
+      <CandidateFormControlModal
+        isOpen={candidateFormControlOpen}
+        onClose={() => setCandidateFormControlOpen(false)}
+        config={candidateFieldConfig}
+        onConfigChange={handleCandidateConfigChange}
+      />
+
+      <BulkCandidateImportModal
+        open={isImportDialogOpen}
+        onClose={() => setIsImportDialogOpen(false)}
+        apiUrl={API_URL}
+        getHeaders={getAuthHeader}
+        onImported={fetchData}
+      />
+
+      <CandidateExportModal
+        open={isExportDialogOpen}
+        onClose={() => setIsExportDialogOpen(false)}
+        candidates={filteredCandidates}
+        standardColumns={candidateExportColumns}
+        customFields={candidateFieldConfig.customFields}
+      />
+
       {isViewDialogOpen && viewCandidate && (
         <div className="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden">
+          <div className="bg-white rounded-xl shadow-2xl max-w-7xl w-full max-h-[90vh] flex flex-col overflow-hidden border border-slate-200">
+            {/* Header */}
             <div className="p-6 border-b border-slate-200 bg-slate-50 flex justify-between items-start">
               <div>
-                <h2 className="text-xl font-bold text-slate-900">{viewCandidate.name}</h2>
+                <h2 className="text-xl font-bold text-slate-900">
+                  <CandidateProfileLink candidate={viewCandidate} className="text-slate-900">
+                    {viewCandidate.name}
+                  </CandidateProfileLink>
+                </h2>
                 <p className="text-sm font-mono text-blue-600 mt-1">{getCandidateId(viewCandidate)}</p>
               </div>
               <button onClick={() => setIsViewDialogOpen(false)} className="text-slate-400 hover:text-slate-600 text-2xl font-bold leading-none px-2">×</button>
             </div>
-            <div className="p-6 overflow-y-auto flex-1 space-y-4 text-sm">
-              <div className="grid grid-cols-2 gap-4">
-                {[
-                  ['First Name', viewCandidate.firstName],
-                  ['Last Name', viewCandidate.lastName],
-                  ['Email', viewCandidate.email],
-                  ['Contact', viewCandidate.contact],
-                  ['Alt Contact', viewCandidate.alternateNumber],
-                  ['Role', viewCandidate.position],
-                  ['Client', viewCandidate.client],
-                  ['Current Company', viewCandidate.currentCompany],
-                  ['Current Location', viewCandidate.currentLocation],
-                  ['Preferred Location', viewCandidate.preferredLocation],
-                  ['Total Exp', viewCandidate.totalExperience ? `${viewCandidate.totalExperience} Yrs` : null],
-                  ['Relevant Exp', viewCandidate.relevantExperience ? `${viewCandidate.relevantExperience} Yrs` : null],
-                  ['Current CTC', viewCandidate.ctc],
-                  ['Current Take Home', viewCandidate.currentTakeHome],
-                  ['Expected CTC', viewCandidate.ectc],
-                  ['Expected Take Home', viewCandidate.expectedTakeHome],
-                  ['Notice Period', viewCandidate.noticePeriod],
-                  ['Serving Notice?', viewCandidate.servingNoticePeriod ? 'Yes' : 'No'],
-                  ['LWD', viewCandidate.lwd ? new Date(viewCandidate.lwd).toLocaleDateString() : null],
-                  ['Reason for Change', viewCandidate.reasonForChange],
-                  ['Offers in Hand', viewCandidate.offersInHand ? `Yes (${viewCandidate.offerPackage})` : 'No'],
-                  ['Source', viewCandidate.source],
-                  ['Assigned Recruiter', typeof viewCandidate.recruiterId === 'object' ? getRecruiterName(viewCandidate.recruiterId) : viewCandidate.recruiterName],
-                  ['Status', Array.isArray(viewCandidate.status) ? viewCandidate.status.join(', ') : viewCandidate.status],
-                  ['Remarks', viewCandidate.remarks]
-                ].map(([label, val]) => val ? (
-                  <div key={label} className="col-span-2 md:col-span-1 border-b border-slate-100 pb-2">
-                    <span className="block text-xs font-semibold text-slate-500 uppercase mb-1">{label}</span>
-                    <span className="text-slate-900 font-medium">{val}</span>
+
+            {/* Body */}
+            <div className="p-6 overflow-y-auto flex-1 space-y-6 text-sm bg-slate-100/60">
+              {/* Personal + Professional grid */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-3 shadow-sm">
+                  <h3 className="font-semibold text-slate-800 border-b pb-2 flex items-center gap-2"><UserCircle className="h-4 w-4" /> Personal Information</h3>
+                  <div className="grid grid-cols-2 gap-y-3">
+                    {[
+                      ['First Name', viewCandidate.firstName],
+                      ['Last Name', viewCandidate.lastName],
+                      ['Email', viewCandidate.email],
+                      ['Contact', viewCandidate.contact],
+                      ['Alt Contact', viewCandidate.alternateNumber],
+                      ['Date of Birth', viewCandidate.dateOfBirth ? new Date(viewCandidate.dateOfBirth).toLocaleDateString() : null],
+                      ['Gender', viewCandidate.gender],
+                      ['Current Location', viewCandidate.currentLocation],
+                      ['Preferred Location', viewCandidate.preferredLocation],
+                    ].map(([label, val]) => val ? (
+                      <div key={label} className="col-span-2 md:col-span-1">
+                        <span className="block text-xs font-semibold text-slate-500 uppercase mb-0.5">{label}</span>
+                        <span className="text-slate-900 font-medium">{val}</span>
+                      </div>
+                    ) : null)}
                   </div>
-                ) : null)}
+                </div>
+
+                <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-3 shadow-sm">
+                  <h3 className="font-semibold text-slate-800 border-b pb-2 flex items-center gap-2"><Briefcase className="h-4 w-4" /> Professional Details</h3>
+                  <div className="grid grid-cols-2 gap-y-3">
+                    {[
+                      ['Current Role', viewCandidate.position],
+                      ['Current Company', viewCandidate.currentCompany],
+                      ['Total Exp', viewCandidate.totalExperience ? `${viewCandidate.totalExperience} Yrs` : null],
+                      ['Relevant Exp', viewCandidate.relevantExperience ? `${viewCandidate.relevantExperience} Yrs` : null],
+                      ['Current CTC', viewCandidate.ctc],
+                      ['Expected CTC', viewCandidate.ectc],
+                      ['Notice Period', viewCandidate.noticePeriod],
+                      ['Serving Notice?', viewCandidate.servingNoticePeriod ? 'Yes' : 'No'],
+                      ['LWD', viewCandidate.lwd ? new Date(viewCandidate.lwd).toLocaleDateString() : null],
+                      ['Offers in Hand', viewCandidate.offersInHand ? `Yes (${viewCandidate.offerPackage})` : 'No'],
+                      ['Source', viewCandidate.source],
+                      ['Assigned Recruiter', (
+                        <RecruiterDetailsTrigger
+                          recruiter={getCandidateRecruiterDetails(viewCandidate, recruiters)}
+                          className="text-slate-900 font-medium"
+                        >
+                          {typeof viewCandidate.recruiterId === 'object' ? getRecruiterName(viewCandidate.recruiterId) : viewCandidate.recruiterName || 'Unassigned'}
+                        </RecruiterDetailsTrigger>
+                      )],
+                      ['Remarks', viewCandidate.remarks],
+                    ].map(([label, val]) => val ? (
+                      <div key={label} className="col-span-2 md:col-span-1">
+                        <span className="block text-xs font-semibold text-slate-500 uppercase mb-0.5">{label}</span>
+                        <span className="text-slate-900 font-medium">{val}</span>
+                      </div>
+                    ) : null)}
+                  </div>
+                  <div>
+                    <span className="block text-xs font-semibold text-slate-500 uppercase mb-2">Status</span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {getCandidateStatuses(viewCandidate).map((status) => (
+                        <StatusBadge key={status} status={status} />
+                      ))}
+                    </div>
+                  </div>
+                  {/* Skills */}
+                  {viewCandidate.skills && (
+                    <div>
+                      <span className="block text-xs font-semibold text-slate-500 uppercase mb-1">Skills</span>
+                      <div className="flex flex-wrap gap-1">
+                        {(Array.isArray(viewCandidate.skills) ? viewCandidate.skills : String(viewCandidate.skills).split(',')).map((s) => (
+                          <span key={s} className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 border border-blue-200">{s.trim()}</span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Client-wise Pipeline */}
+              <div className="rounded-xl border border-slate-200 bg-white p-5">
+                <CandidatePipelinePanel
+                  candidateId={viewCandidate._id}
+                  apiUrl={API_URL}
+                  authHeaders={getAuthHeader}
+                />
               </div>
             </div>
+
             <div className="p-5 border-t border-slate-200 bg-slate-50 flex justify-end gap-3">
+              <button onClick={() => setIsViewDialogOpen(false)} className="px-5 py-2.5 border border-slate-300 bg-white text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-100 transition">Close</button>
               <button onClick={() => { setIsViewDialogOpen(false); openEditDialog(viewCandidate); }} className="px-5 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition">Edit Details</button>
             </div>
           </div>
@@ -1545,7 +2262,7 @@ function AdminTodaySubmissionsModal({ candidates, recruiters, onClose, getCandid
       const d = c.dateAdded || c.createdAt;
       const dateMatch = getSafeDate(d) === selectedDate;
       if (!dateMatch) return false;
-      
+
       if (recruiterFilter === 'all') return true;
       const recId = typeof c.recruiterId === 'object' ? c.recruiterId?._id : c.recruiterId;
       return String(recId) === String(recruiterFilter);
@@ -1572,7 +2289,7 @@ function AdminTodaySubmissionsModal({ candidates, recruiters, onClose, getCandid
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
       <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[85vh] overflow-hidden flex flex-col">
-        
+
         {/* Header */}
         <div className="flex items-start justify-between px-6 pt-5 pb-3 border-b border-slate-100">
           <div className="flex items-center gap-2">
@@ -1648,9 +2365,13 @@ function AdminTodaySubmissionsModal({ candidates, recruiters, onClose, getCandid
                       <td className="px-4 py-3 font-mono text-xs text-blue-600 font-bold whitespace-nowrap">
                         {getCandidateId(c)}
                       </td>
-                      <td className="px-4 py-3 font-semibold text-slate-900 whitespace-nowrap">{c.name}</td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <CandidateProfileLink candidate={c} className="text-slate-900">{c.name}</CandidateProfileLink>
+                      </td>
                       <td className="px-4 py-3 text-slate-600 whitespace-nowrap">
-                        {getRecruiterDisplayName(c.recruiterId)}
+                        <RecruiterDetailsTrigger recruiter={getCandidateRecruiterDetails(c, recruiters)} className="text-slate-600 font-medium">
+                          {getRecruiterDisplayName(c.recruiterId)}
+                        </RecruiterDetailsTrigger>
                       </td>
                       <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{c.position || '-'}</td>
                       <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{c.client || '-'}</td>
@@ -1659,13 +2380,12 @@ function AdminTodaySubmissionsModal({ candidates, recruiters, onClose, getCandid
                           {statusArr.map(s => (
                             <span
                               key={s}
-                              className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                                s === 'Selected' || s === 'Joined'
+                              className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${s === 'Selected' || s === 'Joined'
                                   ? 'bg-green-100 text-green-800'
                                   : s === 'Rejected' || s === 'No Show' || s === 'Backout'
                                     ? 'bg-red-100 text-red-700'
                                     : 'bg-blue-100 text-blue-800'
-                              }`}
+                                }`}
                             >
                               {s}
                             </span>

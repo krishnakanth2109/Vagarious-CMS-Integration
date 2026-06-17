@@ -182,10 +182,6 @@ export const getRecruiters = async (req, res) => {
     const recruiters = await User.find({
       role: { $in: ['recruiter', 'admin', 'manager'] }
     }).select('-password').sort({ role: 1, firstName: 1 }).lean();
-    console.log(`[getRecruiters] Found ${recruiters.length} users with roles recruiter/admin/manager`);
-    if (recruiters.length > 0) {
-      console.log(`- Sample: ${recruiters[0].firstName} ${recruiters[0].lastName} role: ${recruiters[0].role}`);
-    }
     res.json(recruiters);
   } catch (error) {
     res.status(500).json({ message: error.message });

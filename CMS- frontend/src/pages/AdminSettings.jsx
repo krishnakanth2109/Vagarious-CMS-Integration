@@ -131,52 +131,56 @@ export default function AdminSettings() {
 
   if (loading) {
     return (
-      <div className="flex-1 flex items-center justify-center p-8">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="flex-1 flex items-center justify-center bg-[#f3f6fd] p-8">
+        <Loader2 className="h-8 w-8 animate-spin text-[#283086]" />
       </div>
     );
   }
 
   return (
-    <div className="flex-1 p-8 overflow-y-auto">
+    <div className="flex-1 min-h-screen bg-[#f3f6fd] p-6 lg:p-8 overflow-y-auto">
       <div className="max-w-4xl mx-auto space-y-6 animate-fade-in">
 
-        <div>
-          <h1 className="text-4xl font-bold text-foreground">Settings</h1>
-          <p className="text-muted-foreground mt-2">Manage your account and preferences</p>
+        <div className="bg-white/70 p-6 rounded-[1.5rem] border border-gray-100 shadow-sm">
+          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#283086] mb-2">Administration</p>
+          <h1 className="text-3xl font-black text-slate-900">Settings</h1>
+          <p className="text-gray-500 mt-1">Manage your account and preferences</p>
         </div>
 
         {/* ── Profile Card ── */}
-        <Card>
-          <CardHeader>
+        <Card className="rounded-[1.5rem] border border-gray-100 shadow-sm bg-white overflow-hidden">
+          <CardHeader className="bg-[#f8faff] border-b border-gray-100">
             <div className="flex items-center gap-2">
-              <User className="h-5 w-5 text-primary" />
-              <CardTitle>Profile Information</CardTitle>
+              <div className="rounded-xl bg-[#e3f2fd] p-2">
+                <User className="h-5 w-5 text-[#283086]" />
+              </div>
+              <CardTitle className="text-slate-900">Profile Information</CardTitle>
             </div>
             <CardDescription>Update your personal details</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-4 p-6">
             <div className="space-y-2">
               <Label htmlFor="name">Full Name</Label>
               <Input id="name" value={formData.name}
-                onChange={e => setFormData(p => ({ ...p, name: e.target.value }))} />
+                onChange={e => setFormData(p => ({ ...p, name: e.target.value }))}
+                className="border-gray-200 focus-visible:ring-[#283086]" />
             </div>
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <div className="relative">
-                <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                 <Input id="email" type="email" value={formData.email}
                   onChange={e => setFormData(p => ({ ...p, email: e.target.value }))}
-                  className="pl-10" />
+                  className="pl-10 border-gray-200 focus-visible:ring-[#283086]" />
               </div>
             </div>
             <div className="space-y-2">
               <Label htmlFor="username">Username</Label>
-              <Input id="username" value={formData.username} disabled className="bg-muted" />
-              <p className="text-xs text-muted-foreground">Username cannot be changed.</p>
+              <Input id="username" value={formData.username} disabled className="bg-slate-100 border-gray-200" />
+              <p className="text-xs text-gray-500">Username cannot be changed.</p>
             </div>
             <div className="flex justify-end pt-2">
-              <Button onClick={handleSaveProfile} disabled={saving}>
+              <Button onClick={handleSaveProfile} disabled={saving} className="bg-[#283086] hover:bg-[#1f256f]">
                 {saving
                   ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving...</>
                   : 'Save Profile'}
@@ -186,15 +190,17 @@ export default function AdminSettings() {
         </Card>
 
         {/* ── Password Reset Card ── */}
-        <Card>
-          <CardHeader>
+        <Card className="rounded-[1.5rem] border border-gray-100 shadow-sm bg-white overflow-hidden">
+          <CardHeader className="bg-[#f8faff] border-b border-gray-100">
             <div className="flex items-center gap-2">
-              <Lock className="h-5 w-5 text-primary" />
-              <CardTitle>Change Password</CardTitle>
+              <div className="rounded-xl bg-[#f3e5f5] p-2">
+                <Lock className="h-5 w-5 text-[#283086]" />
+              </div>
+              <CardTitle className="text-slate-900">Change Password</CardTitle>
             </div>
             <CardDescription>Request a secure password reset link to be sent to your registered email address.</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-6">
 
             {/* Step indicator */}
             <div className="flex items-center gap-2 mb-6">
@@ -206,16 +212,16 @@ export default function AdminSettings() {
                     <div className="flex items-center gap-1.5 shrink-0">
                       <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
                         done   ? 'bg-green-500 text-white'
-                               : active ? 'bg-primary text-primary-foreground'
-                               : 'bg-muted text-muted-foreground'
+                               : active ? 'bg-[#283086] text-white'
+                               : 'bg-slate-100 text-slate-500'
                       }`}>
                         {done ? <CheckCircle2 className="w-3.5 h-3.5" /> : i + 1}
                       </div>
-                      <span className={`text-xs font-medium hidden sm:block ${active || done ? 'text-foreground' : 'text-muted-foreground'}`}>
+                      <span className={`text-xs font-medium hidden sm:block ${active || done ? 'text-slate-900' : 'text-slate-500'}`}>
                         {label}
                       </span>
                     </div>
-                    {i < 1 && <div className={`flex-1 h-px ${done ? 'bg-green-400' : 'bg-border'}`} />}
+                    {i < 1 && <div className={`flex-1 h-px ${done ? 'bg-green-400' : 'bg-gray-200'}`} />}
                   </React.Fragment>
                 );
               })}
@@ -224,17 +230,17 @@ export default function AdminSettings() {
             {/* STEP 1 — Request Link */}
             {step === STEPS.REQUEST && (
               <div className="space-y-4">
-                <div className="flex items-start gap-3 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-100 dark:border-blue-800">
-                  <Mail className="h-5 w-5 text-blue-600 mt-0.5 shrink-0" />
+                <div className="flex items-start gap-3 p-4 bg-[#f8faff] rounded-xl border border-blue-100">
+                  <Mail className="h-5 w-5 text-[#283086] mt-0.5 shrink-0" />
                   <div>
-                    <p className="text-sm font-semibold text-blue-800 dark:text-blue-300">Identity Verification Required</p>
-                    <p className="text-sm text-blue-700 dark:text-blue-400 mt-0.5">
+                    <p className="text-sm font-semibold text-[#283086]">Identity Verification Required</p>
+                    <p className="text-sm text-slate-600 mt-0.5">
                       A password reset link will be sent to <strong>{getUserEmail()}</strong>. Click the link in the email to securely update your password.
                     </p>
                   </div>
                 </div>
                 <div className="flex justify-end">
-                  <Button onClick={handleSendLink} disabled={sending} className="min-w-[160px]">
+                  <Button onClick={handleSendLink} disabled={sending} className="min-w-[160px] bg-[#283086] hover:bg-[#1f256f]">
                     {sending
                       ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Sending...</>
                       : <><Mail className="mr-2 h-4 w-4" />Send Reset Link</>}
@@ -246,17 +252,17 @@ export default function AdminSettings() {
             {/* STEP 2 — Link Sent UI */}
             {step === STEPS.SENT && (
               <div className="py-8 flex flex-col items-center gap-4 text-center">
-                <div className="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mb-2">
+                <div className="w-16 h-16 bg-green-100 rounded-2xl flex items-center justify-center mb-2">
                   <Mail className="h-8 w-8 text-green-600" />
                 </div>
                 <div>
-                  <h3 className="text-xl font-semibold text-foreground">Check Your Inbox!</h3>
-                  <p className="text-sm text-muted-foreground mt-2 max-w-md mx-auto leading-relaxed">
-                    A reset link has been successfully sent to <strong className="text-foreground">{getUserEmail()}</strong>.
+                  <h3 className="text-xl font-semibold text-slate-900">Check Your Inbox!</h3>
+                  <p className="text-sm text-slate-500 mt-2 max-w-md mx-auto leading-relaxed">
+                    A reset link has been successfully sent to <strong className="text-slate-900">{getUserEmail()}</strong>.
                     Please check your email and click the link to reset your password.
                   </p>
                 </div>
-                <div className="mt-4 pt-4 border-t border-border w-full flex justify-center">
+                <div className="mt-4 pt-4 border-t border-gray-100 w-full flex justify-center">
                   <Button variant="outline" onClick={resetFlow}>Back to Request</Button>
                 </div>
               </div>

@@ -7,6 +7,8 @@ import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import * as XLSX from 'xlsx';
+import CandidateProfileLink from '@/components/CandidateProfileLink';
+import { RecruiterDetailsTrigger } from '@/components/RecruiterDetailsModal';
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 // Adjust for API format
 const API_URL = BASE_URL.endsWith('/api') ? BASE_URL : `${BASE_URL}/api`;
@@ -584,7 +586,9 @@ export default function MockInterviewsDashboard() {
                       <ChevronRight className="w-4 h-4 rotate-180" /> Back to pipeline
                     </button>
                     <h2 className="text-3xl font-black text-slate-800 flex items-center gap-3">
-                      {sessionResults.candidate_name}
+                      <CandidateProfileLink candidateId={sessionResults.candidate_id || sessionResults.candidateId} className="text-slate-800">
+                        {sessionResults.candidate_name}
+                      </CandidateProfileLink>
                       {sessionResults.decision && sessionResults.decision.toLowerCase() !== 'pending' && (
                         <span className={`text-xs tracking-widest font-black px-4 py-1.5 rounded-full border shadow-sm ${sessionResults.decision.toLowerCase() === 'selected'
                             ? 'bg-emerald-500 text-white border-emerald-400'
@@ -933,7 +937,12 @@ export default function MockInterviewsDashboard() {
                           </td>
                           <td className="px-6 py-8">
                             <div className="flex items-center gap-2">
-                              <p className="font-black text-[#584ED3] text-base uppercase whitespace-nowrap">{s.candidate_name}</p>
+                              <CandidateProfileLink
+                                candidateId={s.candidate_id || s.candidateId}
+                                className="font-black text-[#584ED3] text-base uppercase whitespace-nowrap"
+                              >
+                                {s.candidate_name}
+                              </CandidateProfileLink>
                               {s.decision && s.decision !== 'pending' && (
                                 <span className={`px-3 py-1 rounded text-[10px] font-black uppercase text-white shadow-md ${s.decision === 'Selected' ? 'bg-[#10B981]' : 'bg-[#EF4444]'
                                   }`}>
@@ -966,7 +975,9 @@ export default function MockInterviewsDashboard() {
                                 <div className="w-8 h-8 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-500 text-xs font-black border border-indigo-100">
                                   {recInitial}
                                 </div>
-                                <span className="font-black text-slate-700 text-sm tracking-tight">{recName}</span>
+                                <RecruiterDetailsTrigger recruiter={rec || { name: recName }} className="font-black text-slate-700 text-sm tracking-tight">
+                                  {recName}
+                                </RecruiterDetailsTrigger>
                               </div>
                             </td>
                           )}
@@ -1102,7 +1113,9 @@ export default function MockInterviewsDashboard() {
                             <div className="flex items-center gap-3">
                               <div className="w-7 h-7 bg-indigo-50 rounded-full flex items-center justify-center text-[10px] font-black text-indigo-500">{c.name.charAt(0)}</div>
                               <div>
-                                <p className="text-xs font-black text-slate-800">{c.name}</p>
+                                <p className="text-xs font-black">
+                                  <CandidateProfileLink candidate={c} className="text-slate-800">{c.name}</CandidateProfileLink>
+                                </p>
                                 <p className="text-[10px] text-slate-400 font-medium">{c.email}</p>
                               </div>
                             </div>

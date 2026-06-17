@@ -21,6 +21,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
+import { RecruiterDetailsTrigger } from "@/components/RecruiterDetailsModal";
 
 // ── ENV ───────────────────────────────────────────────────────────────────────
 const BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/$/, '');
@@ -449,7 +450,7 @@ export default function AdminRecruiters() {
   // Render
   // ══════════════════════════════════════════════════════════════════════════
   return (
-    <div className="flex-1 p-6 lg:p-8">
+    <div className="flex-1 min-h-screen overflow-y-auto bg-[#f3f6fd] p-6 lg:p-8">
       <div className="max-w-7xl mx-auto space-y-6">
 
         {/* ── Success Banner ───────────────────────────────────────────── */}
@@ -491,47 +492,51 @@ export default function AdminRecruiters() {
         )}
 
         {/* ── Header ──────────────────────────────────────────────────── */}
-        <div className="flex flex-col lg:flex-row justify-between items-center gap-4">
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-4 bg-white/70 p-6 rounded-[1.5rem] border border-gray-100 shadow-sm">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight text-gray-900 dark:text-white">
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#283086] mb-2">Administration</p>
+            <h1 className="text-3xl font-black tracking-tight text-slate-900">
               Users Management
             </h1>
-            <p className="text-gray-500 mt-1">Manage Admins and Recruiters</p>
+            <p className="text-gray-500 mt-1">Manage admins and recruiters</p>
           </div>
           <Button
             onClick={() => { setShowModal(true); setErrors({}); setNewRecruiter(EMPTY_RECRUITER); }}
-            className="bg-blue-600 hover:bg-blue-700">
+            className="bg-[#283086] hover:bg-[#1f256f] shadow-lg">
             <UserPlus className="h-4 w-4 mr-2" /> Add User
           </Button>
         </div>
 
         {/* ── Summary Cards ────────────────────────────────────────────── */}
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-          <Card className="bg-blue-600 text-white cursor-pointer hover:bg-blue-700 transition"
+          <Card className="relative overflow-hidden bg-[#3530a0] text-white cursor-pointer hover:bg-[#2b2788] transition rounded-[1.5rem] border-0 shadow-lg"
             onClick={() => { setSelectedStatsRecruiters(recruiters); setStatsModalTitle("All Users"); setShowStatsModal(true); }}>
-            <CardContent className="p-4 flex justify-between items-center">
-              <div><p className="text-blue-100 text-sm">Total</p><p className="text-3xl font-bold">{totalR}</p></div>
+            <CardContent className="p-6 flex justify-between items-center">
+              <div><p className="text-white/80 text-[10px] font-bold uppercase tracking-wider">Total</p><p className="text-4xl font-black mt-2">{totalR}</p></div>
               <Users className="h-10 w-10 opacity-70" />
+              <div className="absolute -right-8 -top-8 h-28 w-28 rounded-full bg-white/10" />
             </CardContent>
           </Card>
-          <Card className="bg-green-600 text-white cursor-pointer hover:bg-green-700 transition"
+          <Card className="relative overflow-hidden bg-white cursor-pointer hover:shadow-md transition rounded-[1.5rem] border border-gray-100 shadow-sm"
             onClick={() => { setSelectedStatsRecruiters(recruiters.filter(isActive)); setStatsModalTitle("Active Users"); setShowStatsModal(true); }}>
-            <CardContent className="p-4 flex justify-between items-center">
-              <div><p className="text-green-100 text-sm">Active</p><p className="text-3xl font-bold">{activeR}</p></div>
-              <UserCheck className="h-10 w-10 opacity-70" />
+            <CardContent className="p-6 flex justify-between items-center">
+              <div><p className="text-gray-500 text-[10px] font-bold uppercase tracking-wider">Active</p><p className="text-4xl font-black mt-2 text-slate-800">{activeR}</p></div>
+              <div className="p-3 rounded-xl bg-[#e8f5e9]"><UserCheck className="h-7 w-7 text-green-600" /></div>
+              <div className="absolute -left-8 -top-8 h-28 w-28 rounded-full bg-[#e8f5e9]" />
             </CardContent>
           </Card>
-          <Card className="bg-red-500 text-white cursor-pointer hover:bg-red-600 transition"
+          <Card className="relative overflow-hidden bg-white cursor-pointer hover:shadow-md transition rounded-[1.5rem] border border-gray-100 shadow-sm"
             onClick={() => { setSelectedStatsRecruiters(recruiters.filter(isInactive)); setStatsModalTitle("Inactive Users"); setShowStatsModal(true); }}>
-            <CardContent className="p-4 flex justify-between items-center">
-              <div><p className="text-red-100 text-sm">Inactive</p><p className="text-3xl font-bold">{inactiveR}</p></div>
-              <UserX className="h-10 w-10 opacity-70" />
+            <CardContent className="p-6 flex justify-between items-center">
+              <div><p className="text-gray-500 text-[10px] font-bold uppercase tracking-wider">Inactive</p><p className="text-4xl font-black mt-2 text-slate-800">{inactiveR}</p></div>
+              <div className="p-3 rounded-xl bg-[#ffebee]"><UserX className="h-7 w-7 text-red-500" /></div>
+              <div className="absolute -left-8 -top-8 h-28 w-28 rounded-full bg-[#ffebee]" />
             </CardContent>
           </Card>
         </div>
 
         {/* ── Controls ─────────────────────────────────────────────────── */}
-        <Card>
+        <Card className="rounded-[1.5rem] border border-gray-100 shadow-sm bg-white">
           <CardContent className="p-4 flex flex-col md:flex-row gap-4 items-center justify-between">
             <div className="relative w-full md:max-w-md">
               <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
@@ -539,7 +544,7 @@ export default function AdminRecruiters() {
                 placeholder="Search by name, email, ID, role…"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
+                className="pl-10 border-gray-200 focus-visible:ring-[#283086]"
               />
             </div>
             <div className="flex gap-2">
@@ -554,7 +559,7 @@ export default function AdminRecruiters() {
                   <SelectItem value="selected">Selected</SelectItem>
                 </SelectContent>
               </Select>
-              <div className="flex border rounded-md overflow-hidden">
+              <div className="flex border border-gray-200 rounded-xl overflow-hidden bg-white">
                 <Button variant={viewMode === 'grid' ? 'secondary' : 'ghost'} size="icon" onClick={() => setViewMode('grid')}><Grid3X3 className="h-4 w-4" /></Button>
                 <Button variant={viewMode === 'list' ? 'secondary' : 'ghost'} size="icon" onClick={() => setViewMode('list')}><List    className="h-4 w-4" /></Button>
               </div>
@@ -581,23 +586,25 @@ export default function AdminRecruiters() {
                   const st = calcStats(r.id);
                   const isAdmin = r.role === 'admin';
                   return (
-                    <Card key={r.id} className={`hover:shadow-lg transition-shadow relative ${
-                      !isActive(r) ? 'opacity-70 border-red-200 bg-red-50/20' :
-                      isAdmin ? 'border-purple-200 bg-purple-50/10' : ''
+                    <Card key={r.id} className={`rounded-[1.5rem] border-gray-100 bg-white shadow-sm hover:shadow-md transition-shadow relative overflow-hidden ${
+                      !isActive(r) ? 'opacity-70 border-red-200 bg-red-50/30' :
+                      isAdmin ? 'border-indigo-100' : ''
                     }`}>
                       <CardHeader className="flex flex-row items-start justify-between pb-2">
                         <div className="flex items-start gap-3">
-                          <div className={`h-12 w-12 rounded-full flex items-center justify-center text-white font-bold overflow-hidden flex-shrink-0 mt-0.5 ${isAdmin ? 'bg-gradient-to-br from-purple-500 to-indigo-600' : 'bg-gradient-to-br from-blue-500 to-cyan-500'}`}>
+                          <div className={`h-12 w-12 rounded-2xl flex items-center justify-center text-white font-bold overflow-hidden flex-shrink-0 mt-0.5 shadow-sm ${isAdmin ? 'bg-[#3530a0]' : 'bg-[#283086]'}`}>
                             {r.profilePicture
                               ? <img src={r.profilePicture} className="w-full h-full object-cover" alt="pfp" />
                               : getInitials(r.firstName, r.lastName)}
                           </div>
                           <div className="flex flex-col">
                             <CardTitle className="text-base leading-tight">
-                              <span className="flex items-center gap-1">
-                                {r.firstName} {r.lastName}
-                                {isAdmin && <ShieldAlert className="h-4 w-4 text-purple-600 flex-shrink-0" />}
-                              </span>
+                              <RecruiterDetailsTrigger recruiter={r} className="font-semibold text-slate-900">
+                                <span className="flex items-center gap-1">
+                                  {r.firstName} {r.lastName}
+                                  {isAdmin && <ShieldAlert className="h-4 w-4 text-purple-600 flex-shrink-0" />}
+                                </span>
+                              </RecruiterDetailsTrigger>
                             </CardTitle>
                             <div className="flex items-center gap-1.5 mt-1.5">
                               {r.recruiterId && <Badge variant="outline" className="text-xs flex-shrink-0">{r.recruiterId}</Badge>}
@@ -651,7 +658,7 @@ export default function AdminRecruiters() {
                         </div>
 
                         {/* Per-recruiter mini stats */}
-                        <div className="grid grid-cols-4 gap-2 border-t pt-3 text-center">
+                        <div className="grid grid-cols-4 gap-2 border-t border-gray-100 pt-3 text-center">
                           {[
                             { label: 'Total',    val: st.total,    filter: null,       color: 'text-blue-600' },
                             { label: 'Turnups',  val: st.turnups,  filter: 'turnups',  color: 'text-teal-600' },
@@ -659,7 +666,7 @@ export default function AdminRecruiters() {
                             { label: 'Joined',   val: st.joined,   filter: 'joined',   color: 'text-green-600' },
                           ].map(({ label, val, filter, color }) => (
                             <div key={label}
-                              className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded p-1 transition"
+                              className="cursor-pointer hover:bg-[#f8faff] rounded-lg p-1 transition"
                               onClick={() => {
                                 setSelectedRecruiter(r);
                                 setCandidatesModalTitle(`${label} — ${r.firstName} ${r.lastName}`);
@@ -680,10 +687,10 @@ export default function AdminRecruiters() {
 
             {/* ── List View ──────────────────────────────────────────────── */}
             {viewMode === "list" && (
-              <Card>
+              <Card className="rounded-[1.5rem] border border-gray-100 shadow-sm overflow-hidden">
                 <CardContent className="p-0 overflow-x-auto">
                   <table className="w-full text-sm text-left">
-                    <thead className="bg-gray-50 dark:bg-gray-800 text-xs uppercase text-gray-500">
+                    <thead className="bg-[#f8faff] text-xs uppercase text-gray-500">
                       <tr>
                         <th className="px-4 py-3 cursor-pointer" onClick={() => toggleSort('name')}>
                           <span className="flex items-center">User <SortIcon field="name" /></span>
@@ -711,22 +718,24 @@ export default function AdminRecruiters() {
                         const st = calcStats(r.id);
                         const isAdmin = r.role === 'admin';
                         return (
-                          <tr key={r.id} className={`border-b hover:bg-gray-50 dark:hover:bg-gray-800 ${
+                          <tr key={r.id} className={`border-b border-gray-100 hover:bg-blue-50/30 ${
                             !isActive(r) ? 'opacity-60 bg-red-50/30' :
                             isAdmin ? 'bg-purple-50/20' : ''
                           }`}>
                             <td className="px-4 py-3">
                               <div className="flex items-center gap-2">
-                                <div className={`h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold overflow-hidden flex-shrink-0 text-white ${isAdmin ? 'bg-purple-500' : 'bg-blue-500'}`}>
+                                <div className={`h-8 w-8 rounded-xl flex items-center justify-center text-xs font-bold overflow-hidden flex-shrink-0 text-white ${isAdmin ? 'bg-[#3530a0]' : 'bg-[#283086]'}`}>
                                   {r.profilePicture
                                     ? <img src={r.profilePicture} className="w-full h-full object-cover rounded-full" alt="pfp" />
                                     : getInitials(r.firstName, r.lastName)}
                                 </div>
                                 <div>
-                                  <div className="font-medium flex items-center gap-1">
-                                    {r.firstName} {r.lastName}
-                                    {isAdmin && <ShieldAlert className="h-3 w-3 text-purple-600" />}
-                                  </div>
+                                  <RecruiterDetailsTrigger recruiter={r} className="font-medium text-slate-900">
+                                    <span className="flex items-center gap-1">
+                                      {r.firstName} {r.lastName}
+                                      {isAdmin && <ShieldAlert className="h-3 w-3 text-purple-600" />}
+                                    </span>
+                                  </RecruiterDetailsTrigger>
                                   <div className="text-xs text-gray-500">{r.email}</div>
                                 </div>
                               </div>
@@ -797,11 +806,13 @@ export default function AdminRecruiters() {
         <Dialog open={showModal} onClose={() => setShowModal(false)} className="relative z-50">
           <DialogBackdrop className="fixed inset-0 bg-black/50" />
           <div className="fixed inset-0 flex items-center justify-center p-4">
-            <DialogPanel className="bg-white dark:bg-gray-900 w-full max-w-lg rounded-xl shadow-2xl p-6 max-h-[90vh] overflow-y-auto">
-              <DialogTitle className="text-xl font-bold mb-1">Add User</DialogTitle>
-              <p className="text-sm text-gray-500 mb-4">First name, last name, email & password are required.</p>
+            <DialogPanel className="bg-white w-full max-w-lg rounded-2xl shadow-2xl max-h-[90vh] overflow-hidden border border-gray-100 flex flex-col">
+              <div className="bg-[#f8faff] border-b border-gray-100 p-6">
+                <DialogTitle className="text-xl font-black text-slate-900">Add User</DialogTitle>
+                <p className="text-sm text-gray-500 mt-1">First name, last name, email & password are required.</p>
+              </div>
 
-              <div className="space-y-4">
+              <div className="space-y-4 p-6 overflow-y-auto">
                 {/* Profile picture */}
                 <div className="flex items-center gap-4">
                   <div className="h-16 w-16 bg-gray-200 rounded-full flex items-center justify-center overflow-hidden">
@@ -899,7 +910,7 @@ export default function AdminRecruiters() {
 
                 <div className="flex justify-end gap-2 pt-2">
                   <Button variant="outline" onClick={() => setShowModal(false)}>Cancel</Button>
-                  <Button onClick={handleAddRecruiter} className="bg-blue-600 hover:bg-blue-700">Save User</Button>
+                  <Button onClick={handleAddRecruiter} className="bg-[#283086] hover:bg-[#1f256f]">Save User</Button>
                 </div>
               </div>
             </DialogPanel>
@@ -910,10 +921,12 @@ export default function AdminRecruiters() {
         <Dialog open={showEditModal} onClose={() => setShowEditModal(false)} className="relative z-50">
           <DialogBackdrop className="fixed inset-0 bg-black/50" />
           <div className="fixed inset-0 flex items-center justify-center p-4">
-            <DialogPanel className="bg-white dark:bg-gray-900 w-full max-w-lg rounded-xl shadow-2xl p-6 max-h-[90vh] overflow-y-auto">
-              <DialogTitle className="text-xl font-bold mb-4">Edit User</DialogTitle>
+            <DialogPanel className="bg-white w-full max-w-lg rounded-2xl shadow-2xl max-h-[90vh] overflow-hidden border border-gray-100 flex flex-col">
+              <div className="bg-[#f8faff] border-b border-gray-100 p-6">
+                <DialogTitle className="text-xl font-black text-slate-900">Edit User</DialogTitle>
+              </div>
 
-              <div className="space-y-4">
+              <div className="space-y-4 p-6 overflow-y-auto">
                 <div className="flex items-center gap-4">
                   <div className="h-16 w-16 bg-gray-200 rounded-full flex items-center justify-center overflow-hidden">
                     {editRecruiter.profilePicture
@@ -1010,7 +1023,7 @@ export default function AdminRecruiters() {
 
                 <div className="flex justify-end gap-2 pt-2">
                   <Button variant="outline" onClick={() => setShowEditModal(false)}>Cancel</Button>
-                  <Button onClick={handleEditRecruiter} className="bg-blue-600 hover:bg-blue-700">Update User</Button>
+                  <Button onClick={handleEditRecruiter} className="bg-[#283086] hover:bg-[#1f256f]">Update User</Button>
                 </div>
               </div>
             </DialogPanel>
@@ -1021,7 +1034,7 @@ export default function AdminRecruiters() {
         <Dialog open={showDeleteModal} onClose={() => setShowDeleteModal(false)} className="relative z-50">
           <DialogBackdrop className="fixed inset-0 bg-black/50" />
           <div className="fixed inset-0 flex items-center justify-center p-4">
-            <DialogPanel className="bg-white dark:bg-gray-900 rounded-xl p-6 max-w-sm w-full shadow-2xl">
+            <DialogPanel className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-gray-100">
               <div className="flex flex-col items-center text-center gap-3">
                 <div className="h-14 w-14 rounded-full bg-red-100 flex items-center justify-center">
                   <Trash2 className="h-7 w-7 text-red-600" />
@@ -1056,7 +1069,7 @@ export default function AdminRecruiters() {
         <Dialog open={showDeactivateModal} onClose={() => setShowDeactivateModal(false)} className="relative z-50">
           <DialogBackdrop className="fixed inset-0 bg-black/50" />
           <div className="fixed inset-0 flex items-center justify-center p-4">
-            <DialogPanel className="bg-white dark:bg-gray-900 rounded-xl p-6 max-w-sm w-full shadow-2xl">
+            <DialogPanel className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-gray-100">
               <div className="flex flex-col items-center text-center gap-3">
                 <div className={`h-14 w-14 rounded-full flex items-center justify-center ${
                   recruiterToToggle && isActive(recruiterToToggle)
@@ -1109,7 +1122,7 @@ export default function AdminRecruiters() {
         <Dialog open={showPerformanceModal} onClose={() => setShowPerformanceModal(false)} className="relative z-50">
           <DialogBackdrop className="fixed inset-0 bg-black/50" />
           <div className="fixed inset-0 flex items-center justify-center p-4">
-            <DialogPanel className="bg-white dark:bg-gray-900 w-full max-w-3xl rounded-xl shadow-2xl p-6 max-h-[90vh] overflow-y-auto">
+            <DialogPanel className="bg-white w-full max-w-3xl rounded-2xl shadow-2xl p-6 max-h-[90vh] overflow-y-auto border border-gray-100">
               <DialogTitle className="text-xl font-bold mb-4">
                 Performance Report — {selectedRecruiter?.firstName} {selectedRecruiter?.lastName}
               </DialogTitle>
@@ -1132,7 +1145,7 @@ export default function AdminRecruiters() {
                   <>
                     <div className="border rounded-lg overflow-hidden">
                       <table className="w-full text-sm">
-                        <thead className="bg-gray-50 dark:bg-gray-800">
+                        <thead className="bg-[#f8faff]">
                           <tr>
                             <th className="p-2 text-left">Date</th>
                             <th className="p-2 text-center">Submissions</th>
@@ -1176,22 +1189,24 @@ export default function AdminRecruiters() {
         <Dialog open={showStatsModal} onClose={() => setShowStatsModal(false)} className="relative z-50">
           <DialogBackdrop className="fixed inset-0 bg-black/50" />
           <div className="fixed inset-0 flex items-center justify-center p-4">
-            <DialogPanel className="bg-white dark:bg-gray-900 w-full max-w-xl rounded-xl shadow-2xl p-6 max-h-[90vh] overflow-y-auto">
+            <DialogPanel className="bg-white w-full max-w-xl rounded-2xl shadow-2xl p-6 max-h-[90vh] overflow-y-auto border border-gray-100">
               <DialogTitle className="text-xl font-bold mb-4">{statsModalTitle}</DialogTitle>
               <div className="divide-y divide-gray-100 dark:divide-gray-800">
                 {selectedStatsRecruiters.map((r) => (
                   <div key={r.id} className="flex items-center justify-between py-2.5">
                     <div className="flex items-center gap-3">
-                      <div className={`h-9 w-9 rounded-full flex items-center justify-center text-xs font-bold overflow-hidden text-white ${r.role === 'admin' ? 'bg-purple-500' : 'bg-blue-500'}`}>
+                      <div className={`h-9 w-9 rounded-xl flex items-center justify-center text-xs font-bold overflow-hidden text-white ${r.role === 'admin' ? 'bg-[#3530a0]' : 'bg-[#283086]'}`}>
                         {r.profilePicture
                           ? <img src={r.profilePicture} className="w-full h-full object-cover" alt="pfp" />
                           : getInitials(r.firstName, r.lastName)}
                       </div>
                       <div>
-                        <div className="font-medium flex items-center gap-1">
-                          {r.firstName} {r.lastName}
-                          {r.role === 'admin' && <ShieldAlert className="h-3 w-3 text-purple-600" />}
-                        </div>
+                        <RecruiterDetailsTrigger recruiter={r} className="font-medium text-slate-900">
+                          <span className="flex items-center gap-1">
+                            {r.firstName} {r.lastName}
+                            {r.role === 'admin' && <ShieldAlert className="h-3 w-3 text-purple-600" />}
+                          </span>
+                        </RecruiterDetailsTrigger>
                         <div className="text-xs text-gray-500 capitalize">{r.role} • {r.email}</div>
                       </div>
                     </div>
@@ -1213,11 +1228,11 @@ export default function AdminRecruiters() {
         <Dialog open={showCandidatesModal} onClose={() => setShowCandidatesModal(false)} className="relative z-50">
           <DialogBackdrop className="fixed inset-0 bg-black/50" />
           <div className="fixed inset-0 flex items-center justify-center p-4">
-            <DialogPanel className="bg-white dark:bg-gray-900 w-full max-w-4xl rounded-xl shadow-2xl p-6 max-h-[90vh] overflow-y-auto">
+            <DialogPanel className="bg-white w-full max-w-4xl rounded-2xl shadow-2xl p-6 max-h-[90vh] overflow-y-auto border border-gray-100">
               <DialogTitle className="text-xl font-bold mb-4">{candidatesModalTitle}</DialogTitle>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm text-left">
-                  <thead className="bg-gray-50 dark:bg-gray-800 text-xs uppercase text-gray-500">
+                  <thead className="bg-[#f8faff] text-xs uppercase text-gray-500">
                     <tr>
                       <th className="p-3">Name</th>
                       <th className="p-3">Role / Client</th>

@@ -3,7 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Calendar, Clock, MapPin, Video, Phone, Building, Search,
+  Calendar, Clock, MapPin, Video, Phone, Search,
   Calendar as CalendarIcon, List, Grid, Eye, Plus,
   CheckCircle2, AlertCircle, X, Loader2, Mail, Briefcase,
   FileText, UserCircle, Target, Users, Zap, Edit, Pencil, Trash2
@@ -11,6 +11,9 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/AuthContext";
+import CandidateProfileLink from "@/components/CandidateProfileLink";
+import CandidateSearchSelect from "@/components/CandidateSearchSelect";
+import { RecruiterDetailsTrigger } from "@/components/RecruiterDetailsModal";
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -112,12 +115,18 @@ export default function RecruiterSchedules() {
         const data = await resInterviews.json();
         setInterviews(data.map((item) => {
           let rName = "Unknown";
+          let recruiterDetails = null;
           if (item.recruiterId) {
-            if (item.recruiterId.firstName) rName = `${item.recruiterId.firstName} ${item.recruiterId.lastName || ''}`;
-            else if (item.recruiterId.name) rName = item.recruiterId.name;
-            else if ((item.recruiterId._id || item.recruiterId) === sessionRecruiterId) rName = sessionRecruiterName;
+            if (typeof item.recruiterId === 'object') {
+              recruiterDetails = item.recruiterId;
+              if (item.recruiterId.firstName) rName = `${item.recruiterId.firstName} ${item.recruiterId.lastName || ''}`;
+              else if (item.recruiterId.name) rName = item.recruiterId.name;
+            } else if (item.recruiterId === sessionRecruiterId) {
+              rName = sessionRecruiterName;
+            }
           } else if (sessionRecruiterName) {
             rName = sessionRecruiterName;
+            recruiterDetails = storedUser;
           }
 
           return {
@@ -135,6 +144,7 @@ export default function RecruiterSchedules() {
             interviewType: item.type || 'Virtual',
             recruiterId: item.recruiterId?._id || item.recruiterId, 
             recruiterName: rName,
+            recruiterDetails: recruiterDetails || { name: rName },
             clientName: item.jobId?.clientName || "N/A",
             notes: item.notes, 
             meetingLink: item.meetingLink,
@@ -220,8 +230,8 @@ export default function RecruiterSchedules() {
     if (formErrors[name]) setFormErrors(prev => ({ ...prev, [name]: '' }));
   };
 
-  const handleCandidateSelect = (e) => {
-    const selectedId = e.target.value;
+  const handleCandidateSelect = (eventOrId) => {
+    const selectedId = typeof eventOrId === "string" ? eventOrId : eventOrId.target.value;
     if (!selectedId) {
       setNewInterviewForm(prev => ({ ...prev, candidateId: "", candidateName: "", candidateEmail: "", candidatePhone: "", position: "" }));
       return;
@@ -436,8 +446,10 @@ function InterviewGridCard({ interview, onView, onEdit, onDelete }) {
               </AvatarFallback>
             </Avatar>
             <div className="min-w-0">
-              <h3 className="font-bold text-gray-900 dark:text-white truncate text-base leading-tight" title={interview.candidateName}>
-                {interview.candidateName}
+              <h3 className="truncate text-base leading-tight" title={interview.candidateName}>
+                <CandidateProfileLink candidateId={interview.candidateIdRaw} className="font-bold text-gray-900 dark:text-white">
+                  {interview.candidateName}
+                </CandidateProfileLink>
               </h3>
               <p className="text-sm text-gray-500 dark:text-gray-400 truncate mt-0.5 font-medium">
                 {interview.position}
@@ -465,7 +477,9 @@ function InterviewGridCard({ interview, onView, onEdit, onDelete }) {
           
           <div className="flex items-center gap-3">
             <UserCircle className="h-4 w-4 text-indigo-500 shrink-0" /> 
-            <span className="truncate">{interview.recruiterName}</span>
+            <RecruiterDetailsTrigger recruiter={interview.recruiterDetails} className="truncate text-gray-700 dark:text-gray-300">
+              {interview.recruiterName}
+            </RecruiterDetailsTrigger>
           </div>
 
           <div className="flex items-center gap-3">
@@ -529,10 +543,18 @@ function InterviewListView({ interviews, onView, onEdit, onDelete }) {
         <tbody>
           {interviews.map(i => (
             <tr key={i.id} className="border-b border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition">
-              <td className="p-4 font-medium text-gray-900 dark:text-white">{i.candidateName}</td>
+              <td className="p-4">
+                <CandidateProfileLink candidateId={i.candidateIdRaw} className="font-medium text-gray-900 dark:text-white">
+                  {i.candidateName}
+                </CandidateProfileLink>
+              </td>
               <td className="p-4 text-gray-600 dark:text-gray-300">{i.position}</td>
               <td className="p-4 text-gray-600 dark:text-gray-300">{new Date(i.interviewDate).toLocaleDateString()}</td>
-              <td className="p-4 text-gray-600 dark:text-gray-300">{i.recruiterName}</td>
+              <td className="p-4 text-gray-600 dark:text-gray-300">
+                <RecruiterDetailsTrigger recruiter={i.recruiterDetails} className="font-medium text-gray-600 dark:text-gray-300">
+                  {i.recruiterName}
+                </RecruiterDetailsTrigger>
+              </td>
               <td className="p-4">{getStatusBadge(i.status)}</td>
               <td className="p-4 flex items-center gap-2">
                 <button onClick={() => onView(i)} title="View Details" className="p-2 rounded-lg hover:bg-blue-50 text-gray-600 hover:text-blue-600 dark:hover:bg-gray-700 transition">
@@ -679,7 +701,9 @@ function InterviewDetailModal({ interview, candidateFull, loading, onClose, onUp
             </Avatar>
             <div>
               <h2 className="text-2xl font-bold flex items-center gap-3">
-                {interview.candidateName}
+                <CandidateProfileLink candidateId={interview.candidateIdRaw} className="text-white hover:text-blue-100 dark:text-white">
+                  {interview.candidateName}
+                </CandidateProfileLink>
                 {getStatusBadge(interview.status)}
               </h2>
               <div className="flex gap-2 text-blue-100 items-center mt-1 text-sm font-medium">
@@ -848,10 +872,13 @@ function NewInterviewModal({ form, errors, onChange, onCandidateSelect, onGenera
         <div className="p-6 space-y-4 overflow-y-auto flex-1">
           <div>
             <label className="text-sm font-medium block mb-1 text-gray-700 dark:text-gray-200">Select Candidate *</label>
-            <select className={inputCls(errors.candidateId)} onChange={onCandidateSelect} value={form.candidateId}>
-              <option value="">-- Choose a Candidate --</option>
-              {candidates.map((c) => <option key={c._id || c.id} value={c._id || c.id}>{c.name || "Unknown"} ({c.email || "No Email"})</option>)}
-            </select>
+            <CandidateSearchSelect
+              candidates={candidates}
+              value={form.candidateId}
+              onChange={onCandidateSelect}
+              error={!!errors.candidateId}
+              placeholder="-- Choose a Candidate --"
+            />
             {errors.candidateId && <p className="text-xs text-red-500 mt-1">{errors.candidateId}</p>}
           </div>
           <div className="grid grid-cols-2 gap-4">

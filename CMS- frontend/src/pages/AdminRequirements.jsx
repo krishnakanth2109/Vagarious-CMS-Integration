@@ -1,0 +1,1609 @@
+// --- START OF FILE AdminRequirements.jsx ---
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/context/AuthContext";
+import {
+  X, Eye, Pencil, Plus, CheckCircle, Ban,
+  Briefcase, GraduationCap, Building2, Calendar, MapPin, Trash2, SlidersHorizontal
+} from "lucide-react";
+import { RecruiterDetailsTrigger } from "@/components/RecruiterDetailsModal";
+
+const BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/$/, '');
+const API_URL  = `${BASE_URL}/api`;
+
+const inputCls = "w-full px-3 py-2 border border-zinc-300 dark:border-zinc-700 rounded-lg text-sm outline-none focus:ring-2 focus:ring-zinc-500 bg-white dark:bg-zinc-900 dark:text-zinc-100 placeholder-zinc-400";
+
+const getRecruiterDetailsByName = (name, recruiters = []) => {
+  const displayName = name || 'Unassigned';
+  const found = recruiters.find((recruiter) => recruiter.name === displayName);
+  return found || { name: displayName };
+};
+
+const DEFAULT_FIELD_CONFIG = [
+  { fieldName: 'clientName', label: 'Client Name', fieldType: 'text', isMandatory: false, visible: true, isDefault: true },
+  { fieldName: 'jobType', label: 'Job Type', fieldType: 'select', isMandatory: true, visible: true, isDefault: true, options: ['Full-Time', 'Internship', 'Contract'] },
+  { fieldName: 'location', label: 'Location', fieldType: 'text', isMandatory: false, visible: true, isDefault: true },
+  { fieldName: 'experience', label: 'Experience', fieldType: 'number', isMandatory: false, visible: true, isDefault: true },
+  { fieldName: 'relevantExperience', label: 'Relevant Experience', fieldType: 'number', isMandatory: false, visible: true, isDefault: true },
+  { fieldName: 'qualification', label: 'Qualification', fieldType: 'text', isMandatory: false, visible: true, isDefault: true },
+  { fieldName: 'salaryBudget', label: 'Salary Budget', fieldType: 'number', isMandatory: false, visible: true, isDefault: true },
+  { fieldName: 'monthlySalary', label: 'Monthly Salary', fieldType: 'number', isMandatory: false, visible: true, isDefault: true },
+  { fieldName: 'gender', label: 'Gender', fieldType: 'select', isMandatory: false, visible: true, isDefault: true, options: ['Male', 'Female', 'Any'] },
+  { fieldName: 'noticePeriod', label: 'Notice Period', fieldType: 'text', isMandatory: false, visible: true, isDefault: true },
+  { fieldName: 'tatTime', label: 'TAT Time', fieldType: 'date', isMandatory: false, visible: true, isDefault: true },
+  { fieldName: 'primaryRecruiter', label: 'Primary Recruiter', fieldType: 'text', isMandatory: false, visible: true, isDefault: true },
+  { fieldName: 'secondaryRecruiter', label: 'Secondary Recruiter', fieldType: 'text', isMandatory: false, visible: true, isDefault: true },
+  { fieldName: 'skills', label: 'Mandatory Skills', fieldType: 'textarea', isMandatory: false, visible: true, isDefault: true },
+  { fieldName: 'mandatorySkills', label: 'Mandatory Skills', fieldType: 'textarea', isMandatory: false, visible: true, isDefault: true },
+  { fieldName: 'preferredSkills', label: 'Preferred Skills', fieldType: 'textarea', isMandatory: false, visible: true, isDefault: true },
+  { fieldName: 'jobDescription', label: 'Job Description', fieldType: 'textarea', isMandatory: false, visible: true, isDefault: true },
+];
+
+const REQUIRED_DEFAULT_FIELD_NAMES = new Set(['clientName', 'jobType', 'location', 'experience', 'skills']);
+
+const normalizeFieldConfig = (config = {}) => {
+  const storedFields = Array.isArray(config.fields) ? config.fields : [];
+  const storedCustomFields = Array.isArray(config.customFields) ? config.customFields : [];
+
+  return {
+    fields: DEFAULT_FIELD_CONFIG.map((field) => {
+      const stored = storedFields.find((item) => item.fieldName === field.fieldName) || {};
+      const isMandatory = REQUIRED_DEFAULT_FIELD_NAMES.has(field.fieldName) || Boolean(stored.isMandatory || field.isMandatory);
+      return {
+        ...field,
+        ...stored,
+        ...(field.options ? { options: field.options } : {}),
+        isDefault: true,
+        isMandatory,
+        visible: isMandatory ? true : stored.visible ?? field.visible,
+      };
+    }),
+    customFields: storedCustomFields.map((field) => ({
+      ...field,
+      isDefault: false,
+      isMandatory: Boolean(field.isMandatory),
+      visible: field.visible !== false,
+    })),
+  };
+};
+
+const getFieldConfig = () => {
+  try {
+    const user = JSON.parse(sessionStorage.getItem('currentUser') || '{}');
+    return normalizeFieldConfig(user?.requirementSettings || { fields: DEFAULT_FIELD_CONFIG, customFields: [] });
+  } catch {
+    return normalizeFieldConfig({ fields: DEFAULT_FIELD_CONFIG, customFields: [] });
+  }
+};
+
+const saveFieldConfig = (updated) => {
+  try {
+    const user = JSON.parse(sessionStorage.getItem('currentUser') || '{}');
+    user.requirementSettings = normalizeFieldConfig(updated);
+    sessionStorage.setItem('currentUser', JSON.stringify(user));
+    // TODO: PATCH /api/user/settings or /api/tenant/settings if route exists.
+  } catch (e) {
+    console.error('Config save failed', e);
+  }
+};
+
+const CustomFieldInput = ({ field, value, onChange, className = inputCls, placeholder = "" }) => {
+  const handle = (e) => onChange(field.fieldName, e.target.value);
+
+  if (field.fieldType === 'boolean') {
+    return (
+      <select value={value ?? ''} onChange={handle} className={className}>
+        <option value="">Select</option>
+        <option value="true">Yes</option>
+        <option value="false">No</option>
+      </select>
+    );
+  }
+
+  if (field.fieldType === 'textarea') {
+    return (
+      <textarea value={value ?? ''} onChange={handle} rows={3} placeholder={placeholder} className={`${className} resize-none`} />
+    );
+  }
+
+  if (field.fieldType === 'select') {
+    return (
+      <select value={value ?? ''} onChange={handle} className={className}>
+        <option value="">{field.selectPlaceholder || 'Select'}</option>
+        {(field.options || []).map((option) => <option key={option} value={option}>{option}</option>)}
+      </select>
+    );
+  }
+
+  const inputType = field.fieldType === 'date' ? 'date' : field.fieldType === 'number' && !field.isDefault ? 'number' : 'text';
+  return (
+    <input
+      type={inputType}
+      value={value ?? ''}
+      onChange={handle}
+      placeholder={placeholder}
+      className={className}
+    />
+  );
+};
+
+const FormControlModal = ({ isOpen, onClose, config, onConfigChange }) => {
+  const [editingIndex, setEditingIndex] = useState(null);
+  const [editingType, setEditingType] = useState(null);
+  const [newField, setNewField] = useState({ label: '', fieldType: 'text', options: '' });
+
+  if (!isOpen) return null;
+
+  const toggleDefault = (i) => {
+    const updated = { ...config, fields: [...config.fields] };
+    if (updated.fields[i].isMandatory) return;
+    updated.fields[i] = { ...updated.fields[i], visible: !updated.fields[i].visible };
+    onConfigChange(updated);
+  };
+
+  const toggleCustom = (i) => {
+    const updated = { ...config, customFields: [...config.customFields] };
+    updated.customFields[i] = { ...updated.customFields[i], visible: !updated.customFields[i].visible };
+    onConfigChange(updated);
+  };
+
+  const editCustomLabel = (i, value) => {
+    const updated = { ...config, customFields: [...config.customFields] };
+    updated.customFields[i] = { ...updated.customFields[i], label: value };
+    onConfigChange(updated);
+  };
+
+  const deleteCustom = (i) => {
+    onConfigChange({ ...config, customFields: config.customFields.filter((_, idx) => idx !== i) });
+  };
+
+  const addCustomField = () => {
+    if (!newField.label.trim()) return;
+
+    const baseName = newField.label.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'custom_field';
+    const existingNames = new Set([...config.fields, ...config.customFields].map((field) => field.fieldName));
+    let fieldName = baseName;
+    let suffix = 2;
+    while (existingNames.has(fieldName)) {
+      fieldName = `${baseName}_${suffix}`;
+      suffix += 1;
+    }
+
+    const entry = {
+      fieldName,
+      label: newField.label.trim(),
+      fieldType: newField.fieldType,
+      isDefault: false,
+      isMandatory: false,
+      visible: true,
+      ...(newField.fieldType === 'select' && {
+        options: newField.options.split(',').map((option) => option.trim()).filter(Boolean),
+      }),
+    };
+
+    onConfigChange({ ...config, customFields: [...config.customFields, entry] });
+    setNewField({ label: '', fieldType: 'text', options: '' });
+  };
+
+  const visibleDefaultCount = config.fields.filter(field => field.visible).length;
+  const visibleCustomCount = config.customFields.filter(field => field.visible).length;
+
+  return (
+    <div className="fixed inset-0 bg-zinc-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div
+        className="bg-slate-50 dark:bg-zinc-950 rounded-2xl shadow-2xl max-w-5xl w-full max-h-[92vh] overflow-hidden border border-zinc-200 dark:border-zinc-800"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="bg-white dark:bg-zinc-900 px-6 py-5 border-b border-zinc-200 dark:border-zinc-800">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-3">
+                <span className="w-10 h-10 rounded-xl bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 flex items-center justify-center">
+                  <SlidersHorizontal className="w-5 h-5" />
+                </span>
+                <div>
+                  <h2 className="text-xl font-bold tracking-tight text-zinc-900 dark:text-white">Form Control</h2>
+                  <p className="text-zinc-500 dark:text-zinc-400 text-sm mt-0.5">Configure requirement fields and add custom inputs.</p>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center rounded-lg border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-xs font-medium text-zinc-600 dark:text-zinc-300">
+                {visibleDefaultCount} default active
+              </span>
+              <span className="inline-flex items-center rounded-lg border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-xs font-medium text-zinc-600 dark:text-zinc-300">
+                {visibleCustomCount} custom active
+              </span>
+              <button onClick={onClose} className="p-2 rounded-lg text-zinc-400 hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid lg:grid-cols-[320px_1fr] h-[calc(92vh-82px)] min-h-0 overflow-hidden">
+          <aside className="bg-white dark:bg-zinc-900 border-r border-zinc-200 dark:border-zinc-800 p-5 min-h-0 overflow-y-auto">
+            <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-3">Add Custom Field</p>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-zinc-500 mb-1">Field Label</label>
+                <input
+                  placeholder="Example: Work Mode"
+                  value={newField.label}
+                  onChange={(e) => setNewField((prev) => ({ ...prev, label: e.target.value }))}
+                  className={inputCls}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-zinc-500 mb-1">Field Type</label>
+                <select
+                  value={newField.fieldType}
+                  onChange={(e) => setNewField((prev) => ({ ...prev, fieldType: e.target.value }))}
+                  className={inputCls}
+                >
+                  <option value="text">Text</option>
+                  <option value="number">Number</option>
+                  <option value="date">Date</option>
+                  <option value="boolean">Yes/No</option>
+                  <option value="textarea">Textarea</option>
+                  <option value="select">Select</option>
+                </select>
+              </div>
+              {newField.fieldType === 'select' && (
+                <div>
+                  <label className="block text-xs font-medium text-zinc-500 mb-1">Options</label>
+                  <input
+                    placeholder="Remote, Hybrid, On-site"
+                    value={newField.options}
+                    onChange={(e) => setNewField((prev) => ({ ...prev, options: e.target.value }))}
+                    className={inputCls}
+                  />
+                </div>
+              )}
+              <button
+                onClick={addCustomField}
+                className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 rounded-lg text-sm font-medium hover:bg-zinc-800 dark:hover:bg-zinc-200 shadow-sm"
+              >
+                <Plus className="w-4 h-4" />
+                Add Field
+              </button>
+            </div>
+
+            <div className="mt-5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 p-4">
+              <p className="text-sm font-semibold text-zinc-900 dark:text-white">Additional fields</p>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">New fields appear in their own section in the requirement form.</p>
+            </div>
+          </aside>
+
+          <div className="p-5 min-h-0 overflow-y-auto lg:overflow-hidden">
+            <div className="grid md:grid-cols-2 gap-5 md:h-full md:min-h-0">
+              <section className="space-y-3 md:min-h-0 md:flex md:flex-col">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Standard Fields</p>
+                  <span className="text-xs text-zinc-400">{config.fields.length} fields</span>
+                </div>
+                <div className="space-y-2 md:min-h-0 md:overflow-y-auto md:pr-1">
+                  {config.fields.map((field, i) => (
+                    <div key={field.fieldName} className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-3">
+                      <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          disabled={field.isMandatory}
+                          onClick={() => toggleDefault(i)}
+                          className={`relative h-6 w-11 rounded-full transition-colors ${field.visible ? 'bg-zinc-900 dark:bg-white' : 'bg-zinc-200 dark:bg-zinc-700'} disabled:opacity-60`}
+                          title={field.isMandatory ? 'Required field' : 'Toggle field visibility'}
+                        >
+                          <span className={`absolute top-1 h-4 w-4 rounded-full bg-white transition-all ${field.visible ? 'left-6 dark:bg-zinc-900' : 'left-1'}`} />
+                        </button>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">{field.label}</p>
+                          <p className="text-xs text-zinc-400 mt-0.5">{field.fieldName}</p>
+                        </div>
+                        <span className="rounded-md bg-zinc-100 dark:bg-zinc-800 px-2 py-1 text-xs text-zinc-500 dark:text-zinc-400">{field.fieldType}</span>
+                      </div>
+                      {field.isMandatory && <p className="text-xs text-red-500 mt-2">Required fields stay visible.</p>}
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              <section className="space-y-3 md:min-h-0 md:flex md:flex-col">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Additional Fields</p>
+                  <span className="text-xs text-zinc-400">{config.customFields.length} fields</span>
+                </div>
+                {config.customFields.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-6 text-center">
+                    <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">No additional fields yet</p>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">Create one from the panel on the left.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2 md:min-h-0 md:overflow-y-auto md:pr-1">
+                    {config.customFields.map((field, i) => (
+                      <div key={field.fieldName} className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-3">
+                        <div className="flex items-center gap-3">
+                          <button
+                            type="button"
+                            onClick={() => toggleCustom(i)}
+                            className={`relative h-6 w-11 rounded-full transition-colors ${field.visible ? 'bg-zinc-900 dark:bg-white' : 'bg-zinc-200 dark:bg-zinc-700'}`}
+                            title="Toggle field visibility"
+                          >
+                            <span className={`absolute top-1 h-4 w-4 rounded-full bg-white transition-all ${field.visible ? 'left-6 dark:bg-zinc-900' : 'left-1'}`} />
+                          </button>
+                          <div className="min-w-0 flex-1">
+                            {editingIndex === i && editingType === 'custom' ? (
+                              <input
+                                autoFocus
+                                value={field.label}
+                                onChange={(e) => editCustomLabel(i, e.target.value)}
+                                onBlur={() => { setEditingIndex(null); setEditingType(null); }}
+                                className={inputCls}
+                              />
+                            ) : (
+                              <>
+                                <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">{field.label}</p>
+                                <p className="text-xs text-zinc-400 mt-0.5">{field.fieldName}</p>
+                              </>
+                            )}
+                          </div>
+                          <span className="rounded-md bg-zinc-100 dark:bg-zinc-800 px-2 py-1 text-xs text-zinc-500 dark:text-zinc-400">{field.fieldType}</span>
+                        </div>
+                        <div className="flex justify-end gap-1 mt-3">
+                          <button
+                            onClick={() => { setEditingIndex(i); setEditingType('custom'); }}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => deleteCustom(i)}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/* ---------------- JOB DETAIL MODAL ---------------- */
+const JobDetailCard = ({ job, onClose, recruiters = [] }) => {
+  return (
+    <div
+      className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto border border-zinc-200 dark:border-zinc-800"
+        onClick={e => e.stopPropagation()}
+      >
+          <div className="bg-gradient-to-r from-zinc-800 to-zinc-950 text-white p-6 rounded-t-2xl border-b border-zinc-700">
+             <div className="flex justify-between items-start">
+                <div>
+                  <h2 className="text-2xl font-bold tracking-tight">{job.position}</h2>
+                  <div className="flex items-center gap-3 mt-2 text-zinc-300 text-sm">
+                    <span className="bg-zinc-800 px-2 py-1 rounded-md border border-zinc-700 text-xs font-mono">
+                      {job.jobCode}
+                    </span>
+                    <span>• {job.clientName}</span>
+                  </div>
+                </div>
+                <button onClick={onClose} className="p-1.5 hover:bg-zinc-700 rounded-lg text-zinc-400 hover:text-white">
+                  <X className="w-6 h-6" />
+                </button>
+             </div>
+          </div>
+
+          <div className="p-6 space-y-6 text-zinc-800 dark:text-zinc-300">
+             <div className="grid md:grid-cols-2 gap-8">
+                <div className="bg-zinc-50 dark:bg-zinc-800/50 p-5 rounded-xl border border-zinc-100 dark:border-zinc-800">
+                  <h3 className="font-semibold text-lg mb-4 flex items-center gap-2 text-zinc-900 dark:text-zinc-100 border-b border-zinc-200 dark:border-zinc-700 pb-2">
+                    <GraduationCap className="w-5 h-5 text-zinc-500" /> Candidate Profile
+                  </h3>
+                  <div className="space-y-3 text-sm">
+                    <p className="flex justify-between"><span className="text-zinc-500">Mandatory Skills:</span> <span className="font-medium text-right ml-4">{job.skills || "-"}</span></p>
+                    <p className="flex justify-between"><span className="text-zinc-500">Total Exp:</span> <span className="font-medium">{job.experience ? `${job.experience} Years` : "-"}</span></p>
+                    <p className="flex justify-between"><span className="text-zinc-500">Relevant Exp:</span> <span className="font-medium">{job.relevantExperience ? `${job.relevantExperience} Years` : "-"}</span></p>
+                    <p className="flex justify-between"><span className="text-zinc-500">Qualification:</span> <span className="font-medium">{job.qualification || "-"}</span></p>
+                    <p className="flex justify-between"><span className="text-zinc-500">Gender:</span> <span className="font-medium">{job.gender || "Any"}</span></p>
+                  </div>
+                </div>
+                <div className="bg-zinc-50 dark:bg-zinc-800/50 p-5 rounded-xl border border-zinc-100 dark:border-zinc-800">
+                  <h3 className="font-semibold text-lg mb-4 flex items-center gap-2 text-zinc-900 dark:text-zinc-100 border-b border-zinc-200 dark:border-zinc-700 pb-2">
+                    <Briefcase className="w-5 h-5 text-zinc-500" /> Job Details
+                  </h3>
+                  <div className="space-y-3 text-sm">
+                    <p className="flex justify-between"><span className="text-zinc-500">Job Type:</span> <span className="font-medium">{job.jobType || "-"}</span></p>
+                    <p className="flex justify-between"><span className="text-zinc-500">Location:</span> <span className="font-medium">{job.location || "-"}</span></p>
+                    <p className="flex justify-between"><span className="text-zinc-500">Max Salary Range:</span> <span className="font-medium">{job.salaryBudget || "-"}</span></p>
+                    <p className="flex justify-between"><span className="text-zinc-500">Monthly Salary:</span> <span className="font-medium">{job.monthlySalary || "-"}</span></p>
+                    <p className="flex justify-between"><span className="text-zinc-500">Notice Period:</span> <span className="font-medium">{job.noticePeriod || "-"}</span></p>
+                    <p className="flex justify-between"><span className="text-zinc-500">Date of Expiry (TAT):</span> <span className="font-medium">{job.tatTime ? new Date(job.tatTime).toLocaleDateString() : "-"}</span></p>
+                    <div className="pt-2 border-t border-zinc-200 dark:border-zinc-700 mt-2">
+                      <p className="flex justify-between mt-2">
+                        <span className="text-zinc-500">Primary Recruiter:</span>
+                        <RecruiterDetailsTrigger recruiter={getRecruiterDetailsByName(job.primaryRecruiter, recruiters)} className="font-medium text-zinc-800 dark:text-zinc-100">
+                          {job.primaryRecruiter || 'Unassigned'}
+                        </RecruiterDetailsTrigger>
+                      </p>
+                      <p className="flex justify-between mt-1">
+                        <span className="text-zinc-500">Secondary Recruiter:</span>
+                        <RecruiterDetailsTrigger recruiter={getRecruiterDetailsByName(job.secondaryRecruiter, recruiters)} className="font-medium text-zinc-800 dark:text-zinc-100">
+                          {job.secondaryRecruiter || 'Unassigned'}
+                        </RecruiterDetailsTrigger>
+                      </p>
+                    </div>
+                  </div>
+                </div>
+             </div>
+             {job.jdLink && (
+               <div className="bg-zinc-100 dark:bg-zinc-800 p-5 rounded-xl border border-zinc-200 dark:border-zinc-700">
+                 <h4 className="font-semibold mb-2 text-zinc-900 dark:text-zinc-100 text-sm">Job Description Link</h4>
+                 <a href={job.jdLink} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline break-all text-sm">
+                   {job.jdLink}
+                 </a>
+               </div>
+             )}
+             {job.jobDescription && (
+               <div className="bg-zinc-100 dark:bg-zinc-800 p-5 rounded-xl border border-zinc-200 dark:border-zinc-700">
+                 <h4 className="font-semibold mb-3 text-zinc-900 dark:text-zinc-100 text-sm">Job Description</h4>
+                 <div className="max-h-80 overflow-y-auto rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 p-4">
+                   <p className="text-sm leading-6 text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap">
+                     {job.jobDescription}
+                   </p>
+                 </div>
+               </div>
+             )}
+          </div>
+      </div>
+    </div>
+  );
+};
+
+/* ---------------- MAIN COMPONENT ---------------- */
+export default function AdminRequirements() {
+  const { toast } = useToast();
+  const { authHeaders } = useAuth();
+
+  const getAuthHeader = useCallback(async () => ({
+    'Content-Type': 'application/json',
+    ...(await authHeaders()),
+  }), [authHeaders]);
+
+  const [jobs, setJobs] = useState([]);
+  const [clients, setClients] = useState([]);
+  const [recruiters, setRecruiters] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  // Filters State
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedClientFilter, setSelectedClientFilter] = useState("");
+
+  const initialFormState = {
+    jobCode: "", clientName: "", position: "", location: "",
+    experience: "", relevantExperience: "", qualification: "",
+    salaryBudget: "", monthlySalary: "", gender: "Any", noticePeriod: "",
+    tatTime: "", // New Field
+    primaryRecruiter: "", secondaryRecruiter: "", skills: "", mandatorySkills: "",
+    preferredSkills: "", jobType: "", jobDescription: "", jdLink: "",
+    active: true, customFields: {},
+  };
+
+  const [form, setForm] = useState(initialFormState);
+  const [fieldConfig, setFieldConfig] = useState(getFieldConfig);
+  const [formControlOpen, setFormControlOpen] = useState(false);
+  const [errors, setErrors] = useState({});
+  const [selectedJob, setSelectedJob] = useState(null);
+  const [editingJob, setEditingJob] = useState(null);
+  const [showForm, setShowForm] = useState(false);
+  const [jobDescriptionModalOpen, setJobDescriptionModalOpen] = useState(false);
+  const [mandatorySkillInput, setMandatorySkillInput] = useState("");
+  const [isImportingJD, setIsImportingJD] = useState(false);
+  const pdfInputRef = useRef(null);
+  const docxInputRef = useRef(null);
+
+  const handleConfigChange = (updated) => {
+    const normalized = normalizeFieldConfig(updated);
+    setFieldConfig(normalized);
+    saveFieldConfig(normalized);
+  };
+
+  const closeRequirementForm = () => {
+    setShowForm(false);
+    setEditingJob(null);
+    setJobDescriptionModalOpen(false);
+    setMandatorySkillInput("");
+    setErrors({});
+    setForm(initialFormState);
+  };
+
+  // ─── SCROLLBAR SYNC REFS & LOGIC ───────────────────────────────────────
+  const topScrollRef = useRef(null);
+  const bottomScrollRef = useRef(null);
+  const tableRef = useRef(null);
+  const [scrollWidth, setScrollWidth] = useState('100%');
+  
+  const isSyncingTop = useRef(false);
+  const isSyncingBottom = useRef(false);
+
+  useEffect(() => {
+    const tableEl = tableRef.current;
+    if (!tableEl) return;
+
+    const updateWidth = () => {
+      setScrollWidth(`${tableEl.scrollWidth}px`);
+    };
+
+    const observer = new ResizeObserver(updateWidth);
+    observer.observe(tableEl);
+    
+    updateWidth();
+
+    window.addEventListener('resize', updateWidth);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', updateWidth);
+    };
+  }, [jobs, searchTerm, selectedClientFilter, showForm]);
+
+  const handleTopScroll = (e) => {
+    if (isSyncingTop.current) {
+      isSyncingTop.current = false;
+      return;
+    }
+    if (bottomScrollRef.current) {
+      isSyncingBottom.current = true;
+      bottomScrollRef.current.scrollLeft = e.target.scrollLeft;
+    }
+  };
+
+  const handleBottomScroll = (e) => {
+    if (isSyncingBottom.current) {
+      isSyncingBottom.current = false;
+      return;
+    }
+    if (topScrollRef.current) {
+      isSyncingTop.current = true;
+      topScrollRef.current.scrollLeft = e.target.scrollLeft;
+    }
+  };
+  // ───────────────────────────────────────────────────────────────────────
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const headers = await getAuthHeader();
+      const [jobsRes, clientsRes, recRes] = await Promise.all([
+        fetch(`${API_URL}/jobs`,       { headers }),
+        fetch(`${API_URL}/clients`,    { headers }),
+        fetch(`${API_URL}/recruiters`, { headers })
+      ]);
+
+      if(jobsRes.ok) {
+        const data = await jobsRes.json();
+        const jobsArray = Array.isArray(data) ? data : data.data || [];
+        setJobs(jobsArray.map((j) => ({ ...j, id: j._id })));
+      }
+      if(clientsRes.ok) {
+        const data = await clientsRes.json();
+        const clientsArray = Array.isArray(data) ? data : data.data || [];
+        setClients(clientsArray.map((c) => ({ id: c._id, companyName: c.companyName })));
+      }
+      if(recRes.ok) {
+        const data = await recRes.json();
+        const recruitersArray = Array.isArray(data) ? data : data.data || data.recruiters || [];
+        setRecruiters(recruitersArray.map((r) => {
+          let recName = r.name || r.username || r.fullName || r.email || 'Unnamed Recruiter';
+          if (r.firstName && r.lastName) recName = `${r.firstName} ${r.lastName}`;
+          return { id: r._id || r.id, name: recName, email: r.email };
+        }));
+      }
+    } catch (error) {
+      toast({ title: "Error loading data", variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  }, [getAuthHeader]);
+
+  useEffect(() => { fetchData(); }, []);
+
+  // ✅ REAL-TIME INPUT RESTRICTION
+  const sanitizeRequirementValue = (name, value, type = 'text', checked = false) => {
+    let newValue = type === 'checkbox' ? checked : value;
+
+    if (type !== 'checkbox') {
+      if (name === 'position' || name === 'qualification') {
+        newValue = newValue.replace(/[^a-zA-Z\s]/g, '');
+      } else if (name === 'location') {
+        // ✅ Strictly prevent numbers from being accepted in location
+        newValue = newValue.replace(/[0-9]/g, '');
+      } else if (name === 'experience' || name === 'relevantExperience') {
+        // ✅ Allow numbers, single decimal point, spaces, and hyphens (e.g. "0.6 - 2")
+        newValue = newValue.replace(/[^0-9.\- ]/g, '');
+      } else if (name === 'jobCode') {
+        newValue = newValue.replace(/[^a-zA-Z0-9\-_]/g, '');
+      }
+    }
+
+    return newValue;
+  };
+
+  const updateFormField = (name, value) => {
+    setForm(prev => ({ ...prev, [name]: value }));
+    if (errors[name]) {
+        setErrors(prev => { const n = { ...prev }; delete n[name]; return n; });
+    }
+  };
+
+  const handleChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    updateFormField(name, sanitizeRequirementValue(name, value, type, checked));
+  };
+
+  const handleDefaultFieldChange = (fieldName, value) => {
+    updateFormField(fieldName, sanitizeRequirementValue(fieldName, value));
+  };
+
+  const handleCustomFieldChange = (fieldName, value) => {
+    setForm(prev => ({ ...prev, customFields: { ...prev.customFields, [fieldName]: value } }));
+  };
+
+  // ✅ SUBMIT VALIDATION
+  const cleanImportedJDText = (text = "") => (
+    String(text)
+      .replace(/\r\n/g, "\n")
+      .replace(/\r/g, "\n")
+      .replace(/[ \t]+\n/g, "\n")
+      .replace(/\n[ \t]+/g, "\n")
+      .replace(/[ \t]{2,}/g, " ")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim()
+  );
+
+  const decodeXmlText = (text = "") => (
+    String(text)
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"')
+      .replace(/&apos;/g, "'")
+      .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
+      .replace(/&#x([\da-f]+);/gi, (_, code) => String.fromCharCode(parseInt(code, 16)))
+  );
+
+  const extractPdfJDText = async (file) => {
+    const pdfjsLib = await import("pdfjs-dist");
+    const workerModule = await import("pdfjs-dist/build/pdf.worker.min.mjs?url");
+    pdfjsLib.GlobalWorkerOptions.workerSrc = workerModule.default;
+
+    const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
+    const pages = [];
+
+    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+      const page = await pdf.getPage(pageNumber);
+      const content = await page.getTextContent();
+      const textItems = content.items
+        .map((item) => {
+          const str = item.str || "";
+          const [, , , height = 10, x = 0, y = 0] = item.transform || [];
+          return { str, x, y, height: Math.abs(height) || 10, width: item.width || 0 };
+        })
+        .filter((item) => item.str.trim());
+
+      const sortedItems = textItems.sort((a, b) => {
+        const yDiff = b.y - a.y;
+        if (Math.abs(yDiff) > Math.max(a.height, b.height) * 0.45) return yDiff;
+        return a.x - b.x;
+      });
+
+      const lines = [];
+      sortedItems.forEach((item) => {
+        const currentLine = lines[lines.length - 1];
+        const tolerance = item.height * 0.45;
+
+        if (!currentLine || Math.abs(currentLine.y - item.y) > tolerance) {
+          lines.push({ y: item.y, height: item.height, items: [item] });
+          return;
+        }
+
+        currentLine.items.push(item);
+        currentLine.height = Math.max(currentLine.height, item.height);
+      });
+
+      const pageLines = lines.map((line) => {
+        const ordered = line.items.sort((a, b) => a.x - b.x);
+        let previousEnd = null;
+
+        return ordered.reduce((lineText, item) => {
+          const value = item.str.trim();
+          if (!value) return lineText;
+
+          if (!lineText) {
+            previousEnd = item.x + item.width;
+            return value;
+          }
+
+          const gap = previousEnd == null ? 0 : item.x - previousEnd;
+          previousEnd = item.x + item.width;
+          const needsSpace = gap > Math.max(item.height * 0.2, 1.5) && !/[-/(]$/.test(lineText) && !/^[,.;:)]/.test(value);
+
+          return `${lineText}${needsSpace ? " " : ""}${value}`;
+        }, "");
+      });
+
+      const formattedLines = [];
+      pageLines.forEach((lineText, index) => {
+        const previous = lines[index - 1];
+        const current = lines[index];
+        if (previous && previous.y - current.y > Math.max(previous.height, current.height) * 1.8) {
+          formattedLines.push("");
+        }
+        formattedLines.push(lineText);
+      });
+
+      pages.push(formattedLines.join("\n"));
+    }
+
+    return pages.join("\n\n");
+  };
+
+  const extractDocxJDText = async (file) => {
+    const JSZip = (await import("jszip")).default;
+    const zip = await JSZip.loadAsync(await file.arrayBuffer());
+    const documentFile = zip.file("word/document.xml");
+
+    if (!documentFile) {
+      throw new Error("Unable to read this DOCX file.");
+    }
+
+    const xml = await documentFile.async("string");
+    return decodeXmlText(
+      xml
+        .replace(/<w:tab\s*\/>/g, "\t")
+        .replace(/<\/w:p>/g, "\n")
+        .replace(/<[^>]+>/g, "")
+    );
+  };
+
+  const handleImportJD = async (event, expectedType) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    const lowerName = file.name.toLowerCase();
+    const isPdf = file.type === "application/pdf" || lowerName.endsWith(".pdf");
+    const isDocx = file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" || lowerName.endsWith(".docx");
+
+    if (expectedType === "pdf" && !isPdf) {
+      toast({ title: "Invalid File", description: "Please upload a valid PDF file.", variant: "destructive" });
+      return;
+    }
+    if (expectedType === "docx" && !isDocx) {
+      toast({ title: "Invalid File", description: "Please upload a valid DOCX file.", variant: "destructive" });
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast({ title: "File Too Large", description: "File size must be less than 5MB.", variant: "destructive" });
+      return;
+    }
+
+    setIsImportingJD(true);
+    try {
+      const importedText = expectedType === "pdf"
+        ? await extractPdfJDText(file)
+        : await extractDocxJDText(file);
+      const text = cleanImportedJDText(importedText);
+
+      if (!text) {
+        throw new Error("No readable text found in this file.");
+      }
+
+      setForm(prev => ({ ...prev, jobDescription: text }));
+      toast({ title: "Imported", description: "Job description extracted successfully." });
+    } catch (error) {
+      toast({ title: "Import Failed", description: error.message || "Failed to import job description.", variant: "destructive" });
+    } finally {
+      setIsImportingJD(false);
+    }
+  };
+
+  const validateForm = () => {
+    const newErrors = {};
+    const trimStr = (val) => (typeof val === "string" ? val.trim() : val);
+
+    if (!form.clientName) newErrors.clientName = "Please select a client";
+
+    if (!form.jobType) newErrors.jobType = "Please select a job type";
+    
+    const position = trimStr(form.position);
+    if (!position) newErrors.position = "Role is required";
+    else if (position.length < 2) newErrors.position = "Must be at least 2 characters";
+
+    const loc = trimStr(form.location);
+    if (!loc) newErrors.location = "Location is required";
+
+    const exp = trimStr(form.experience);
+    if (!exp) newErrors.experience = "Experience is required";
+
+    // Cross-validation: Primary and Secondary recruiters cannot be the same
+    if (form.primaryRecruiter && form.secondaryRecruiter && form.primaryRecruiter === form.secondaryRecruiter) {
+      newErrors.secondaryRecruiter = "Secondary Recruiter cannot be the same as Primary";
+      newErrors.primaryRecruiter = "Must be different from Secondary";
+    }
+
+    const skills = trimStr(form.skills);
+    if (!skills) newErrors.skills = "At least one mandatory skill is required";
+
+    const link = trimStr(form.jdLink);
+    if (link) {
+      const urlPattern = /^(https?:\/\/)?([\w\d\-]+\.)+\w{2,}(\/.*)?$/i;
+      if (!urlPattern.test(link)) {
+        newErrors.jdLink = "Please enter a valid URL (e.g., https://example.com)";
+      }
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSubmit = async () => {
+    if (!validateForm()) {
+      toast({ title: "Validation Error", description: "Please fix the highlighted fields", variant: "destructive" });
+      return;
+    }
+
+    // Clean payload before sending
+    const sanitizedPayload = {
+      ...form,
+      position: form.position.trim(),
+      location: form.location.trim(),
+      experience: form.experience.trim(),
+      relevantExperience: form.relevantExperience?.trim() || "",
+      qualification: form.qualification?.trim() || "",
+      salaryBudget: form.salaryBudget?.trim() || "",
+      monthlySalary: form.monthlySalary?.trim() || "",
+      noticePeriod: form.noticePeriod?.trim() || "",
+      tatTime: form.tatTime || null,
+      jobType: form.jobType,
+      skills: form.skills.trim(),
+      jobDescription: form.jobDescription?.trim() || "",
+      jdLink: form.jdLink?.trim() || "",
+      customFields: form.customFields || {}
+    };
+
+    try {
+      const url = editingJob ? `${API_URL}/jobs/${editingJob.id}` : `${API_URL}/jobs`;
+      const response = await fetch(url, {
+        method: editingJob ? 'PUT' : 'POST',
+        headers: await getAuthHeader(),
+        body: JSON.stringify(sanitizedPayload)
+      });
+
+      if (!response.ok) throw new Error('Failed to save job');
+
+      const saved = await response.json();
+      const normalized = {
+        ...(editingJob || {}),
+        ...sanitizedPayload,
+        ...saved,
+        id: saved._id || saved.id || editingJob?.id,
+        jobType: saved.jobType ?? sanitizedPayload.jobType,
+        jobDescription: saved.jobDescription ?? sanitizedPayload.jobDescription,
+      };
+
+      // Update local state directly — no full refetch needed
+      if (editingJob) {
+        setJobs(prev => prev.map(j => j.id === editingJob.id ? normalized : j));
+      } else {
+        setJobs(prev => [normalized, ...prev]);
+      }
+
+      toast({ title: "Success", description: "Job requirement saved successfully" });
+      setShowForm(false);
+      setEditingJob(null);
+      setMandatorySkillInput("");
+      setErrors({});
+      setForm(initialFormState);
+    } catch (error) {
+      toast({ title: "Error", description: "Failed to save data. Please try again.", variant: "destructive" });
+    }
+  };
+
+  const handleEditJob = (job) => {
+    setEditingJob(job);
+    setErrors({});
+    setMandatorySkillInput("");
+    setForm({
+      ...initialFormState,
+      ...job,
+      jobDescription: job.jobDescription || "",
+      jdLink: job.jdLink || "",
+      customFields: job.customFields || {},
+      tatTime: job.tatTime ? new Date(job.tatTime).toISOString().substring(0, 10) : ""
+    });
+    setShowForm(true);
+  };
+
+  const handleToggleActive = async (job) => {
+    try {
+      await fetch(`${API_URL}/jobs/${job.id}`, {
+        method: 'PUT',
+        headers: await getAuthHeader(),
+        body: JSON.stringify({ active: !job.active })
+      });
+      // Update local state directly — no full refetch
+      setJobs(prev => prev.map(j => j.id === job.id ? { ...j, active: !job.active } : j));
+      toast({ title: "Status Updated" });
+    } catch (e) {
+      toast({ title: "Error", variant: "destructive" });
+    }
+  };
+
+  const handleDeleteJob = async (jobId) => {
+    if (!window.confirm("Are you sure you want to delete this requirement? This action cannot be undone.")) {
+      return;
+    }
+    try {
+      const response = await fetch(`${API_URL}/jobs/${jobId}`, {
+        method: 'DELETE',
+        headers: await getAuthHeader()
+      });
+      if (!response.ok) throw new Error('Failed to delete job');
+      // Remove from local state directly — no full refetch
+      setJobs(prev => prev.filter(j => j.id !== jobId));
+      toast({ title: "Deleted", description: "Requirement deleted successfully." });
+    } catch (error) {
+      toast({ title: "Error", description: "Failed to delete requirement.", variant: "destructive" });
+    }
+  };
+
+  const filteredJobs = useMemo(() => jobs.filter(j => {
+    const matchesSearch = j.position?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          j.clientName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          j.jobCode?.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesClient = selectedClientFilter === "" || j.clientName === selectedClientFilter;
+    return matchesSearch && matchesClient;
+  }), [jobs, searchTerm, selectedClientFilter]);
+
+  const visibleDefaults = useMemo(
+    () => (fieldConfig?.fields || []).filter(field => field.visible),
+    [fieldConfig]
+  );
+  const visibleDefaultByName = useMemo(
+    () => new Map(visibleDefaults.map(field => [field.fieldName, field])),
+    [visibleDefaults]
+  );
+  const coreDetailFields = useMemo(
+    () => ['clientName', 'jobType', 'location', 'experience', 'relevantExperience', 'qualification']
+      .map(fieldName => visibleDefaultByName.get(fieldName))
+      .filter(Boolean),
+    [visibleDefaultByName]
+  );
+  const compensationFields = useMemo(
+    () => ['salaryBudget', 'monthlySalary', 'gender', 'noticePeriod', 'tatTime']
+      .map(fieldName => visibleDefaultByName.get(fieldName))
+      .filter(Boolean),
+    [visibleDefaultByName]
+  );
+  const assignmentSkillFields = useMemo(
+    () => ['primaryRecruiter', 'secondaryRecruiter', 'preferredSkills']
+      .map(fieldName => visibleDefaultByName.get(fieldName))
+      .filter(Boolean),
+    [visibleDefaultByName]
+  );
+  const jobDescriptionField = visibleDefaultByName.get('jobDescription');
+  const visibleCustom = useMemo(
+    () => (fieldConfig?.customFields || []).filter(field => field.visible),
+    [fieldConfig]
+  );
+
+  const defaultFieldPlaceholders = {
+    clientName: 'Select Client',
+    location: 'City / Remote',
+    experience: 'E.g. 0.6 - 2',
+    relevantExperience: 'E.g. 1 - 2',
+    qualification: 'E.g. BTech',
+    salaryBudget: 'E.g. 10-12 LPA',
+    monthlySalary: 'E.g. 50k - 60k',
+    noticePeriod: 'E.g. 15 Days',
+    primaryRecruiter: 'Select Recruiter',
+    secondaryRecruiter: 'Select Recruiter',
+    skills: 'React, Node.js, etc.',
+  };
+
+  const getDefaultField = (field) => {
+    if (field.fieldName === 'clientName') {
+      return { ...field, fieldType: 'select', selectPlaceholder: 'Select Client', options: clients.map(client => client.companyName) };
+    }
+
+    if (field.fieldName === 'primaryRecruiter' || field.fieldName === 'secondaryRecruiter') {
+      return { ...field, fieldType: 'select', selectPlaceholder: 'Select Recruiter', options: recruiters.map(recruiter => recruiter.name) };
+    }
+
+    return field;
+  };
+
+  const getFieldWrapperClass = (field) => {
+    if (field.fieldName === 'jobDescription') return 'md:col-span-4';
+    if (field.fieldType === 'textarea' || field.fieldName === 'skills') return 'md:col-span-2';
+    return 'md:col-span-1';
+  };
+
+  const getFieldInputClass = (field) => `${inputCls} ${errors[field.fieldName] ? "border-red-500 focus:ring-red-500" : ""}`;
+
+  const mandatorySkillItems = useMemo(
+    () => (form.skills || '').split(/[,;|\n]+/).map(skill => skill.trim()).filter(Boolean),
+    [form.skills]
+  );
+
+  const commitMandatorySkill = (rawValue = mandatorySkillInput) => {
+    const additions = rawValue.split(/[,;|\n]+/).map(skill => skill.trim()).filter(Boolean);
+    if (additions.length === 0) return;
+    const existing = new Set(mandatorySkillItems.map(skill => skill.toLowerCase()));
+    const next = [...mandatorySkillItems];
+    additions.forEach(skill => {
+      if (!existing.has(skill.toLowerCase())) {
+        existing.add(skill.toLowerCase());
+        next.push(skill);
+      }
+    });
+    handleDefaultFieldChange('skills', next.join(', '));
+    setMandatorySkillInput("");
+  };
+
+  const removeMandatorySkill = (skillToRemove) => {
+    const next = mandatorySkillItems.filter(skill => skill !== skillToRemove);
+    handleDefaultFieldChange('skills', next.join(', '));
+  };
+
+  const renderMandatorySkillsField = () => {
+    const skillsField = visibleDefaultByName.get('skills');
+    if (!skillsField) return null;
+
+    return (
+      <div className="md:col-span-2">
+        <label className="block text-xs font-medium text-zinc-500 mb-1">Mandatory Skills *</label>
+        <div className={`min-h-[42px] w-full rounded-lg border bg-white dark:bg-zinc-900 px-2 py-2 text-sm transition-shadow focus-within:ring-2 focus-within:ring-zinc-500 ${errors.skills ? "border-red-500 focus-within:ring-red-500" : "border-zinc-300 dark:border-zinc-700"}`}>
+          <div className="flex flex-wrap items-center gap-2">
+            {mandatorySkillItems.map(skill => (
+              <span key={skill} className="inline-flex items-center gap-1 rounded-full border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 px-2.5 py-1 text-xs font-medium text-zinc-700 dark:text-zinc-200">
+                {skill}
+                <button type="button" onClick={() => removeMandatorySkill(skill)} className="rounded-full text-zinc-400 hover:text-red-500">
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            ))}
+            <input
+              value={mandatorySkillInput}
+              onChange={(e) => setMandatorySkillInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ',') {
+                  e.preventDefault();
+                  commitMandatorySkill();
+                }
+                if (e.key === 'Backspace' && !mandatorySkillInput && mandatorySkillItems.length > 0) {
+                  removeMandatorySkill(mandatorySkillItems[mandatorySkillItems.length - 1]);
+                }
+              }}
+              onBlur={() => commitMandatorySkill()}
+              placeholder={mandatorySkillItems.length ? "Add more..." : "Type a skill and press Enter"}
+              className="min-w-[160px] flex-1 bg-transparent px-1 py-1 text-sm outline-none text-zinc-900 dark:text-zinc-100 placeholder-zinc-400"
+            />
+          </div>
+        </div>
+        {errors.skills && <p className="text-xs text-red-500 mt-1">{errors.skills}</p>}
+      </div>
+    );
+  };
+
+  const renderDefaultField = (field) => {
+    const resolvedField = getDefaultField(field);
+    const label = `${field.label}${field.isMandatory ? ' *' : ''}`;
+
+    return (
+      <div key={field.fieldName} className={getFieldWrapperClass(field)}>
+        <label className="block text-xs font-medium text-zinc-500 mb-1">{label}</label>
+        <CustomFieldInput
+          field={resolvedField}
+          value={form[field.fieldName]}
+          onChange={handleDefaultFieldChange}
+          placeholder={defaultFieldPlaceholders[field.fieldName] || field.label}
+          className={getFieldInputClass(field)}
+        />
+        {errors[field.fieldName] && <p className="text-xs text-red-500 mt-1">{errors[field.fieldName]}</p>}
+      </div>
+    );
+  };
+
+  const renderCustomField = (field) => (
+    <div key={field.fieldName} className={getFieldWrapperClass(field)}>
+      <label className="block text-xs font-medium text-zinc-500 mb-1">{field.label}</label>
+      <CustomFieldInput
+        field={field}
+        value={form.customFields?.[field.fieldName]}
+        onChange={handleCustomFieldChange}
+        placeholder={field.label}
+      />
+    </div>
+  );
+
+  return (
+    <div className="flex-1 grid grid-cols-1 min-w-0 w-full p-6 space-y-8 overflow-y-auto overflow-x-hidden bg-slate-50 dark:bg-zinc-950 min-h-screen text-zinc-900 dark:text-zinc-100">
+      
+      {/* Header */}
+      <div className="w-full max-w-full mx-auto space-y-6">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-white">Job Requirements</h1>
+            <p className="text-zinc-500 dark:text-zinc-400 mt-1">Manage active openings and allocations</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => setFormControlOpen(true)}
+              className="inline-flex items-center gap-2 px-4 py-2 border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 bg-white dark:bg-zinc-900 rounded-lg text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800 shadow-sm"
+            >
+              <SlidersHorizontal className="w-4 h-4" />
+              Form Control
+            </button>
+            <button
+              onClick={() => {
+                setEditingJob(null);
+                setShowForm(true);
+                setForm(initialFormState);
+                setMandatorySkillInput("");
+                setErrors({});
+              }}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 rounded-lg text-sm font-medium hover:bg-zinc-800 dark:hover:bg-zinc-200 shadow-sm"
+            >
+              <Plus className="w-4 h-4" />
+              Add Requirement
+            </button>
+          </div>
+        </div>
+
+        {/* Filters & Search Bar */}
+        <div className="bg-white dark:bg-zinc-900 p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm flex flex-col sm:flex-row gap-4 items-center">
+          <div className="w-full sm:flex-1">
+            <input
+              placeholder="Search by Role, Job Code, or Company..."
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              className={inputCls}
+            />
+          </div>
+          <div className="w-full sm:w-64">
+            <select 
+              value={selectedClientFilter} 
+              onChange={(e) => setSelectedClientFilter(e.target.value)}
+              className={inputCls}
+            >
+              <option value="">All Clients</option>
+              {clients.map(c => (
+                <option key={c.id} value={c.companyName}>{c.companyName}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Custom Styles for the Dual Scrollbar matching Candidate format */}
+        <style>{`
+          .tbl-scroll::-webkit-scrollbar { height: 10px; }
+          .tbl-scroll::-webkit-scrollbar-track { background: #e2e8f0; border-radius: 10px; }
+          .tbl-scroll::-webkit-scrollbar-thumb { background: #475569; border-radius: 10px; border: 2px solid #e2e8f0; }
+          .tbl-scroll::-webkit-scrollbar-thumb:hover { background: #1e293b; }
+          .tbl-scroll { scrollbar-width: thin; scrollbar-color: #475569 #e2e8f0; }
+          
+          .dark .tbl-scroll::-webkit-scrollbar-track { background: #27272a; }
+          .dark .tbl-scroll::-webkit-scrollbar-thumb { background: #52525b; border-color: #27272a; }
+          .dark .tbl-scroll::-webkit-scrollbar-thumb:hover { background: #71717a; }
+
+          .no-scrollbar::-webkit-scrollbar { display: none; }
+          .no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+        `}</style>
+
+        {/* ✅ DUAL SCROLLBAR TABLE CONTAINER */}
+        <div className="w-full border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-sm bg-white dark:bg-zinc-900 flex flex-col relative overflow-hidden">
+          {loading ? (
+            <div className="text-center p-12 text-zinc-500 flex flex-col items-center">
+              <div className="w-8 h-8 border-4 border-zinc-300 border-t-zinc-800 rounded-full animate-spin mb-4"></div>
+              Loading jobs...
+            </div>
+          ) : (
+            <>
+              {/* TOP SCROLLBAR */}
+              <div 
+                ref={topScrollRef} 
+                onScroll={handleTopScroll} 
+                className="tbl-scroll overflow-x-auto overflow-y-hidden border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 z-20 sticky top-0 rounded-t-xl"
+                style={{ height: '18px' }}
+              >
+                <div style={{ width: scrollWidth, height: '1px' }}></div>
+              </div>
+
+              {/* BOTTOM TABLE CONTAINER WITH STICKY HEADER */}
+              <div 
+                ref={bottomScrollRef} 
+                onScroll={handleBottomScroll} 
+                className="no-scrollbar max-h-[calc(100vh-16rem)] min-h-[400px] overflow-auto rounded-b-xl w-full"
+              >
+                <table ref={tableRef} className="min-w-[1400px] w-full text-left text-sm whitespace-nowrap border-collapse">
+                  <thead className="bg-zinc-50 dark:bg-zinc-900/80 text-xs uppercase text-zinc-500 font-semibold tracking-wider sticky top-0 z-10 shadow-[0_1px_0_0_#e4e4e7] dark:shadow-[0_1px_0_0_#27272a]">
+                    <tr>
+                      <th className="px-6 py-4 bg-zinc-50 dark:bg-zinc-900">Job Code</th>
+                      <th className="px-6 py-4 bg-zinc-50 dark:bg-zinc-900">Role</th>
+                      <th className="px-6 py-4 bg-zinc-50 dark:bg-zinc-900">Company</th>
+                      <th className="px-6 py-4 bg-zinc-50 dark:bg-zinc-900">Location</th>
+                      <th className="px-6 py-4 bg-zinc-50 dark:bg-zinc-900">Primary Recruiter</th>
+                      <th className="px-6 py-4 bg-zinc-50 dark:bg-zinc-900">Secondary Recruiter</th>
+                      <th className="px-6 py-4 bg-zinc-50 dark:bg-zinc-900">Expiry (TAT)</th>
+                      <th className="px-6 py-4 bg-zinc-50 dark:bg-zinc-900 text-center">Status</th>
+                      <th className="px-6 py-4 bg-zinc-50 dark:bg-zinc-900 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  
+                  <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/50 bg-white dark:bg-zinc-900">
+                    {filteredJobs.length === 0 ? (
+                      <tr><td colSpan={9} className="text-center py-12 text-zinc-400">No requirements found.</td></tr>
+                    ) : filteredJobs.map(job => (
+                      <tr key={job.id} className="hover:bg-zinc-50/50 dark:hover:bg-zinc-800/20">
+                        
+                        {/* Job Code */}
+                        <td className="px-6 py-4">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedJob(job)}
+                            title="View Details"
+                            className="inline-flex items-center bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 px-2.5 py-1 rounded text-xs border border-zinc-200 dark:border-zinc-700 font-mono font-medium hover:bg-blue-50 hover:text-blue-700 hover:border-blue-200 dark:hover:bg-zinc-700 dark:hover:text-blue-300 dark:hover:border-zinc-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          >
+                            {job.jobCode}
+                          </button>
+                        </td>
+
+                        {/* Role */}
+                        <td className="px-6 py-4">
+                          <div className="font-bold text-zinc-900 dark:text-zinc-100 text-base">{job.position}</div>
+                        </td>
+
+                        {/* Company */}
+                        <td className="px-6 py-4">
+                          <div className="font-semibold text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
+                            <Building2 className="w-4 h-4 text-zinc-400" />
+                            {job.clientName}
+                          </div>
+                        </td>
+
+                        {/* Location */}
+                        <td className="px-6 py-4">
+                          <div className="text-sm text-zinc-600 dark:text-zinc-400 flex items-center gap-1.5">
+                            <MapPin className="w-4 h-4 text-zinc-400" />
+                            {job.location || 'N/A'}
+                          </div>
+                        </td>
+
+                        {/* Primary Recruiter */}
+                        <td className="px-6 py-4">
+                          {job.primaryRecruiter ? (
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-7 h-7 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 flex items-center justify-center text-xs font-bold border border-blue-200 dark:border-blue-800">
+                                {job.primaryRecruiter.charAt(0).toUpperCase()}
+                              </div>
+                              <RecruiterDetailsTrigger recruiter={getRecruiterDetailsByName(job.primaryRecruiter, recruiters)} className="font-medium text-zinc-700 dark:text-zinc-300">
+                                {job.primaryRecruiter}
+                              </RecruiterDetailsTrigger>
+                            </div>
+                          ) : (
+                            <span className="inline-flex items-center px-2 py-1 rounded bg-zinc-50 dark:bg-zinc-800/50 text-zinc-400 text-xs border border-dashed border-zinc-200 dark:border-zinc-700">
+                              Unassigned
+                            </span>
+                          )}
+                        </td>
+
+                        {/* Secondary Recruiter */}
+                        <td className="px-6 py-4">
+                          {job.secondaryRecruiter ? (
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-7 h-7 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 flex items-center justify-center text-xs font-bold border border-purple-200 dark:border-purple-800">
+                                {job.secondaryRecruiter.charAt(0).toUpperCase()}
+                              </div>
+                              <RecruiterDetailsTrigger recruiter={getRecruiterDetailsByName(job.secondaryRecruiter, recruiters)} className="font-medium text-zinc-700 dark:text-zinc-300">
+                                {job.secondaryRecruiter}
+                              </RecruiterDetailsTrigger>
+                            </div>
+                          ) : (
+                            <span className="inline-flex items-center px-2 py-1 rounded bg-zinc-50 dark:bg-zinc-800/50 text-zinc-400 text-xs border border-dashed border-zinc-200 dark:border-zinc-700">
+                              Unassigned
+                            </span>
+                          )}
+                        </td>
+
+                        {/* Expiry (TAT) */}
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-zinc-500 dark:text-zinc-400">
+                          <div className="flex items-center gap-1.5">
+                            <Calendar className="w-4 h-4" />
+                            {job.tatTime 
+                              ? new Date(job.tatTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) 
+                              : 'No TAT'
+                            }
+                          </div>
+                          {job.tatTime && new Date(job.tatTime).setHours(0,0,0,0) < new Date().setHours(0,0,0,0) && (
+                            <span className="text-[10px] text-red-500 font-medium block mt-0.5">Expired</span>
+                          )}
+                        </td>
+
+                        {/* Status */}
+                        <td className="px-6 py-4 text-center">
+                          <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border ${
+                            job.active !== false 
+                              ? "bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800/50" 
+                              : "bg-red-50 text-red-600 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800/50"
+                          }`}>
+                            {job.active !== false ? "Active" : "Inactive"}
+                          </span>
+                        </td>
+
+                        {/* Actions */}
+                        <td className="px-6 py-4 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            {/* View Button */}
+                            <button onClick={() => setSelectedJob(job)} title="View Details" className="p-1.5 rounded-lg text-zinc-400 hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-zinc-800 dark:hover:text-blue-400">
+                              <Eye className="w-5 h-5" />
+                            </button>
+                            {/* Edit Button */}
+                            <button onClick={() => handleEditJob(job)} title="Edit Requirement" className="p-1.5 rounded-lg text-zinc-400 hover:bg-amber-50 hover:text-amber-600 dark:hover:bg-zinc-800 dark:hover:text-amber-400">
+                              <Pencil className="w-5 h-5" />
+                            </button>
+                            {/* Toggle Active Button */}
+                            <button onClick={() => handleToggleActive(job)} title={job.active !== false ? "Mark as Inactive" : "Mark as Active"} className={`p-1.5 rounded-lg ${job.active !== false ? 'text-zinc-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-zinc-800 dark:hover:text-red-400' : 'text-zinc-400 hover:bg-green-50 hover:text-green-600 dark:hover:bg-zinc-800 dark:hover:text-green-400'}`}>
+                              {job.active !== false ? <Ban className="w-5 h-5" /> : <CheckCircle className="w-5 h-5" />}
+                            </button>
+                            <button onClick={() => handleDeleteJob(job.id)} title="Delete Requirement" className="p-1.5 rounded-lg text-zinc-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-zinc-800 dark:hover:text-red-400">
+                              <Trash2 className="w-5 h-5" />
+                            </button>
+                          </div>
+                        </td>
+
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {showForm && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={closeRequirementForm}>
+          <div
+            className="w-full max-w-[1400px] max-h-[94vh] flex flex-col rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-2xl overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-6 py-5 bg-gradient-to-r from-zinc-900 via-zinc-800 to-zinc-950 text-white">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <h3 className="font-bold text-xl tracking-tight">
+                      {editingJob ? "Edit Job Requirement" : "New Job Requirement"}
+                    </h3>
+                    {form.jobCode && (
+                      <span className="inline-flex items-center rounded-lg border border-white/20 bg-white/10 px-2.5 py-1 text-xs font-mono text-zinc-100">
+                        {form.jobCode}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm text-zinc-300 mt-1">Complete the requirement details and assignment preferences.</p>
+                </div>
+                <button onClick={closeRequirementForm} className="p-2 rounded-lg text-zinc-300 hover:bg-white/10 hover:text-white">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-5 bg-zinc-50 dark:bg-zinc-950">
+              <section className="rounded-xl border border-zinc-100 dark:border-zinc-800/60 bg-zinc-50/50 dark:bg-zinc-800/10 p-5">
+                <div className="mb-4">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Core Details</p>
+                  <h4 className="text-base font-semibold text-zinc-900 dark:text-white mt-1">Role and client information</h4>
+                </div>
+                <div className="grid md:grid-cols-4 gap-4">
+                  <div className="md:col-span-1">
+                    <label className="block text-xs font-medium text-zinc-500 mb-1">Job Code</label>
+                    <input name="jobCode" placeholder="Auto-generated" value={form.jobCode} disabled className={`${inputCls} bg-zinc-100 dark:bg-zinc-800 opacity-70 cursor-not-allowed`} />
+                  </div>
+
+                  {coreDetailFields.slice(0, 1).map(renderDefaultField)}
+
+                  <div className="md:col-span-1">
+                    <label className="block text-xs font-medium text-zinc-500 mb-1">Role / Position *</label>
+                    <input name="position" placeholder="E.g. Software Engineer" value={form.position} onChange={handleChange} className={`${inputCls} ${errors.position ? "border-red-500 focus:ring-red-500" : ""}`} />
+                    {errors.position && <p className="text-xs text-red-500 mt-1">{errors.position}</p>}
+                  </div>
+
+                  {coreDetailFields.slice(1).map(renderDefaultField)}
+                </div>
+              </section>
+
+              <section className="rounded-xl border border-zinc-100 dark:border-zinc-800/60 bg-zinc-50/50 dark:bg-zinc-800/10 p-5">
+                <div className="mb-4">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Compensation & Preferences</p>
+                  <h4 className="text-base font-semibold text-zinc-900 dark:text-white mt-1">Budget, notice, and timeline</h4>
+                </div>
+                <div className="grid md:grid-cols-4 gap-4">
+                  {compensationFields.map(renderDefaultField)}
+                </div>
+              </section>
+
+              <section className="rounded-xl border border-zinc-100 dark:border-zinc-800/60 bg-zinc-50/50 dark:bg-zinc-800/10 p-5">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Assignment & Skills</p>
+                  <h4 className="text-base font-semibold text-zinc-900 dark:text-white mt-1 mb-4">Recruiter ownership and skill requirements</h4>
+                </div>
+                <div className="grid md:grid-cols-4 gap-4">
+                  {assignmentSkillFields.slice(0, 2).map(renderDefaultField)}
+                  {renderMandatorySkillsField()}
+                  {assignmentSkillFields.slice(2).map(renderDefaultField)}
+                </div>
+              </section>
+
+              <section className="rounded-xl border border-zinc-100 dark:border-zinc-800/60 bg-zinc-50/50 dark:bg-zinc-800/10 p-5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Custom Fields</p>
+                    <h4 className="text-base font-semibold text-zinc-900 dark:text-white mt-1">Configured requirement inputs</h4>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setFormControlOpen(true)}
+                    className="inline-flex items-center justify-center gap-2 px-3 py-2 border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 bg-white dark:bg-zinc-900 rounded-lg text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                  >
+                    <SlidersHorizontal className="w-4 h-4" />
+                    Manage Fields
+                  </button>
+                </div>
+
+                {visibleCustom.length > 0 ? (
+                  <div className="grid md:grid-cols-4 gap-4">
+                    {visibleCustom.map(renderCustomField)}
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-dashed border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 p-6 text-center">
+                    <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">No additional fields enabled</p>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">Use Form Control to add or show custom fields here.</p>
+                  </div>
+                )}
+              </section>
+            </div>
+
+            <div className="px-6 py-4 border-t border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                {jobDescriptionField && (
+                  <button
+                    type="button"
+                    onClick={() => setJobDescriptionModalOpen(true)}
+                    className="inline-flex items-center justify-center px-4 py-2 border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 rounded-lg text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                  >
+                    {form.jobDescription ? "Edit Job Description" : "Add Job Description"}
+                  </button>
+                )}
+              </div>
+              <div className="flex flex-col-reverse sm:flex-row justify-end gap-2">
+                <button onClick={closeRequirementForm} className="px-5 py-2 border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 rounded-lg text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800">
+                  Cancel
+                </button>
+                <button onClick={handleSubmit} className="px-6 py-2 bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 rounded-lg text-sm font-medium hover:bg-zinc-800 dark:hover:bg-zinc-200 shadow-sm">
+                  {editingJob ? "Update Requirement" : "Save Requirement"}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {jobDescriptionModalOpen && (
+            <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setJobDescriptionModalOpen(false)}>
+              <div
+                className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-3xl max-h-[88vh] flex flex-col border border-zinc-200 dark:border-zinc-800 overflow-hidden"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between gap-4">
+                  <div>
+                    <h4 className="text-lg font-semibold text-zinc-900 dark:text-white">Job Description</h4>
+                    <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">Import a JD file or type the description manually.</p>
+                  </div>
+                  <button onClick={() => setJobDescriptionModalOpen(false)} className="p-2 rounded-lg text-zinc-400 hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-white">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+                <div className="p-6 space-y-4 overflow-y-auto">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={isImportingJD}
+                      onClick={() => pdfInputRef.current?.click()}
+                      className="inline-flex items-center justify-center px-4 py-2 border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 rounded-lg text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-50"
+                    >
+                      {isImportingJD ? "Importing..." : "Import PDF"}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isImportingJD}
+                      onClick={() => docxInputRef.current?.click()}
+                      className="inline-flex items-center justify-center px-4 py-2 border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 rounded-lg text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-50"
+                    >
+                      {isImportingJD ? "Importing..." : "Import DOCX"}
+                    </button>
+                    <input
+                      ref={pdfInputRef}
+                      type="file"
+                      accept=".pdf,application/pdf"
+                      className="hidden"
+                      onChange={(event) => handleImportJD(event, "pdf")}
+                    />
+                    <input
+                      ref={docxInputRef}
+                      type="file"
+                      accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                      className="hidden"
+                      onChange={(event) => handleImportJD(event, "docx")}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-zinc-500 mb-1">Job Description</label>
+                    <textarea
+                      value={form.jobDescription || ""}
+                      onChange={(e) => setForm(prev => ({ ...prev, jobDescription: e.target.value }))}
+                      rows={8}
+                      placeholder="Describe responsibilities, requirements, and role context..."
+                      className={`${inputCls} resize-none ${errors.jobDescription ? "border-red-500 focus:ring-red-500" : ""}`}
+                    />
+                    <div className="mt-1 flex justify-end text-xs text-zinc-400">
+                      {(form.jobDescription || "").length} characters
+                    </div>
+                    {errors.jobDescription && <p className="text-xs text-red-500 mt-1">{errors.jobDescription}</p>}
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-zinc-500 mb-1">JD Link</label>
+                    <input
+                      type="url"
+                      name="jdLink"
+                      value={form.jdLink || ""}
+                      onChange={handleChange}
+                      placeholder="https://example.com/job-description"
+                      className={`${inputCls} ${errors.jdLink ? "border-red-500 focus:ring-red-500" : ""}`}
+                    />
+                    {errors.jdLink && <p className="text-xs text-red-500 mt-1">{errors.jdLink}</p>}
+                  </div>
+                </div>
+                <div className="px-6 py-4 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 flex justify-end gap-2">
+                  <button onClick={() => setForm(prev => ({ ...prev, jobDescription: "" }))} className="px-5 py-2 border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 rounded-lg text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800">
+                    Clear
+                  </button>
+                  <button onClick={() => setJobDescriptionModalOpen(false)} className="px-5 py-2 border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 rounded-lg text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800">
+                    Done
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {selectedJob && <JobDetailCard job={selectedJob} recruiters={recruiters} onClose={() => setSelectedJob(null)} />}
+      <FormControlModal
+        isOpen={formControlOpen}
+        onClose={() => setFormControlOpen(false)}
+        config={fieldConfig}
+        onConfigChange={handleConfigChange}
+      />
+    </div>
+  );
+}

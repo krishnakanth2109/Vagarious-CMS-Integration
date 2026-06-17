@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   Users, UserCheck, TrendingUp, PauseCircle, UserX, User,
   ClipboardList, Briefcase, FileText
@@ -12,6 +12,8 @@ import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/context/AuthContext';
 import { format } from 'date-fns';
+import RecruiterPerformanceModal from '@/components/RecruiterPerformanceModal';
+import { RecruiterDetailsTrigger } from '@/components/RecruiterDetailsModal';
 
 // ─── API Helpers ──────────────────────────────────────────────────────────────
 // Module-level constants — computed once, never re-derived on re-render.
@@ -41,6 +43,28 @@ const getSafeStatus = (s) => {
   if (Array.isArray(s)) return String(s[0] || '').toLowerCase();
   return String(s || '').toLowerCase();
 };
+
+const getCandidateRecruiterId = (candidate) => {
+  const rec = candidate.recruiterId;
+  if (!rec) return '';
+  if (typeof rec === 'object') return String(rec._id || rec.id || '');
+  return String(rec);
+};
+
+const statusMatchesMetric = (candidate, metric) => {
+  const status = getSafeStatus(candidate.status);
+  if (metric === 'submissions') return true;
+  if (metric === 'pending') return ['submitted', 'pending'].includes(status);
+  return status === metric;
+};
+
+const RECRUITER_PERFORMANCE_COLUMNS = [
+  { key: 'submissions', label: 'Submissions', className: 'text-blue-600 font-black' },
+  { key: 'hold', label: 'Hold', className: 'text-orange-400 font-bold' },
+  { key: 'joined', label: 'Joined', className: 'text-green-600 font-black' },
+  { key: 'rejected', label: 'Rejected', className: 'text-red-500 font-medium' },
+  { key: 'pending', label: 'Pending', className: 'text-gray-500 font-medium' },
+];
 
 // ─── Theme map — module level constant, not recreated per render ──────────────
 const BUBBLE_THEMES = {
@@ -113,6 +137,19 @@ const BubbleStatCard = React.memo(({ title, value, trend, icon: Icon, theme = 'b
 
 // ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
 // NOTE: Export name kept as AdminDashboard to avoid breaking existing route imports.
+const RecruiterMetricButton = ({ value, className, onClick }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className={clsx(
+      'inline-flex min-w-6 justify-center rounded-sm underline-offset-4 transition hover:underline focus:outline-none focus:ring-2 focus:ring-blue-200',
+      className
+    )}
+  >
+    {value}
+  </button>
+);
+
 export default function AdminDashboard() {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -123,6 +160,7 @@ export default function AdminDashboard() {
   const [clients,    setClients   ] = useState([]);
   const [jobs,       setJobs      ] = useState([]);
   const [loading,    setLoading   ] = useState(true);
+  const [performanceModal, setPerformanceModal] = useState(null);
 
   // FIX: Added cleanup flag to prevent setState on unmounted component.
   // FIX: Promise.allSettled so a slow /jobs or /clients endpoint never blocks
@@ -169,9 +207,11 @@ export default function AdminDashboard() {
       .filter(r => r._id || r.id)
       .map(r => {
         const rid   = r._id || r.id;
-        const cands = candidates.filter(c => (c.recruiterId?._id || c.recruiterId) === rid);
+        const cands = candidates.filter(c => getCandidateRecruiterId(c) === String(rid));
         const name  = r.name || `${r.firstName || ''} ${r.lastName || ''}`.trim();
         return {
+          id:          String(rid),
+          recruiter:   r,
           fullName:    name,
           submissions: cands.length,
           joined:      cands.filter(c => getSafeStatus(c.status) === 'joined').length,
@@ -184,11 +224,41 @@ export default function AdminDashboard() {
       .sort((a, b) => b.submissions - a.submissions);
   }, [candidates, recruiters]);
 
+  const recruiterTotals = useMemo(() => (
+    RECRUITER_PERFORMANCE_COLUMNS.reduce((totals, column) => {
+      totals[column.key] = recruiterStats.reduce((sum, row) => sum + (Number(row[column.key]) || 0), 0);
+      return totals;
+    }, {})
+  ), [recruiterStats]);
+
   // FIX: barData was computed inline in JSX — now memoized.
   const barData = useMemo(
     () => recruiterStats.slice(0, 6).map(r => ({ name: r.fullName.split(' ')[0], value: r.submissions })),
     [recruiterStats]
   );
+
+  const openPerformanceModal = useCallback((recruiterRow, column) => {
+    const rows = candidates.filter(candidate => (
+      getCandidateRecruiterId(candidate) === recruiterRow.id && statusMatchesMetric(candidate, column.key)
+    ));
+    setPerformanceModal({
+      title: `${recruiterRow.fullName} - ${column.label}`,
+      subtitle: `${column.label} candidates for ${recruiterRow.fullName}`,
+      rows,
+    });
+  }, [candidates]);
+
+  const openPerformanceTotalModal = useCallback((column) => {
+    const visibleRecruiterIds = new Set(recruiterStats.map(row => row.id));
+    const rows = candidates.filter(candidate => (
+      visibleRecruiterIds.has(getCandidateRecruiterId(candidate)) && statusMatchesMetric(candidate, column.key)
+    ));
+    setPerformanceModal({
+      title: `Total ${column.label}`,
+      subtitle: `${column.label} candidates across all recruiters in this table`,
+      rows,
+    });
+  }, [candidates, recruiterStats]);
 
   if (loading) return (
     <div className="flex h-screen w-full items-center justify-center bg-[#f3f6fd]">
@@ -306,12 +376,20 @@ export default function AdminDashboard() {
             <tbody className="divide-y divide-gray-50 bg-white">
               {recruiterStats.map((r, i) => (
                 <tr key={r.fullName || i} className="hover:bg-blue-50/30">
-                  <td className="px-8 py-5 font-bold text-slate-700">{r.fullName}</td>
-                  <td className="px-4 py-5 text-center text-blue-600 font-black">{r.submissions}</td>
-                  <td className="px-4 py-5 text-center text-orange-400 font-bold">{r.hold}</td>
-                  <td className="px-4 py-5 text-center text-green-600 font-black">{r.joined}</td>
-                  <td className="px-4 py-5 text-center text-red-500 font-medium">{r.rejected}</td>
-                  <td className="px-4 py-5 text-center text-gray-400 font-medium">{r.pending}</td>
+                  <td className="px-8 py-5">
+                    <RecruiterDetailsTrigger recruiter={r.recruiter} className="font-bold text-slate-700">
+                      {r.fullName}
+                    </RecruiterDetailsTrigger>
+                  </td>
+                  {RECRUITER_PERFORMANCE_COLUMNS.map((column) => (
+                    <td key={column.key} className="px-4 py-5 text-center">
+                      <RecruiterMetricButton
+                        value={r[column.key]}
+                        className={column.className}
+                        onClick={() => openPerformanceModal(r, column)}
+                      />
+                    </td>
+                  ))}
                   <td className="px-8 py-5 text-right font-black text-red-500">0.0%</td>
                 </tr>
               ))}
@@ -319,9 +397,31 @@ export default function AdminDashboard() {
                 <tr><td colSpan="7" className="p-8 text-center text-gray-400">No active recruiter data available</td></tr>
               )}
             </tbody>
+            {recruiterStats.length > 0 && (
+              <tfoot className="bg-[#f8faff] border-t border-gray-100">
+                <tr>
+                  <td className="px-8 py-5 font-black text-slate-800">Total</td>
+                  {RECRUITER_PERFORMANCE_COLUMNS.map((column) => (
+                    <td key={column.key} className="px-4 py-5 text-center">
+                      <RecruiterMetricButton
+                        value={recruiterTotals[column.key] || 0}
+                        className={column.className}
+                        onClick={() => openPerformanceTotalModal(column)}
+                      />
+                    </td>
+                  ))}
+                  <td className="px-8 py-5 text-right font-black text-red-500">0.0%</td>
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
       </div>
+
+      <RecruiterPerformanceModal
+        detail={performanceModal}
+        onClose={() => setPerformanceModal(null)}
+      />
 
     </div>
   );

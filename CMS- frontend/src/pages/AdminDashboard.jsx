@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   Users, UserCheck, TrendingUp, PauseCircle, UserX, User,
-  ClipboardList, Briefcase, X, Calendar
+  ClipboardList, Briefcase, X, Calendar, Plus
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -12,6 +12,9 @@ import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/context/AuthContext';
 import { format } from 'date-fns';
+import CandidateProfileLink from '@/components/CandidateProfileLink';
+import RecruiterPerformanceModal from '@/components/RecruiterPerformanceModal';
+import { RecruiterDetailsTrigger } from '@/components/RecruiterDetailsModal';
 
 // ─── API Helpers ──────────────────────────────────────────────────────────────
 // FIX 1: Computed ONCE at module level — not re-computed on every render/call.
@@ -44,6 +47,36 @@ const getSafeStatus = (s) => {
   if (Array.isArray(s)) return String(s[0] || '').toLowerCase();
   return String(s || '').toLowerCase();
 };
+
+const getCandidateRecruiterId = (candidate) => {
+  const rec = candidate.recruiterId;
+  if (!rec) return '';
+  if (typeof rec === 'object') return String(rec._id || rec.id || '');
+  return String(rec);
+};
+
+const getRecruiterName = (recruiter = {}) => (
+  recruiter.name ||
+  `${recruiter.firstName || ''} ${recruiter.lastName || ''}`.trim() ||
+  recruiter.username ||
+  recruiter.email ||
+  'Unnamed Recruiter'
+);
+
+const statusMatchesMetric = (candidate, metric) => {
+  const status = getSafeStatus(candidate.status);
+  if (metric === 'submissions') return true;
+  if (metric === 'pending') return ['submitted', 'pending'].includes(status);
+  return status === metric;
+};
+
+const RECRUITER_PERFORMANCE_COLUMNS = [
+  { key: 'submissions', label: 'Submissions', className: 'text-blue-600 font-black' },
+  { key: 'hold', label: 'Hold', className: 'text-orange-400 font-bold' },
+  { key: 'joined', label: 'Joined', className: 'text-green-600 font-black' },
+  { key: 'rejected', label: 'Rejected', className: 'text-red-500 font-medium' },
+  { key: 'pending', label: 'Pending', className: 'text-gray-500 font-medium' },
+];
 
 // ─── REUSABLE CARD COMPONENTS ─────────────────────────────────────────────────
 // FIX 5: Both card components are defined outside the parent component.
@@ -118,6 +151,19 @@ const BubbleStatCard = React.memo(({ title, value, trend, icon: Icon, theme = 'b
 });
 
 // ─── Loading Spinner ───────────────────────────────────────────────────────────
+const RecruiterMetricButton = ({ value, className, onClick }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className={clsx(
+      'inline-flex min-w-6 justify-center rounded-sm underline-offset-4 transition hover:underline focus:outline-none focus:ring-2 focus:ring-blue-200',
+      className
+    )}
+  >
+    {value}
+  </button>
+);
+
 const FullPageSpinner = () => (
   <div className="flex h-screen w-full items-center justify-center bg-[#f3f6fd]">
     <div className="animate-spin h-12 w-12 border-4 border-[#283086] border-t-transparent rounded-full" />
@@ -139,10 +185,9 @@ export default function AdminDashboard() {
   const [isModalOpen,     setIsModalOpen    ] = useState(false);
   const [modalData,       setModalData      ] = useState([]);
   const [modalLoading,    setModalLoading   ] = useState(false);
+  const [performanceModal, setPerformanceModal] = useState(null);
   const [filterDate,      setFilterDate     ] = useState(() => new Date().toISOString().split('T')[0]);
   const [recruiterFilter, setRecruiterFilter] = useState('All');
-
-  const RECRUITER_NAMES = ['All', 'Varun', 'Lahithya', 'Akhila', 'Hema', 'Nainika'];
 
   // ── FIX 7: Initial fetch — all 4 endpoints in parallel, settled so a single
   //    slow/failing endpoint never blocks the others from painting data. ────────
@@ -196,31 +241,58 @@ export default function AdminDashboard() {
   // The old code had [isModalOpen, filterDate, toast] which caused double-fetches.
 
   // ── Computed stats — all useMemo with correct minimal dep arrays ─────────────
+  const recruiterOptions = useMemo(() => (
+    recruiters
+      .filter(r => r._id || r.id)
+      .map(r => ({ id: String(r._id || r.id), name: getRecruiterName(r) }))
+      .filter(r => r.name.trim() !== '')
+      .sort((a, b) => a.name.localeCompare(b.name))
+  ), [recruiters]);
+
+  const selectedRecruiterName = useMemo(() => {
+    if (recruiterFilter === 'All') return 'all recruiters';
+    return recruiterOptions.find(r => r.id === recruiterFilter)?.name || 'selected recruiter';
+  }, [recruiterFilter, recruiterOptions]);
+
+  const scopedCandidates = useMemo(() => (
+    recruiterFilter === 'All'
+      ? candidates
+      : candidates.filter(c => getCandidateRecruiterId(c) === recruiterFilter)
+  ), [candidates, recruiterFilter]);
+
+  const visibleRecruiters = useMemo(() => (
+    recruiterFilter === 'All'
+      ? recruiters
+      : recruiters.filter(r => String(r._id || r.id || '') === recruiterFilter)
+  ), [recruiters, recruiterFilter]);
+
   const stats = useMemo(() => {
-    const total    = candidates.length;
-    const submitted = candidates.filter(c => { const s = getSafeStatus(c.status); return s === 'submitted' || s === 'pending'; }).length;
-    const joined   = candidates.filter(c => getSafeStatus(c.status) === 'joined').length;
-    const hold     = candidates.filter(c => getSafeStatus(c.status) === 'hold').length;
-    const rejected = candidates.filter(c => getSafeStatus(c.status) === 'rejected').length;
+    const total    = scopedCandidates.length;
+    const submitted = scopedCandidates.filter(c => { const s = getSafeStatus(c.status); return s === 'submitted' || s === 'pending'; }).length;
+    const joined   = scopedCandidates.filter(c => getSafeStatus(c.status) === 'joined').length;
+    const hold     = scopedCandidates.filter(c => getSafeStatus(c.status) === 'hold').length;
+    const rejected = scopedCandidates.filter(c => getSafeStatus(c.status) === 'rejected').length;
 
     const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
     const todayEnd   = new Date(); todayEnd.setHours(23, 59, 59, 999);
-    const todaySubmissions = candidates.filter(c => {
+    const todaySubmissions = scopedCandidates.filter(c => {
       const d = new Date(c.dateAdded || c.createdAt);
       return d >= todayStart && d <= todayEnd;
     }).length;
 
     return { total, submitted, joined, hold, rejected, todaySubmissions };
-  }, [candidates]);
+  }, [scopedCandidates]);
 
   const recruiterStats = useMemo(() => {
-    return recruiters
+    return visibleRecruiters
       .filter(r => r._id || r.id)
       .map(r => {
         const rid   = r._id || r.id;
-        const cands = candidates.filter(c => (c.recruiterId?._id || c.recruiterId) === rid);
-        const name  = r.name || `${r.firstName || ''} ${r.lastName || ''}`.trim();
+        const cands = candidates.filter(c => getCandidateRecruiterId(c) === String(rid));
+        const name  = getRecruiterName(r);
         return {
+          id:          String(rid),
+          recruiter:   r,
           fullName:    name,
           submissions: cands.length,
           joined:      cands.filter(c => getSafeStatus(c.status) === 'joined').length,
@@ -232,7 +304,14 @@ export default function AdminDashboard() {
       })
       .filter(r => r.fullName !== '')
       .sort((a, b) => b.submissions - a.submissions);
-  }, [candidates, recruiters]);
+  }, [candidates, visibleRecruiters]);
+
+  const recruiterTotals = useMemo(() => (
+    RECRUITER_PERFORMANCE_COLUMNS.reduce((totals, column) => {
+      totals[column.key] = recruiterStats.reduce((sum, row) => sum + (Number(row[column.key]) || 0), 0);
+      return totals;
+    }, {})
+  ), [recruiterStats]);
 
   // ── FIX 12: barData updated to include Submissions, Selected, and Rejected ──
   const barData = useMemo(
@@ -247,18 +326,33 @@ export default function AdminDashboard() {
 
   const filteredModalData = useMemo(() => {
     if (recruiterFilter === 'All') return modalData;
-    return modalData.filter(c => {
-      const rec       = c.recruiterId;
-      if (!rec) return false;
-      const firstName = (typeof rec === 'object'
-        ? (rec.firstName || rec.name?.split(' ')[0] || rec.username || '')
-        : ''
-      ).toLowerCase();
-      return firstName === recruiterFilter.toLowerCase();
-    });
+    return modalData.filter(c => getCandidateRecruiterId(c) === recruiterFilter);
   }, [modalData, recruiterFilter]);
 
   // ── Stable handlers — useCallback so child onClick props don't change ref ────
+  const openPerformanceModal = useCallback((recruiterRow, column) => {
+    const rows = candidates.filter(candidate => (
+      getCandidateRecruiterId(candidate) === recruiterRow.id && statusMatchesMetric(candidate, column.key)
+    ));
+    setPerformanceModal({
+      title: `${recruiterRow.fullName} - ${column.label}`,
+      subtitle: `${column.label} candidates for ${recruiterRow.fullName}`,
+      rows,
+    });
+  }, [candidates]);
+
+  const openPerformanceTotalModal = useCallback((column) => {
+    const visibleRecruiterIds = new Set(recruiterStats.map(row => row.id));
+    const rows = candidates.filter(candidate => (
+      visibleRecruiterIds.has(getCandidateRecruiterId(candidate)) && statusMatchesMetric(candidate, column.key)
+    ));
+    setPerformanceModal({
+      title: `Total ${column.label}`,
+      subtitle: `${column.label} candidates across all recruiters in this table`,
+      rows,
+    });
+  }, [candidates, recruiterStats]);
+
   const openModal   = useCallback(() => setIsModalOpen(true),  []);
   const closeModal  = useCallback(() => setIsModalOpen(false), []);
 
@@ -286,8 +380,9 @@ export default function AdminDashboard() {
               onChange={(e) => setRecruiterFilter(e.target.value)}
               className="pl-4 pr-10 py-2.5 text-xs font-bold uppercase tracking-wider border border-gray-200 rounded-xl text-[#283086] focus:ring-4 focus:ring-blue-100 focus:outline-none bg-white appearance-none cursor-pointer shadow-sm transition-all hover:border-[#283086]"
             >
-              {RECRUITER_NAMES.map(name => (
-                <option key={name} value={name}>{name === 'All' ? '🗂️ All Recruiters' : `👤 ${name}`}</option>
+              <option value="All">All Recruiters</option>
+              {recruiterOptions.map(recruiter => (
+                <option key={recruiter.id} value={recruiter.id}>{recruiter.name}</option>
               ))}
             </select>
             <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400 group-hover:text-[#283086] transition-colors">
@@ -356,7 +451,11 @@ export default function AdminDashboard() {
       <div className="bg-white p-8 rounded-[1.5rem] shadow-sm border border-gray-100">
         <div className="flex justify-between items-center mb-6">
           <h3 className="text-base font-bold text-slate-800">Top Recruiters (Upload Report)</h3>
-          <span className="text-xs text-gray-400">showing {Math.min(6, recruiters.length)} of {recruiters.length}</span>
+          <span className="text-xs text-gray-400">
+            {recruiterFilter === 'All'
+              ? `showing ${Math.min(6, recruiterStats.length)} of ${recruiterStats.length}`
+              : selectedRecruiterName}
+          </span>
         </div>
         <div className="h-80">
           <ResponsiveContainer width="100%" height="100%">
@@ -400,12 +499,20 @@ export default function AdminDashboard() {
             <tbody className="divide-y divide-gray-50 bg-white">
               {recruiterStats.map((r, i) => (
                 <tr key={r.fullName || i} className="hover:bg-blue-50/30">
-                  <td className="px-8 py-5 font-bold text-slate-700">{r.fullName}</td>
-                  <td className="px-4 py-5 text-center text-blue-600 font-black">{r.submissions}</td>
-                  <td className="px-4 py-5 text-center text-orange-400 font-bold">{r.hold}</td>
-                  <td className="px-4 py-5 text-center text-green-600 font-black">{r.joined}</td>
-                  <td className="px-4 py-5 text-center text-red-500 font-medium">{r.rejected}</td>
-                  <td className="px-4 py-5 text-center text-gray-400 font-medium">{r.pending}</td>
+                  <td className="px-8 py-5 font-bold text-slate-700">
+                    <RecruiterDetailsTrigger recruiter={r.recruiter} className="text-slate-700 font-bold">
+                      {r.fullName}
+                    </RecruiterDetailsTrigger>
+                  </td>
+                  {RECRUITER_PERFORMANCE_COLUMNS.map((column) => (
+                    <td key={column.key} className="px-4 py-5 text-center">
+                      <RecruiterMetricButton
+                        value={r[column.key]}
+                        className={column.className}
+                        onClick={() => openPerformanceModal(r, column)}
+                      />
+                    </td>
+                  ))}
                   <td className="px-8 py-5 text-right font-black text-red-500">0.0%</td>
                 </tr>
               ))}
@@ -413,6 +520,23 @@ export default function AdminDashboard() {
                 <tr><td colSpan="7" className="p-8 text-center text-gray-400">No active recruiter data available</td></tr>
               )}
             </tbody>
+            {recruiterStats.length > 0 && (
+              <tfoot className="bg-[#f8faff] border-t border-gray-100">
+                <tr>
+                  <td className="px-8 py-5 font-black text-slate-800">Total</td>
+                  {RECRUITER_PERFORMANCE_COLUMNS.map((column) => (
+                    <td key={column.key} className="px-4 py-5 text-center">
+                      <RecruiterMetricButton
+                        value={recruiterTotals[column.key] || 0}
+                        className={column.className}
+                        onClick={() => openPerformanceTotalModal(column)}
+                      />
+                    </td>
+                  ))}
+                  <td className="px-8 py-5 text-right font-black text-red-500">0.0%</td>
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
       </div>
@@ -430,7 +554,7 @@ export default function AdminDashboard() {
                   Day Submissions
                 </h2>
                 <p className="text-xs text-gray-500 font-medium mt-1">
-                  Viewing candidates submitted by {recruiterFilter === 'All' ? 'all recruiters' : recruiterFilter}
+                  Viewing candidates submitted by {selectedRecruiterName}
                 </p>
               </div>
               <div className="flex items-center gap-3">
@@ -439,9 +563,10 @@ export default function AdminDashboard() {
                   onChange={(e) => setRecruiterFilter(e.target.value)}
                   className="pl-3 pr-8 py-2 text-sm border border-gray-200 rounded-lg text-slate-700 font-medium focus:ring-2 focus:ring-[#283086] focus:outline-none bg-white appearance-none cursor-pointer"
                 >
-                  {RECRUITER_NAMES.map(name => (
-                    <option key={name} value={name}>{name === 'All' ? 'All Recruiters' : name}</option>
-                  ))}
+              <option value="All">All Recruiters</option>
+              {recruiterOptions.map(recruiter => (
+                <option key={recruiter.id} value={recruiter.id}>{recruiter.name}</option>
+              ))}
                 </select>
                 <div className="relative flex items-center">
                   <Calendar className="absolute left-3 w-4 h-4 text-gray-400" />
@@ -474,7 +599,7 @@ export default function AdminDashboard() {
                   <h3 className="text-slate-800 font-bold">No submissions found</h3>
                   <p className="text-sm text-gray-500 mt-1">
                     {recruiterFilter !== 'All'
-                      ? `No candidates submitted by ${recruiterFilter} on ${filterDate}`
+                      ? `No candidates submitted by ${selectedRecruiterName} on ${filterDate}`
                       : `No candidates were added on ${filterDate}`}
                   </p>
                 </div>
@@ -498,12 +623,21 @@ export default function AdminDashboard() {
                           ? `${rec.firstName || rec.name || ''} ${rec.lastName || ''}`.trim() || rec.username || 'Unknown'
                           : 'Unknown')
                         : (c.recruiterName || 'Unknown');
+                      const recruiterDetails = typeof rec === 'object' ? rec : { name: recruiterName };
                       const cStatus = Array.isArray(c.status) ? c.status[0] : c.status;
                       return (
                         <tr key={c._id} className="hover:bg-purple-50/30">
                           <td className="px-6 py-4 font-bold text-[#283086]">{c.candidateId || 'N/A'}</td>
-                          <td className="px-6 py-4 font-semibold text-slate-800">{c.name || `${c.firstName} ${c.lastName}`}</td>
-                          <td className="px-6 py-4 font-medium text-gray-600">{recruiterName}</td>
+                          <td className="px-6 py-4">
+                            <CandidateProfileLink candidate={c} className="text-slate-800">
+                              {c.name || `${c.firstName || ''} ${c.lastName || ''}`.trim() || 'Unknown Candidate'}
+                            </CandidateProfileLink>
+                          </td>
+                          <td className="px-6 py-4 font-medium text-gray-600">
+                            <RecruiterDetailsTrigger recruiter={recruiterDetails} className="text-gray-600 font-medium">
+                              {recruiterName}
+                            </RecruiterDetailsTrigger>
+                          </td>
                           <td className="px-6 py-4 text-gray-500">{c.position || '-'}</td>
                           <td className="px-6 py-4 text-gray-500">{c.client || '-'}</td>
                           <td className="px-6 py-4 text-center">
@@ -524,7 +658,7 @@ export default function AdminDashboard() {
               <div className="px-6 py-3 border-t border-gray-100 bg-gray-50 flex justify-between items-center text-xs font-medium text-gray-500">
                 <p>
                   Showing {filteredModalData.length} submission(s) for the selected date
-                  {recruiterFilter !== 'All' && <span> · <span className="text-purple-600 font-semibold">{recruiterFilter}</span></span>}
+                  {recruiterFilter !== 'All' && <span> · <span className="text-purple-600 font-semibold">{selectedRecruiterName}</span></span>}
                 </p>
                 <button onClick={closeModal} className="text-slate-700 hover:text-[#283086] font-bold uppercase tracking-wider">
                   Close Window
@@ -534,6 +668,11 @@ export default function AdminDashboard() {
           </div>
         </div>
       )}
+
+      <RecruiterPerformanceModal
+        detail={performanceModal}
+        onClose={() => setPerformanceModal(null)}
+      />
 
     </div>
   );

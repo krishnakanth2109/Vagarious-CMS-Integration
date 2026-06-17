@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/AuthContext";
+import CandidateProfileLink from "@/components/CandidateProfileLink";
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 import * as XLSX from "xlsx";
 
@@ -108,6 +109,7 @@ const AdminClientInvoice = () => {
     invoiceNumber: `INV-${Math.floor(1000 + Math.random() * 9000)}`,
     invoiceDate: new Date().toISOString().split("T")[0],
     clientId: "",
+    candidateProfileId: "",
     candidateName: "",
     joiningDate: "",
     role: "",
@@ -155,6 +157,7 @@ const AdminClientInvoice = () => {
     const ctc = parseFloat(candidate.ctc ? candidate.ctc.replace(/[^0-9.]/g, "") : "0") * 100000 || 0;
     setForm(p => ({
       ...p,
+      candidateProfileId: candidate._id || candidate.id || "",
       candidateName: candidate.name || "",
       role: candidate.position || "",
       joiningDate: candidate.joiningDate ? candidate.joiningDate.split('T')[0] : new Date().toISOString().split("T")[0],
@@ -173,6 +176,7 @@ const AdminClientInvoice = () => {
     }
     const newCandidate = {
       id: Date.now(),
+      candidateProfileId: form.candidateProfileId,
       name: form.candidateName,
       role: form.role,
       joiningDate: form.joiningDate,
@@ -183,6 +187,7 @@ const AdminClientInvoice = () => {
     setForm(prev => ({
       ...prev,
       selectedCandidates: [...prev.selectedCandidates, newCandidate],
+      candidateProfileId: "",
       candidateName: "",
       joiningDate: "",
       role: "",
@@ -1088,7 +1093,7 @@ const AdminClientInvoice = () => {
                 )}
                 <button
                   type="button"
-                  onClick={() => setForm(prev => ({ ...prev, candidateName: "", role: "", joiningDate: "", actualSalary: "", percentage: "", payment: 0 }))}
+                  onClick={() => setForm(prev => ({ ...prev, candidateProfileId: "", candidateName: "", role: "", joiningDate: "", actualSalary: "", percentage: "", payment: 0 }))}
                   className="px-4 py-2 border border-gray-300 text-gray-600 rounded-lg text-sm font-medium hover:bg-gray-50 mb-3"
                 >
                   Clear Fields
@@ -1143,7 +1148,11 @@ const AdminClientInvoice = () => {
                         {form.selectedCandidates.map((c, idx) => (
                           <tr key={c.id} className="hover:bg-blue-50/50 transition-colors">
                             <td className="px-4 py-2 text-gray-500">{idx + 1}</td>
-                            <td className="px-4 py-2 font-medium text-gray-900">{c.name}</td>
+                            <td className="px-4 py-2">
+                              <CandidateProfileLink candidateId={c.candidateProfileId} className="text-gray-900">
+                                {c.name}
+                              </CandidateProfileLink>
+                            </td>
                             <td className="px-4 py-2 text-gray-600">{c.role}</td>
                             <td className="px-4 py-2 text-right font-bold text-blue-700">₹{c.payment.toLocaleString('en-IN')}</td>
                             <td className="px-4 py-2 text-center">

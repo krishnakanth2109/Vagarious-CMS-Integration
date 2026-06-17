@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { useAuth } from '@/context/AuthContext';
+import CandidateProfileLink from '@/components/CandidateProfileLink';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -32,6 +33,9 @@ function DetailModal({ app, onClose, onStatusChange, canEdit }) {
   const [promoting, setPromoting] = useState(false);
   const [promoteStep, setPromoteStep] = useState('idle'); // 'idle' | 'confirm' | 'success' | 'error'
   const [promoteResult, setPromoteResult] = useState(null);
+  const promotedCandidateId = typeof app.promotedCandidateId === 'object'
+    ? app.promotedCandidateId?._id || app.promotedCandidateId?.id
+    : app.promotedCandidateId;
 
   const handleSave = async () => {
     setSaving(true);
@@ -80,7 +84,11 @@ function DetailModal({ app, onClose, onStatusChange, canEdit }) {
         {/* Header */}
         <div className="sticky top-0 bg-white border-b border-gray-100 px-6 py-4 flex items-center justify-between rounded-t-2xl">
           <div>
-            <h2 className="text-xl font-bold text-slate-900">{app.name}</h2>
+            <h2 className="text-xl font-bold text-slate-900">
+              <CandidateProfileLink candidateId={promotedCandidateId} className="text-slate-900">
+                {app.name}
+              </CandidateProfileLink>
+            </h2>
             <p className="text-sm text-slate-500 mt-0.5">{app.email} · {app.phone}</p>
           </div>
           <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100 transition-colors text-slate-500 hover:text-slate-800">
@@ -452,7 +460,14 @@ export default function JobApplications() {
                   <tr key={app._id} className="hover:bg-slate-50/60 transition-colors group">
                     {/* Applicant */}
                     <td className="px-5 py-4 min-w-[180px]">
-                      <p className="font-semibold text-slate-800">{app.name}</p>
+                      <p>
+                        <CandidateProfileLink
+                          candidateId={typeof app.promotedCandidateId === 'object' ? app.promotedCandidateId?._id || app.promotedCandidateId?.id : app.promotedCandidateId}
+                          className="text-slate-800"
+                        >
+                          {app.name}
+                        </CandidateProfileLink>
+                      </p>
                       <p className="text-xs text-slate-400 mt-0.5">{app.email}</p>
                       <p className="text-xs text-slate-400">{app.phone}</p>
                     </td>
