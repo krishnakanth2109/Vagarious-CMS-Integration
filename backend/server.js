@@ -24,6 +24,8 @@ import messageRoutes from './routes/messageRoutes.js';
 import channelRoutes from './routes/channelRoutes.js';
 import aiMockRoutes from './routes/aiMockRoutes.js';
 import jobApplicationRoutes from './routes/jobApplicationRoutes.js';
+import externalClientRoutes from './routes/externalClientRoutes.js';
+import externalContactRoutes from './routes/externalContactRoutes.js';
 
 // ── Agreement Module Routes ───────────────────────────────────────────────────
 import { connectAgreementDB } from './config/agreementDatabase.js';
@@ -178,6 +180,10 @@ app.use('/api/messages', messageRoutes);
 app.use('/api/channels', channelRoutes);
 app.use('/api/ai-mock', aiMockRoutes);
 app.use('/api/job-applications', jobApplicationRoutes);
+app.use('/api/externalclients', externalClientRoutes);
+app.use('/api/externalcontacts', externalContactRoutes);
+app.use('/api/employer-requirements', externalClientRoutes);
+app.use('/api/contact', externalContactRoutes);
 
 // ── Agreement Module Routes ────────────────────────────────────────────────────
 app.use('/agreement-companies', agreementCompanyRoutes);
@@ -196,6 +202,10 @@ app.use('/messages', messageRoutes);
 app.use('/channels', channelRoutes);
 app.use('/ai-mock', aiMockRoutes);
 app.use('/job-applications', jobApplicationRoutes);
+app.use('/externalclients', externalClientRoutes);
+app.use('/externalcontacts', externalContactRoutes);
+app.use('/employer-requirements', externalClientRoutes);
+app.use('/contact', externalContactRoutes);
 
 // Mount AI mock routes at root so index.html can call /start-session-interview etc. directly
 app.use('/', aiMockRoutes);

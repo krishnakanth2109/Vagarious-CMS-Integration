@@ -1,18 +1,20 @@
 import React, { useState } from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import {
   LayoutDashboard, UserPlus, Briefcase,
   Building2, Receipt, ClipboardList, MessageSquare,
   BarChart3, Settings, Power, User, Users, Calendar,
-  Video, FileText, Handshake, FileInput // <-- Added FileInput icon
+  Video, FileText, Handshake, FileInput, ContactRound, ChevronDown
 } from 'lucide-react';
 import clsx from 'clsx';
 
 export default function Sidebar({ isOpen, toggleSidebar }) {
   const { userRole, logout, currentUser } = useAuth();
+  const location = useLocation();
 
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [expandedMenus, setExpandedMenus] = useState({});
 
   const sidebarBg = "bg-[#283086]";
   const mainBackgroundColor = "#f3f6fd";
@@ -20,10 +22,20 @@ export default function Sidebar({ isOpen, toggleSidebar }) {
   const activeTextClass = "text-[#283086] font-extrabold";
   const inactiveTextClass = "text-white font-medium hover:bg-white/10";
 
+  const externalImportsMenu = {
+    name: 'External Imports',
+    key: 'externalImports',
+    icon: ClipboardList,
+    children: [
+      { name: 'External Contacts', path: '/admin/external-imports/contacts', icon: ContactRound },
+      { name: 'External Clients', path: '/admin/external-imports/clients', icon: Building2 },
+    ],
+  };
   // Manager links
   const managerLinks = [
     { name: 'Dashboard', path: '/admin', icon: LayoutDashboard },
     { name: 'OverAll Candidates', path: '/admin/add-candidate', icon: Users },
+    externalImportsMenu,
     { name: 'Recruiters', path: '/admin/recruiters', icon: Briefcase },
     { name: 'Client Info', path: '/admin/clients', icon: Building2 },
     { name: 'Invoices', path: '/admin/invoices', icon: Receipt },
@@ -60,6 +72,7 @@ export default function Sidebar({ isOpen, toggleSidebar }) {
       { name: 'Dashboard', path: '/admin', icon: LayoutDashboard },
       { name: 'OverAll Candidates', path: '/admin/add-candidate', icon: Users },
       { name: 'My Candidates', path: '/admin/my-candidates', icon: UserPlus },
+       externalImportsMenu,
       { name: 'Recruiters', path: '/admin/recruiters', icon: Briefcase },
       { name: 'Requirements', path: '/admin/requirements', icon: ClipboardList },
       { name: 'Job Applications', path: '/admin/job-applications', icon: FileInput },
@@ -68,7 +81,7 @@ export default function Sidebar({ isOpen, toggleSidebar }) {
       { name: 'Agreements', path: '/admin/agreements', icon: Handshake },
       { name: 'Mock Interviews', path: '/admin/mock', icon: Video },
       // { name: 'Offer Letters',      isExternal: true, url: 'https://automated-offer-letter-generator-mocha.vercel.app/?jr_id=l_4387424181',     icon: FileText }, 
-
+     
       { name: 'Reports', path: '/admin/reports', icon: BarChart3 },
       { name: 'Settings', path: '/admin/settings', icon: Settings },
     ];
@@ -132,6 +145,75 @@ export default function Sidebar({ isOpen, toggleSidebar }) {
         <div className={clsx("flex-1 overflow-y-auto space-y-1 pt-8 pb-8 pr-0 relative [&::-webkit-scrollbar]:hidden", isOpen ? "pl-6" : "pl-2")}>
           {links.map((link) => {
             // Handle External Links (Opens in new tab)
+            if (link.children) {
+              const expanded = expandedMenus[link.key];
+              const childActive = link.children.some(
+                (child) => location.pathname === child.path
+              );
+
+              return (
+                <div key={link.key || link.name} className={clsx(isOpen ? "pr-0" : "pr-2")}>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setExpandedMenus((prev) => ({
+                        ...prev,
+                        [link.key]: !prev[link.key],
+                      }))
+                    }
+                    className={clsx(
+                      "group flex w-full items-center relative py-4",
+                      childActive
+                        ? `${activeBgClass} ${activeTextClass}`
+                        : `${inactiveTextClass}`,
+                      isOpen
+                        ? "pl-8 rounded-l-[40px]"
+                        : "justify-center pl-0 rounded-xl mx-2"
+                    )}
+                  >
+                    <div className={clsx("flex items-center", isOpen ? "gap-5" : "gap-0")}>
+                      <link.icon className="h-5 w-5" />
+                      {isOpen && (
+                        <span className="text-[15px] whitespace-nowrap">
+                          {link.name}
+                        </span>
+                      )}
+                    </div>
+
+                    {isOpen && (
+                      <ChevronDown
+                        className={clsx(
+                          "ml-auto mr-6 h-4 w-4 transition-transform",
+                          expanded && "rotate-180"
+                        )}
+                      />
+                    )}
+                  </button>
+
+                  {isOpen && expanded && (
+                    <div className="mt-1 space-y-1 pl-8 pr-4">
+                      {link.children.map((child) => (
+                        <NavLink
+                          key={child.path}
+                          to={child.path}
+                          className={({ isActive }) =>
+                            clsx(
+                              "flex items-center gap-3 rounded-l-[28px] px-5 py-3 text-sm",
+                              isActive
+                                ? "bg-white text-[#283086] font-bold"
+                                : "text-blue-100 hover:bg-white/10 hover:text-white"
+                            )
+                          }
+                        >
+                          <child.icon className="h-4 w-4" />
+                          <span>{child.name}</span>
+                        </NavLink>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            }
             if (link.isExternal) {
               return (
                 <a
