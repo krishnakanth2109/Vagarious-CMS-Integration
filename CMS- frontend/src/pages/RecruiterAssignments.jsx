@@ -5,9 +5,11 @@ import {
   BriefcaseIcon, MapPinIcon, CurrencyDollarIcon,
   Squares2X2Icon, ListBulletIcon, EyeIcon, XMarkIcon, 
   BuildingOfficeIcon, PlusIcon, UserGroupIcon, MagnifyingGlassIcon,
-  TrashIcon, UserCircleIcon
+  TrashIcon, UserCircleIcon, CheckCircleIcon
 } from "@heroicons/react/24/outline";
 import { useToast } from "@/hooks/use-toast";
+import { MatchBreakdownBar, ScoreBadge, SkillChips } from "@/components/Score/ScoreComponents";
+import { getMatchingCandidatesByJobId } from "@/utils/candidateMatching";
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -65,6 +67,116 @@ const ModalDesc = ({ children }) => <p className="text-sm text-zinc-500 mt-1 pb-
 const ModalFooter = ({ children }) => <div className="px-6 pb-6 pt-4 flex justify-end gap-3 border-t border-zinc-100 dark:border-zinc-800 mt-4">{children}</div>;
 const ModalBody = ({ children }) => <div className="px-6 py-2">{children}</div>;
 
+const CandidateMatchesModal = ({
+  job,
+  mode,
+  rows,
+  loading,
+  expandedCandidateId,
+  onToggleCandidate,
+  onClose,
+}) => {
+  if (!job) return null;
+
+  const title = mode === 'matching' ? 'Matching Candidates' : 'Submitted Candidates';
+  const emptyText = mode === 'matching'
+    ? 'No candidates meet the minimum skill-match threshold for this requirement.'
+    : 'No candidates have been submitted to this requirement yet.';
+  const getCandidateName = (candidate = {}) => (
+    candidate.name || `${candidate.firstName || ''} ${candidate.lastName || ''}`.trim() || 'Unnamed Candidate'
+  );
+
+  return (
+    <Modal open={Boolean(job)} onClose={onClose} maxWidth="max-w-5xl">
+      <ModalHeader>
+        <ModalTitle>{title}</ModalTitle>
+        <ModalDesc>{job.jobCode} • {job.position} • {job.clientName}</ModalDesc>
+      </ModalHeader>
+      <ModalBody>
+        {loading ? (
+          <div className="flex h-52 flex-col items-center justify-center gap-3 text-zinc-500">
+            <div className="h-8 w-8 animate-spin rounded-full border-4 border-zinc-200 border-t-zinc-900 dark:border-zinc-800 dark:border-t-zinc-100" />
+            Loading candidates...
+          </div>
+        ) : rows.length === 0 ? (
+          <div className="flex h-52 items-center justify-center rounded-xl border border-dashed border-zinc-300 bg-zinc-50 text-sm text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900">
+            {emptyText}
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {rows.map((item) => {
+              const candidate = item.candidate || {};
+              const candidateId = item.id || candidate._id || candidate.id;
+              const score = item.scoreData;
+              const expanded = expandedCandidateId === candidateId;
+
+              return (
+                <div key={candidateId} className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h4 className="font-semibold text-zinc-900 dark:text-white">{getCandidateName(candidate)}</h4>
+                        {candidate.candidateId && (
+                          <span className="rounded-md bg-zinc-100 px-2 py-0.5 text-xs font-mono text-zinc-500 dark:bg-zinc-800">
+                            {candidate.candidateId}
+                          </span>
+                        )}
+                        {item.status && (
+                          <span className="rounded-full border border-blue-100 bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700 dark:border-blue-900/50 dark:bg-blue-900/20 dark:text-blue-300">
+                            {item.status}
+                          </span>
+                        )}
+                      </div>
+                      <p className="mt-1 text-sm text-zinc-500">
+                        {candidate.position || 'No role'} • {candidate.totalExperience || 'Experience not set'} • {candidate.currentLocation || candidate.preferredLocation || 'Location not set'}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {score && (
+                        <>
+                          <ScoreBadge score={score.matchPercentage} />
+                          <span className="text-xs font-semibold text-zinc-500">{score.matchLevel}</span>
+                        </>
+                      )}
+                      {score && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => onToggleCandidate(expanded ? null : candidateId)}
+                        >
+                          {expanded ? 'Hide Details' : 'Details'}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+
+                  {score && expanded && (
+                    <div className="mt-4 grid gap-4 border-t border-zinc-100 pt-4 dark:border-zinc-800 lg:grid-cols-[1fr_1.2fr]">
+                      <div>
+                        <p className="text-sm text-zinc-600 dark:text-zinc-300">{score.reason}</p>
+                        <MatchBreakdownBar breakdown={score.breakdown} />
+                      </div>
+                      <SkillChips
+                        matchedMandatory={score.matchedMandatorySkills}
+                        missingMandatory={score.missingMandatorySkills}
+                        matchedPreferred={score.matchedPreferredSkills}
+                        missingPreferred={score.missingPreferredSkills}
+                      />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </ModalBody>
+      <ModalFooter>
+        <Button onClick={onClose}>Close</Button>
+      </ModalFooter>
+    </Modal>
+  );
+};
+
 const Button = ({ children, onClick, disabled, className = '', variant = 'default', size = 'md' }) => {
   const base = 'inline-flex items-center justify-center font-medium rounded-lg transition-colors focus:outline-none disabled:opacity-50 disabled:pointer-events-none shadow-sm';
   const sizes = { sm: 'px-2 py-1 text-xs', md: 'px-4 py-2 text-sm', icon: 'p-2' };
@@ -105,6 +217,7 @@ export default function RecruiterAssignments() {
   const [jobs, setJobs] = useState([]);
   const [recruiters, setRecruiters] = useState([]);
   const [clients, setClients] = useState([]);
+  const [candidates, setCandidates] = useState([]);
   const [loading, setLoading] = useState(true);
   
   const [viewMode, setViewMode] = useState('grid');
@@ -116,6 +229,11 @@ export default function RecruiterAssignments() {
   const [isEditMode, setIsEditMode] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [jobToDelete, setJobToDelete] = useState(null);
+  const [candidateModalJob, setCandidateModalJob] = useState(null);
+  const [candidateModalMode, setCandidateModalMode] = useState('submitted');
+  const [jobCandidates, setJobCandidates] = useState([]);
+  const [isLoadingJobCandidates, setIsLoadingJobCandidates] = useState(false);
+  const [expandedCandidateId, setExpandedCandidateId] = useState(null);
   
   const [submitting, setSubmitting] = useState(false);
 
@@ -140,10 +258,11 @@ export default function RecruiterAssignments() {
     setLoading(true);
     try {
       const headers = await getAuthHeader();
-      const [resJobs, resRecs, resClients] = await Promise.all([
+      const [resJobs, resRecs, resClients, resCandidates] = await Promise.all([
         fetch(`${API_URL}/jobs`, { headers }),
         fetch(`${API_URL}/users/active-list`, { headers }),
-        fetch(`${API_URL}/clients`, { headers })
+        fetch(`${API_URL}/clients`, { headers }),
+        fetch(`${API_URL}/candidates?includeSubmissions=true`, { headers })
       ]);
       if (resJobs.ok) {
         const data = await resJobs.json();
@@ -151,6 +270,14 @@ export default function RecruiterAssignments() {
       }
       if (resRecs.ok) setRecruiters(await resRecs.json());
       if (resClients.ok) setClients(await resClients.json());
+      if (resCandidates.ok) {
+        const data = await resCandidates.json();
+        const candidatesArray = Array.isArray(data) ? data : data.data || [];
+        setCandidates(candidatesArray.map((candidate) => ({
+          ...candidate,
+          id: candidate._id || candidate.id,
+        })));
+      }
     } catch (error) {
       console.error(error);
       toast({ title: "Error", description: "Failed to fetch data", variant: "destructive" });
@@ -244,6 +371,120 @@ export default function RecruiterAssignments() {
     });
   }, [jobs, searchQuery]);
 
+  const candidateCounts = useMemo(() => {
+    const countsByJob = new Map();
+
+    candidates.forEach((candidate) => {
+      const submittedJobIds = new Set();
+      (candidate.submissions || []).forEach((submission) => {
+        const jobId = submission.jobId?._id || submission.jobId || submission.requirementId?._id || submission.requirementId;
+        if (jobId) submittedJobIds.add(String(jobId));
+      });
+
+      submittedJobIds.forEach((jobId) => {
+        countsByJob.set(jobId, (countsByJob.get(jobId) || 0) + 1);
+      });
+    });
+
+    return Object.fromEntries(countsByJob);
+  }, [candidates]);
+
+  const matchingCandidatesByJobId = useMemo(
+    () => getMatchingCandidatesByJobId(jobs, candidates, 3),
+    [jobs, candidates]
+  );
+
+  const matchingCounts = useMemo(() => (
+    Object.fromEntries(
+      Object.entries(matchingCandidatesByJobId).map(([jobId, matchedCandidates]) => [jobId, matchedCandidates.length])
+    )
+  ), [matchingCandidatesByJobId]);
+
+  const openCandidatesModalForJob = async (job, mode = 'submitted') => {
+    const jobId = job?._id || job?.id;
+    if (!jobId) return;
+
+    setCandidateModalJob(job);
+    setCandidateModalMode(mode);
+    setJobCandidates([]);
+    setExpandedCandidateId(null);
+    setIsLoadingJobCandidates(true);
+
+    try {
+      const headers = await getAuthHeader();
+
+      if (mode === 'matching') {
+        const quickMatches = matchingCandidatesByJobId[jobId] || [];
+
+        if (!quickMatches.length) {
+          setJobCandidates([]);
+          return;
+        }
+
+        const res = await fetch(`${API_URL}/score-match/bulk`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            requirementId: jobId,
+            candidateIds: quickMatches.map((candidate) => candidate._id || candidate.id),
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Failed to load candidate scores');
+
+        const scoreByCandidate = new Map(
+          (data.scores || []).map((score) => [String(score.candidateId), score])
+        );
+
+        setJobCandidates(
+          quickMatches
+            .map((candidate) => {
+              const candidateId = candidate._id || candidate.id;
+              return {
+                id: candidateId,
+                candidate,
+                scoreData: scoreByCandidate.get(String(candidateId)),
+              };
+            })
+            .filter((item) => item.scoreData)
+            .sort((a, b) => (b.scoreData?.matchPercentage || 0) - (a.scoreData?.matchPercentage || 0))
+        );
+        return;
+      }
+
+      const res = await fetch(`${API_URL}/submissions?jobId=${jobId}`, { headers });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Failed to load submitted candidates');
+
+      const submissions = Array.isArray(data) ? data : data.data || [];
+      setJobCandidates(
+        submissions.map((submission) => {
+          const populatedCandidate = typeof submission.candidateId === 'object' ? submission.candidateId : null;
+          const fallbackCandidate = candidates.find((candidate) => (
+            String(candidate._id || candidate.id) === String(submission.candidateId)
+          ));
+          const candidate = populatedCandidate || fallbackCandidate || {};
+          const candidateId = candidate._id || candidate.id || submission.candidateId || submission._id;
+
+          return {
+            id: candidateId,
+            candidate,
+            status: submission.status || submission.pipelineStage || 'Submitted',
+            submission,
+          };
+        })
+      );
+    } catch (err) {
+      toast({
+        title: 'Error',
+        description: err.message || 'Could not load candidates for this requirement',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoadingJobCandidates(false);
+    }
+  };
+
   return (
     <>
       <div className="flex-1 p-6 lg:p-8 overflow-y-auto bg-zinc-50 dark:bg-zinc-950 min-h-screen text-zinc-900 dark:text-zinc-100">
@@ -315,6 +556,24 @@ export default function RecruiterAssignments() {
                       <div className="flex justify-between items-center"><span className="text-zinc-500">Assigned Date:</span> <span className="font-medium text-zinc-900 dark:text-zinc-100">{formatDate(job.createdAt)}</span></div>
                       <div className="flex justify-between items-center"><span className="text-zinc-500">Date of Expiry:</span> {getTatBadge(job.tatTime)}</div>
                     </div>
+                    <div className="mb-2 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => openCandidatesModalForJob(job, 'submitted')}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-900/50 dark:bg-blue-900/20 dark:text-blue-300 dark:hover:bg-blue-900/30"
+                      >
+                        <UserGroupIcon className="h-3.5 w-3.5" />
+                        {candidateCounts[job._id || job.id] || 0} Submitted
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openCandidatesModalForJob(job, 'matching')}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 transition-colors hover:bg-emerald-100 dark:border-emerald-900/50 dark:bg-emerald-900/20 dark:text-emerald-300 dark:hover:bg-emerald-900/30"
+                      >
+                        <CheckCircleIcon className="h-3.5 w-3.5" />
+                        {matchingCounts[job._id || job.id] || 0} Matching
+                      </button>
+                    </div>
                     <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
                       <button className="h-8 w-8 flex items-center justify-center text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800 rounded-lg transition-colors" onClick={() => openViewModal(job)}>
                         <EyeIcon className="w-4 h-4"/>
@@ -331,6 +590,7 @@ export default function RecruiterAssignments() {
                 <thead className="bg-zinc-50 dark:bg-zinc-950 text-zinc-500 border-b border-zinc-200 dark:border-zinc-800 uppercase text-xs">
                   <tr>
                     <th className="p-4 font-semibold">Job Code</th>
+                    <th className="p-4 font-semibold">Candidates</th>
                     <th className="p-4 font-semibold">Position</th>
                     <th className="p-4 font-semibold">Client</th>
                     <th className="p-4 font-semibold">Location</th>
@@ -346,6 +606,26 @@ export default function RecruiterAssignments() {
                     return (
                       <tr key={job.id} className={`transition-colors ${isExpired ? 'bg-red-50/20 dark:bg-red-900/10' : 'hover:bg-zinc-50/50 dark:hover:bg-zinc-800/20'}`}>
                         <td className="p-4 font-mono text-xs text-zinc-600 dark:text-zinc-400">{job.jobCode}</td>
+                        <td className="p-4">
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() => openCandidatesModalForJob(job, 'submitted')}
+                              className="inline-flex items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-100 dark:border-blue-900/50 dark:bg-blue-900/20 dark:text-blue-300"
+                            >
+                              <UserGroupIcon className="h-3.5 w-3.5" />
+                              {candidateCounts[job._id || job.id] || 0}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => openCandidatesModalForJob(job, 'matching')}
+                              className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 dark:border-emerald-900/50 dark:bg-emerald-900/20 dark:text-emerald-300"
+                            >
+                              <CheckCircleIcon className="h-3.5 w-3.5" />
+                              {matchingCounts[job._id || job.id] || 0}
+                            </button>
+                          </div>
+                        </td>
                         <td className={`p-4 font-medium ${isExpired ? 'text-red-900 dark:text-red-400' : 'text-zinc-900 dark:text-white'}`}>{job.position}</td>
                         <td className="p-4 text-zinc-600 dark:text-zinc-400">{job.clientName}</td>
                         <td className="p-4 text-zinc-600 dark:text-zinc-400">{job.location}</td>
@@ -477,6 +757,20 @@ export default function RecruiterAssignments() {
 
       {/* Delete Confirm Modal */}
       {/* (Space reserved if you add delete functionality back in the future) */}
+
+      <CandidateMatchesModal
+        job={candidateModalJob}
+        mode={candidateModalMode}
+        rows={jobCandidates}
+        loading={isLoadingJobCandidates}
+        expandedCandidateId={expandedCandidateId}
+        onToggleCandidate={setExpandedCandidateId}
+        onClose={() => {
+          setCandidateModalJob(null);
+          setJobCandidates([]);
+          setExpandedCandidateId(null);
+        }}
+      />
 
     </>
   );

@@ -117,7 +117,7 @@ export default function ClientJobSubmissions({
   };
 
   const handleAddRow = () => {
-    onChange([...submissions, emptyRow()]);
+    onChange([emptyRow(), ...submissions]);
   };
 
   const handleRemoveNewRow = (index) => {
@@ -184,7 +184,7 @@ export default function ClientJobSubmissions({
   const newRows = submissions.filter((r) => !r.isExisting);
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-4">
       {/* Confirm delete dialog */}
       {deleteTarget && (
         <ConfirmDeleteDialog
@@ -234,7 +234,7 @@ export default function ClientJobSubmissions({
 
       {/* ── Existing submissions (edit mode) ─────────────────────────── */}
       {existingRows.length > 0 && (
-        <div className="space-y-2">
+        <div className="space-y-2 order-3">
           <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
             Existing Submissions
             <span className="ml-2 text-slate-400 normal-case font-normal">
@@ -314,7 +314,7 @@ export default function ClientJobSubmissions({
 
       {/* ── New submission rows ──────────────────────────────────────── */}
       {newRows.length > 0 && (
-        <div className="space-y-2">
+        <div className="space-y-2 order-2">
           {isEditMode && existingRows.length > 0 && (
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
               New Submissions to Add

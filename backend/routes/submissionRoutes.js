@@ -30,18 +30,23 @@ const resolveUserName = (u) => {
 const normalizeName = (value) => String(value || '').trim().toLowerCase();
 
 // ─────────────────────────────────────────────────────────────────────────────
-// GET /api/submissions?candidateId=<id>
-// Get all submissions for a candidate (populates job data)
+// GET /api/submissions?candidateId=<id> or ?jobId=<id>
+// Get submissions for a candidate or requirement.
 // ─────────────────────────────────────────────────────────────────────────────
 router.get('/', async (req, res) => {
   try {
-    const { candidateId } = req.query;
-    if (!candidateId) {
-      return res.status(400).json({ message: 'candidateId query param is required' });
+    const { candidateId, jobId } = req.query;
+    if (!candidateId && !jobId) {
+      return res.status(400).json({ message: 'candidateId or jobId query param is required' });
     }
 
-    const submissions = await CandidateSubmission.find({ candidateId })
+    const query = {};
+    if (candidateId) query.candidateId = candidateId;
+    if (jobId) query.jobId = jobId;
+
+    const submissions = await CandidateSubmission.find(query)
       .populate('jobId', 'jobCode position clientName location')
+      .populate('candidateId', 'candidateId name firstName lastName email contact position skills totalExperience education currentLocation preferredLocation')
       .populate('submittedBy', 'firstName lastName name email')
       .sort({ createdAt: -1 })
       .lean();

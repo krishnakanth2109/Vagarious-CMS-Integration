@@ -344,6 +344,21 @@ export default function AdminRecruiters() {
     return statsMap[recruiterId] || { total: 0, joined: 0, selected: 0, rejected: 0, turnups: 0, noShow: 0 };
   }, [statsMap]);
 
+  const getCandidateStatusList = (candidate) => (
+    Array.isArray(candidate.status) ? candidate.status : [candidate.status || '']
+  );
+
+  const candidateHasStatus = (candidate, status) => (
+    getCandidateStatusList(candidate).includes(status)
+  );
+
+  const openCandidatesForRecruiter = (recruiter, filter, label) => {
+    setSelectedRecruiter(recruiter);
+    setCandidatesModalTitle(`${label} — ${recruiter.firstName} ${recruiter.lastName}`);
+    setCandidateFilterType(filter);
+    setShowCandidatesModal(true);
+  };
+
   // ── Sort / Filter — memoized so it only recalculates when deps change ────────
   const toggleSort = (field) => {
     if (sortField === field) setSortOrder((o) => o === 'asc' ? 'desc' : 'asc');
@@ -387,9 +402,11 @@ export default function AdminRecruiters() {
       const rid = typeof c.recruiterId === 'object' ? c.recruiterId?._id : c.recruiterId;
       return rid === selectedRecruiter.id;
     });
-    if (candidateFilterType === 'joined')   list = list.filter((c) => (Array.isArray(c.status) ? c.status : [c.status]).includes('Joined'));
-    if (candidateFilterType === 'selected') list = list.filter((c) => (Array.isArray(c.status) ? c.status : [c.status]).includes('Selected'));
-    if (candidateFilterType === 'rejected') list = list.filter((c) => (Array.isArray(c.status) ? c.status : [c.status]).includes('Rejected'));
+    if (candidateFilterType === 'joined')   list = list.filter((c) => candidateHasStatus(c, 'Joined'));
+    if (candidateFilterType === 'selected') list = list.filter((c) => candidateHasStatus(c, 'Selected'));
+    if (candidateFilterType === 'rejected') list = list.filter((c) => candidateHasStatus(c, 'Rejected'));
+    if (candidateFilterType === 'turnups')  list = list.filter((c) => candidateHasStatus(c, 'Turnups'));
+    if (candidateFilterType === 'noShow')   list = list.filter((c) => candidateHasStatus(c, 'No Show'));
     return list;
   }, [candidates, selectedRecruiter, candidateFilterType]);
 
@@ -599,7 +616,7 @@ export default function AdminRecruiters() {
                           </div>
                           <div className="flex flex-col">
                             <CardTitle className="text-base leading-tight">
-                              <RecruiterDetailsTrigger recruiter={r} className="font-semibold text-slate-900">
+                              <RecruiterDetailsTrigger recruiter={r} stats={st} className="font-semibold text-slate-900">
                                 <span className="flex items-center gap-1">
                                   {r.firstName} {r.lastName}
                                   {isAdmin && <ShieldAlert className="h-4 w-4 text-purple-600 flex-shrink-0" />}
@@ -623,12 +640,7 @@ export default function AdminRecruiters() {
                             <DropdownMenuItem onClick={() => { setSelectedRecruiter(r); setShowPerformanceModal(true); setPerformanceData([]); }}>
                               <TrendingUp className="h-4 w-4 mr-2" /> Performance Report
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => {
-                              setSelectedRecruiter(r);
-                              setCandidatesModalTitle(`All Candidates — ${r.firstName} ${r.lastName}`);
-                              setCandidateFilterType(null);
-                              setShowCandidatesModal(true);
-                            }}>
+                            <DropdownMenuItem onClick={() => openCandidatesForRecruiter(r, null, 'All Candidates')}>
                               <Users className="h-4 w-4 mr-2" /> View Candidates
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
@@ -667,12 +679,7 @@ export default function AdminRecruiters() {
                           ].map(({ label, val, filter, color }) => (
                             <div key={label}
                               className="cursor-pointer hover:bg-[#f8faff] rounded-lg p-1 transition"
-                              onClick={() => {
-                                setSelectedRecruiter(r);
-                                setCandidatesModalTitle(`${label} — ${r.firstName} ${r.lastName}`);
-                                setCandidateFilterType(filter);
-                                setShowCandidatesModal(true);
-                              }}>
+                              onClick={() => openCandidatesForRecruiter(r, filter, label)}>
                               <div className={`font-bold text-lg ${color}`}>{val}</div>
                               <div className="text-[10px] text-gray-500">{label}</div>
                             </div>
@@ -730,7 +737,7 @@ export default function AdminRecruiters() {
                                     : getInitials(r.firstName, r.lastName)}
                                 </div>
                                 <div>
-                                  <RecruiterDetailsTrigger recruiter={r} className="font-medium text-slate-900">
+                                  <RecruiterDetailsTrigger recruiter={r} stats={st} className="font-medium text-slate-900">
                                     <span className="flex items-center gap-1">
                                       {r.firstName} {r.lastName}
                                       {isAdmin && <ShieldAlert className="h-3 w-3 text-purple-600" />}
@@ -748,16 +755,19 @@ export default function AdminRecruiters() {
                             </td>
                             <td className="px-4 py-3"><StatusBadge recruiter={r} /></td>
                             <td className="px-4 py-3 text-center font-bold text-blue-600 cursor-pointer hover:underline"
-                              onClick={() => { setSelectedRecruiter(r); setCandidatesModalTitle(`All — ${r.firstName} ${r.lastName}`); setCandidateFilterType(null); setShowCandidatesModal(true); }}>
+                              onClick={() => openCandidatesForRecruiter(r, null, 'All')}>
                               {st.total}
                             </td>
-                            <td className="px-4 py-3 text-center font-bold text-teal-600">{st.turnups}</td>
+                            <td className="px-4 py-3 text-center font-bold text-teal-600 cursor-pointer hover:underline"
+                              onClick={() => openCandidatesForRecruiter(r, 'turnups', 'Turnups')}>
+                              {st.turnups}
+                            </td>
                             <td className="px-4 py-3 text-center font-bold text-purple-600 cursor-pointer hover:underline"
-                              onClick={() => { setSelectedRecruiter(r); setCandidatesModalTitle(`Selected — ${r.firstName} ${r.lastName}`); setCandidateFilterType('selected'); setShowCandidatesModal(true); }}>
+                              onClick={() => openCandidatesForRecruiter(r, 'selected', 'Selected')}>
                               {st.selected}
                             </td>
                             <td className="px-4 py-3 text-center font-bold text-green-600 cursor-pointer hover:underline"
-                              onClick={() => { setSelectedRecruiter(r); setCandidatesModalTitle(`Joined — ${r.firstName} ${r.lastName}`); setCandidateFilterType('joined'); setShowCandidatesModal(true); }}>
+                              onClick={() => openCandidatesForRecruiter(r, 'joined', 'Joined')}>
                               {st.joined}
                             </td>
                             <td className="px-4 py-3 text-right">
@@ -1201,7 +1211,7 @@ export default function AdminRecruiters() {
                           : getInitials(r.firstName, r.lastName)}
                       </div>
                       <div>
-                        <RecruiterDetailsTrigger recruiter={r} className="font-medium text-slate-900">
+                        <RecruiterDetailsTrigger recruiter={r} stats={calcStats(r.id)} className="font-medium text-slate-900">
                           <span className="flex items-center gap-1">
                             {r.firstName} {r.lastName}
                             {r.role === 'admin' && <ShieldAlert className="h-3 w-3 text-purple-600" />}

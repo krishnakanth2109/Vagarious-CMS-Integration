@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Mail, Phone, Shield, UserRound, X } from 'lucide-react';
+import { CalendarDays, Hash, Mail, MapPin, Phone, Shield, UserRound, X } from 'lucide-react';
 
 const getRecruiterName = (recruiter = {}) => {
   if (typeof recruiter === 'string') return recruiter;
@@ -23,6 +23,10 @@ const formatDate = (value) => {
   return Number.isNaN(date.getTime()) ? '-' : date.toLocaleDateString('en-GB');
 };
 
+const formatRole = (value) => (
+  value ? value.toString().charAt(0).toUpperCase() + value.toString().slice(1) : '-'
+);
+
 const DetailItem = ({ label, value }) => (
   <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
     <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{label}</p>
@@ -30,17 +34,25 @@ const DetailItem = ({ label, value }) => (
   </div>
 );
 
-export function RecruiterDetailsModal({ recruiter, onClose }) {
+const StatItem = ({ label, value, color = 'text-slate-800' }) => (
+  <div className="rounded-xl border border-slate-100 bg-white px-4 py-3 text-center shadow-sm">
+    <p className={`text-lg font-black ${color}`}>{value ?? 0}</p>
+    <p className="mt-0.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">{label}</p>
+  </div>
+);
+
+export function RecruiterDetailsModal({ recruiter, stats, onClose }) {
   if (!recruiter) return null;
 
   const data = typeof recruiter === 'string' ? { name: recruiter } : recruiter;
   const name = getRecruiterName(data);
   const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase() || 'R';
   const active = data.active !== false && data.status !== 'inactive';
+  const statValues = stats || data.stats;
 
   return (
     <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-2xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+      <div className="w-full max-w-3xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
         <div className="flex items-start justify-between gap-4 border-b border-slate-100 bg-[#f8faff] px-6 py-5">
           <div className="flex items-center gap-4">
             <div className="h-16 w-16 overflow-hidden rounded-2xl bg-[#283086] text-white flex items-center justify-center text-xl font-black shadow-sm">
@@ -71,16 +83,32 @@ export function RecruiterDetailsModal({ recruiter, onClose }) {
         </div>
 
         <div className="space-y-5 p-6">
+          {statValues && (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+              <StatItem label="Total" value={statValues.total} color="text-blue-600" />
+              <StatItem label="Turnups" value={statValues.turnups} color="text-teal-600" />
+              <StatItem label="Selected" value={statValues.selected} color="text-purple-600" />
+              <StatItem label="Joined" value={statValues.joined} color="text-green-600" />
+              <StatItem label="Rejected" value={statValues.rejected} color="text-red-600" />
+              <StatItem label="No Show" value={statValues.noShow} color="text-slate-600" />
+            </div>
+          )}
+
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <DetailItem label="Recruiter ID" value={getRecruiterId(data)} />
             <DetailItem label="Username" value={data.username} />
+            <DetailItem label="Full Name" value={name} />
+            <DetailItem label="Role" value={formatRole(data.role || 'Recruiter')} />
             <DetailItem label="Email" value={data.email} />
             <DetailItem label="Phone" value={data.phone || data.contact || data.mobile} />
+            <DetailItem label="Location" value={data.location || data.city || data.branch} />
+            <DetailItem label="Department" value={data.department || data.team} />
+            <DetailItem label="Designation" value={data.designation || data.title} />
             <DetailItem label="Joined Date" value={formatDate(data.createdAt || data.dateAdded)} />
             <DetailItem label="Last Updated" value={formatDate(data.updatedAt)} />
           </div>
 
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div className="flex items-center gap-3 rounded-xl border border-slate-100 px-4 py-3">
               <Mail className="h-4 w-4 text-[#283086]" />
               <span className="text-sm font-medium text-slate-700">{data.email || '-'}</span>
@@ -89,6 +117,18 @@ export function RecruiterDetailsModal({ recruiter, onClose }) {
               <Phone className="h-4 w-4 text-[#283086]" />
               <span className="text-sm font-medium text-slate-700">{data.phone || data.contact || data.mobile || '-'}</span>
             </div>
+            <div className="flex items-center gap-3 rounded-xl border border-slate-100 px-4 py-3">
+              <Hash className="h-4 w-4 text-[#283086]" />
+              <span className="text-sm font-medium text-slate-700">{getRecruiterId(data)}</span>
+            </div>
+            <div className="flex items-center gap-3 rounded-xl border border-slate-100 px-4 py-3">
+              <MapPin className="h-4 w-4 text-[#283086]" />
+              <span className="text-sm font-medium text-slate-700">{data.location || data.city || data.branch || '-'}</span>
+            </div>
+            <div className="flex items-center gap-3 rounded-xl border border-slate-100 px-4 py-3">
+              <CalendarDays className="h-4 w-4 text-[#283086]" />
+              <span className="text-sm font-medium text-slate-700">{formatDate(data.createdAt || data.dateAdded)}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -96,7 +136,7 @@ export function RecruiterDetailsModal({ recruiter, onClose }) {
   );
 }
 
-export function RecruiterDetailsTrigger({ recruiter, children, className = '', disabled = false }) {
+export function RecruiterDetailsTrigger({ recruiter, stats, children, className = '', disabled = false }) {
   const [open, setOpen] = useState(false);
   const canOpen = !disabled && recruiter;
 
@@ -111,7 +151,7 @@ export function RecruiterDetailsTrigger({ recruiter, children, className = '', d
         <UserRound className="mr-1.5 h-3.5 w-3.5 opacity-70" />
         {children || getRecruiterName(recruiter)}
       </button>
-      {open && <RecruiterDetailsModal recruiter={recruiter} onClose={() => setOpen(false)} />}
+      {open && <RecruiterDetailsModal recruiter={recruiter} stats={stats} onClose={() => setOpen(false)} />}
     </>
   );
 }

@@ -15,6 +15,8 @@ import BulkCandidateImportModal from '@/components/BulkCandidateImportModal';
 import CandidateExportModal from '@/components/CandidateExportModal';
 import ClientJobSubmissions from '@/components/ClientJobSubmissions';
 import CandidatePipelinePanel from '@/components/CandidatePipelinePanel';
+import CandidateKeywordSearch from '@/components/CandidateKeywordSearch';
+import { candidateMatchesKeywordBadges } from '@/utils/candidateSearch';
 
 const BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/$/, '');
 const API_URL = `${BASE_URL}/api`;
@@ -45,64 +47,6 @@ const normalizeSkills = (skills) => {
 };
 
 // ── UI Components ─────────────────────────────────────────────────────────────
-
-const normalizeSkillSearchText = (value) =>
-  String(value || '')
-    .toLowerCase()
-    .replace(/[._-]+/g, ' ')
-    .replace(/[^a-z0-9+#\s]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-
-const getSkillTokens = (value) => normalizeSkillSearchText(value).split(' ').filter(Boolean);
-
-const parseSkillQuery = (query) => {
-  const seen = new Set();
-  return String(query || '')
-    .split(/[,\s]+/)
-    .map(normalizeSkillSearchText)
-    .filter(Boolean)
-    .filter((skill) => {
-      if (seen.has(skill)) return false;
-      seen.add(skill);
-      return true;
-    });
-};
-
-const normalizeCandidateSkills = (candidate) =>
-  normalizeSkills(candidate?.skills).map((skill) => ({
-    text: normalizeSkillSearchText(skill),
-    tokens: getSkillTokens(skill),
-  }));
-
-const skillMatchesCandidateSkill = (candidateSkill, searchedSkill) => {
-  if (!searchedSkill) return true;
-  if (candidateSkill.text === searchedSkill) return true;
-  const searchedTokens = searchedSkill.split(' ').filter(Boolean);
-  if (searchedTokens.length > 1) {
-    return searchedTokens.every((token) => candidateSkill.tokens.includes(token));
-  }
-  return candidateSkill.tokens.includes(searchedSkill);
-};
-
-const matchesAllSkills = (candidateSkills, searchedSkills) => {
-  if (searchedSkills.length === 0) return true;
-  return searchedSkills.every((skill) =>
-    candidateSkills.some((candidateSkill) => skillMatchesCandidateSkill(candidateSkill, skill))
-  );
-};
-
-const matchesRoleQuery = (candidate, query) => {
-  const normalizedQuery = String(query || '').trim().toLowerCase();
-  if (!normalizedQuery) return true;
-  const roleText = [
-    candidate?.position,
-    candidate?.currentRole,
-    candidate?.role,
-  ].filter(Boolean).join(' ').toLowerCase();
-  const terms = parseSkillQuery(normalizedQuery);
-  return roleText.includes(normalizedQuery) || terms.every((term) => roleText.includes(term));
-};
 
 const STATUS_BADGE_CLASSES = {
   Pipeline: 'bg-gray-100 text-gray-700 border-gray-200',
@@ -546,8 +490,8 @@ export default function RecruiterCandidates() {
   const [viewingCandidate, setViewingCandidate] = useState(null);
   const [isParsingResume, setIsParsingResume] = useState(false);
 
-  const [searchTerm, setSearchTerm] = useState('');
-  const [roleSkillSearchTerm, setRoleSkillSearchTerm] = useState('');
+  const [searchInput, setSearchInput] = useState('');
+  const [searchKeywords, setSearchKeywords] = useState([]);
   const [statusFilter, setStatusFilter] = useState('all');
   const [viewMode, setViewMode] = useState('table');
   const [activeStatFilter, setActiveStatFilter] = useState(null);
@@ -560,7 +504,7 @@ export default function RecruiterCandidates() {
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, roleSkillSearchTerm, statusFilter, activeStatFilter]);
+  }, [searchKeywords, statusFilter, activeStatFilter]);
 
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -929,16 +873,8 @@ export default function RecruiterCandidates() {
 
   const getFilteredCandidates = useMemo(() => {
     const todayLocal = new Date().toLocaleDateString('en-CA');
-    const searchedSkills = parseSkillQuery(roleSkillSearchTerm);
     return candidates.filter(c => {
-      const searchMatch =
-        c.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        c.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        c.candidateId?.toLowerCase().includes(searchTerm.toLowerCase());
-      const roleSkillMatch =
-        !roleSkillSearchTerm.trim() ||
-        matchesRoleQuery(c, roleSkillSearchTerm) ||
-        matchesAllSkills(normalizeCandidateSkills(c), searchedSkills);
+      const searchMatch = candidateMatchesKeywordBadges(c, searchKeywords);
       const currentStatusArr = getCandidateStatuses(c);
       
       let statCardMatch = true;
@@ -950,9 +886,9 @@ export default function RecruiterCandidates() {
       }
       
       const statusDropdownMatch = statusFilter === 'all' || currentStatusArr.includes(statusFilter);
-      return searchMatch && roleSkillMatch && statusDropdownMatch && statCardMatch;
+      return searchMatch && statusDropdownMatch && statCardMatch;
     });
-  }, [candidates, searchTerm, roleSkillSearchTerm, statusFilter, activeStatFilter]);
+  }, [candidates, searchKeywords, statusFilter, activeStatFilter]);
 
   // --- PAGINATION LOGIC ---
   const totalPages = Math.ceil(getFilteredCandidates.length / ITEMS_PER_PAGE);
@@ -1619,15 +1555,13 @@ export default function RecruiterCandidates() {
 
           <div className="p-4 border border-slate-200 rounded-xl bg-white shadow-sm">
             <div className="flex flex-col md:flex-row gap-4 justify-between items-center">
-              <div className="grid w-full grid-cols-1 gap-3 md:max-w-3xl md:grid-cols-2">
-                <div className="relative w-full">
-                  <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                  <Input placeholder="Search name, email, ID..." className="pl-10" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
-                </div>
-                <div className="relative w-full">
-                  <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                  <Input placeholder="Search role / skills" className="pl-10" value={roleSkillSearchTerm} onChange={e => setRoleSkillSearchTerm(e.target.value)} />
-                </div>
+              <div className="w-full md:max-w-2xl">
+                <CandidateKeywordSearch
+                  input={searchInput}
+                  keywords={searchKeywords}
+                  onInputChange={setSearchInput}
+                  onKeywordsChange={setSearchKeywords}
+                />
               </div>
               <div className="flex gap-3">
                 <NativeSelect value={statusFilter} onChange={setStatusFilter} className="w-44">

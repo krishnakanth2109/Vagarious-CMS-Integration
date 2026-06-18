@@ -25,6 +25,7 @@ import channelRoutes from './routes/channelRoutes.js';
 import aiMockRoutes from './routes/aiMockRoutes.js';
 import jobApplicationRoutes from './routes/jobApplicationRoutes.js';
 import submissionRoutes from './routes/submissionRoutes.js';
+import scoreMatchRoutes from './routes/scoreMatch.routes.js';
 
 // ── Agreement Module Routes ───────────────────────────────────────────────────
 import { connectAgreementDB } from './config/agreementDatabase.js';
@@ -180,6 +181,7 @@ app.use('/api/channels', channelRoutes);
 app.use('/api/ai-mock', aiMockRoutes);
 app.use('/api/job-applications', jobApplicationRoutes);
 app.use('/api/submissions', submissionRoutes);
+app.use('/api/score-match', scoreMatchRoutes);
 
 // ── Agreement Module Routes ────────────────────────────────────────────────────
 app.use('/agreement-companies', agreementCompanyRoutes);
@@ -198,6 +200,7 @@ app.use('/messages', messageRoutes);
 app.use('/channels', channelRoutes);
 app.use('/ai-mock', aiMockRoutes);
 app.use('/job-applications', jobApplicationRoutes);
+app.use('/score-match', scoreMatchRoutes);
 
 // Mount AI mock routes at root so index.html can call /start-session-interview etc. directly
 app.use('/', aiMockRoutes);

@@ -4,9 +4,11 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/AuthContext";
 import {
   X, Eye, Pencil, Plus, CheckCircle, Ban,
-  Briefcase, GraduationCap, Building2, Calendar, MapPin, Trash2, SlidersHorizontal
+  Briefcase, GraduationCap, Building2, Calendar, MapPin, Trash2, SlidersHorizontal, Users, Loader2
 } from "lucide-react";
 import { RecruiterDetailsTrigger } from "@/components/RecruiterDetailsModal";
+import { MatchBreakdownBar, ScoreBadge, SkillChips } from "@/components/Score/ScoreComponents";
+import { getMatchingCandidatesByJobId } from "@/utils/candidateMatching";
 
 const BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/$/, '');
 const API_URL  = `${BASE_URL}/api`;
@@ -378,6 +380,67 @@ const FormControlModal = ({ isOpen, onClose, config, onConfigChange }) => {
 };
 
 /* ---------------- JOB DETAIL MODAL ---------------- */
+const formatJobDate = (value, withTime = false) => {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '-';
+  return date.toLocaleString('en-IN', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    ...(withTime ? { hour: '2-digit', minute: '2-digit' } : {}),
+  });
+};
+
+const formatJobValue = (value) => {
+  if (Array.isArray(value)) return value.filter(Boolean).join(', ') || '-';
+  if (typeof value === 'boolean') return value ? 'Active' : 'Inactive';
+  if (value == null || value === '') return '-';
+  return String(value);
+};
+
+const DetailRow = ({ label, value, children }) => (
+  <div className="rounded-lg border border-zinc-100 bg-white px-3 py-2 dark:border-zinc-800 dark:bg-zinc-900">
+    <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">{label}</p>
+    <div className="mt-1 break-words text-sm font-medium text-zinc-800 dark:text-zinc-100">
+      {children || formatJobValue(value)}
+    </div>
+  </div>
+);
+
+const DetailSection = ({ title, icon: Icon, children }) => (
+  <section className="rounded-xl border border-zinc-200 bg-zinc-50 p-5 dark:border-zinc-800 dark:bg-zinc-800/40">
+    <h3 className="mb-4 flex items-center gap-2 border-b border-zinc-200 pb-2 text-base font-semibold text-zinc-900 dark:border-zinc-700 dark:text-zinc-100">
+      {Icon && <Icon className="h-4 w-4 text-zinc-500" />}
+      {title}
+    </h3>
+    {children}
+  </section>
+);
+
+const SkillList = ({ value }) => {
+  const items = Array.isArray(value)
+    ? value.filter(Boolean)
+    : String(value || '').split(/[,;\n]+/).map((item) => item.trim()).filter(Boolean);
+
+  if (!items.length) return <span>-</span>;
+
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {items.map((item) => (
+        <span key={item} className="rounded-full border border-zinc-200 bg-zinc-100 px-2.5 py-1 text-xs font-semibold text-zinc-700 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">
+          {item}
+        </span>
+      ))}
+    </div>
+  );
+};
+
+const parseSkillItems = (value) => {
+  if (Array.isArray(value)) return value.map(skill => String(skill).trim()).filter(Boolean);
+  return String(value || '').split(/[,;|\n]+/).map(skill => skill.trim()).filter(Boolean);
+};
+
 const JobDetailCard = ({ job, onClose, recruiters = [] }) => {
   return (
     <div
@@ -385,18 +448,21 @@ const JobDetailCard = ({ job, onClose, recruiters = [] }) => {
       onClick={onClose}
     >
       <div
-        className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto border border-zinc-200 dark:border-zinc-800"
+        className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl max-w-6xl w-full max-h-[92vh] overflow-y-auto border border-zinc-200 dark:border-zinc-800"
         onClick={e => e.stopPropagation()}
       >
           <div className="bg-gradient-to-r from-zinc-800 to-zinc-950 text-white p-6 rounded-t-2xl border-b border-zinc-700">
-             <div className="flex justify-between items-start">
+             <div className="flex justify-between items-start gap-4">
                 <div>
                   <h2 className="text-2xl font-bold tracking-tight">{job.position}</h2>
-                  <div className="flex items-center gap-3 mt-2 text-zinc-300 text-sm">
+                  <div className="flex flex-wrap items-center gap-3 mt-2 text-zinc-300 text-sm">
                     <span className="bg-zinc-800 px-2 py-1 rounded-md border border-zinc-700 text-xs font-mono">
                       {job.jobCode}
                     </span>
-                    <span>• {job.clientName}</span>
+                    <span>{job.clientName}</span>
+                    <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${job.active !== false ? 'bg-emerald-500/15 text-emerald-200 border border-emerald-400/30' : 'bg-red-500/15 text-red-200 border border-red-400/30'}`}>
+                      {job.active !== false ? 'Active' : 'Inactive'}
+                    </span>
                   </div>
                 </div>
                 <button onClick={onClose} className="p-1.5 hover:bg-zinc-700 rounded-lg text-zinc-400 hover:text-white">
@@ -406,66 +472,207 @@ const JobDetailCard = ({ job, onClose, recruiters = [] }) => {
           </div>
 
           <div className="p-6 space-y-6 text-zinc-800 dark:text-zinc-300">
-             <div className="grid md:grid-cols-2 gap-8">
-                <div className="bg-zinc-50 dark:bg-zinc-800/50 p-5 rounded-xl border border-zinc-100 dark:border-zinc-800">
-                  <h3 className="font-semibold text-lg mb-4 flex items-center gap-2 text-zinc-900 dark:text-zinc-100 border-b border-zinc-200 dark:border-zinc-700 pb-2">
-                    <GraduationCap className="w-5 h-5 text-zinc-500" /> Candidate Profile
-                  </h3>
-                  <div className="space-y-3 text-sm">
-                    <p className="flex justify-between"><span className="text-zinc-500">Mandatory Skills:</span> <span className="font-medium text-right ml-4">{job.skills || "-"}</span></p>
-                    <p className="flex justify-between"><span className="text-zinc-500">Total Exp:</span> <span className="font-medium">{job.experience ? `${job.experience} Years` : "-"}</span></p>
-                    <p className="flex justify-between"><span className="text-zinc-500">Relevant Exp:</span> <span className="font-medium">{job.relevantExperience ? `${job.relevantExperience} Years` : "-"}</span></p>
-                    <p className="flex justify-between"><span className="text-zinc-500">Qualification:</span> <span className="font-medium">{job.qualification || "-"}</span></p>
-                    <p className="flex justify-between"><span className="text-zinc-500">Gender:</span> <span className="font-medium">{job.gender || "Any"}</span></p>
+             <div className="grid gap-6 lg:grid-cols-2">
+                <DetailSection title="Core Details" icon={Briefcase}>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <DetailRow label="Job Code" value={job.jobCode} />
+                    <DetailRow label="Status" value={job.active !== false} />
+                    <DetailRow label="Client Name" value={job.clientName} />
+                    <DetailRow label="Job Type" value={job.jobType} />
+                    <DetailRow label="Role / Position" value={job.position} />
+                    <DetailRow label="Location" value={job.location} />
                   </div>
-                </div>
-                <div className="bg-zinc-50 dark:bg-zinc-800/50 p-5 rounded-xl border border-zinc-100 dark:border-zinc-800">
-                  <h3 className="font-semibold text-lg mb-4 flex items-center gap-2 text-zinc-900 dark:text-zinc-100 border-b border-zinc-200 dark:border-zinc-700 pb-2">
-                    <Briefcase className="w-5 h-5 text-zinc-500" /> Job Details
-                  </h3>
-                  <div className="space-y-3 text-sm">
-                    <p className="flex justify-between"><span className="text-zinc-500">Job Type:</span> <span className="font-medium">{job.jobType || "-"}</span></p>
-                    <p className="flex justify-between"><span className="text-zinc-500">Location:</span> <span className="font-medium">{job.location || "-"}</span></p>
-                    <p className="flex justify-between"><span className="text-zinc-500">Max Salary Range:</span> <span className="font-medium">{job.salaryBudget || "-"}</span></p>
-                    <p className="flex justify-between"><span className="text-zinc-500">Monthly Salary:</span> <span className="font-medium">{job.monthlySalary || "-"}</span></p>
-                    <p className="flex justify-between"><span className="text-zinc-500">Notice Period:</span> <span className="font-medium">{job.noticePeriod || "-"}</span></p>
-                    <p className="flex justify-between"><span className="text-zinc-500">Date of Expiry (TAT):</span> <span className="font-medium">{job.tatTime ? new Date(job.tatTime).toLocaleDateString() : "-"}</span></p>
-                    <div className="pt-2 border-t border-zinc-200 dark:border-zinc-700 mt-2">
-                      <p className="flex justify-between mt-2">
-                        <span className="text-zinc-500">Primary Recruiter:</span>
+                </DetailSection>
+
+                <DetailSection title="Candidate Criteria" icon={GraduationCap}>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <DetailRow label="Experience" value={job.experience ? `${job.experience} Years` : ''} />
+                    <DetailRow label="Relevant Experience" value={job.relevantExperience ? `${job.relevantExperience} Years` : ''} />
+                    <DetailRow label="Qualification" value={job.qualification} />
+                    <DetailRow label="Gender" value={job.gender || 'Any'} />
+                    <DetailRow label="Mandatory Skills">
+                      <SkillList value={job.mandatorySkills?.length ? job.mandatorySkills : job.skills} />
+                    </DetailRow>
+                    <DetailRow label="Preferred Skills">
+                      <SkillList value={job.preferredSkills} />
+                    </DetailRow>
+                  </div>
+                </DetailSection>
+
+                <DetailSection title="Compensation & Timeline" icon={Calendar}>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <DetailRow label="Salary Budget" value={job.salaryBudget} />
+                    <DetailRow label="Monthly Salary" value={job.monthlySalary} />
+                    <DetailRow label="Notice Period" value={job.noticePeriod} />
+                    <DetailRow label="Expiry / TAT" value={formatJobDate(job.tatTime)} />
+                  </div>
+                </DetailSection>
+
+                <DetailSection title="Recruiter Assignment" icon={Users}>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <DetailRow label="Primary Recruiter">
+                      {job.primaryRecruiter ? (
                         <RecruiterDetailsTrigger recruiter={getRecruiterDetailsByName(job.primaryRecruiter, recruiters)} className="font-medium text-zinc-800 dark:text-zinc-100">
-                          {job.primaryRecruiter || 'Unassigned'}
+                          {job.primaryRecruiter}
                         </RecruiterDetailsTrigger>
-                      </p>
-                      <p className="flex justify-between mt-1">
-                        <span className="text-zinc-500">Secondary Recruiter:</span>
+                      ) : 'Unassigned'}
+                    </DetailRow>
+                    <DetailRow label="Secondary Recruiter">
+                      {job.secondaryRecruiter ? (
                         <RecruiterDetailsTrigger recruiter={getRecruiterDetailsByName(job.secondaryRecruiter, recruiters)} className="font-medium text-zinc-800 dark:text-zinc-100">
-                          {job.secondaryRecruiter || 'Unassigned'}
+                          {job.secondaryRecruiter}
                         </RecruiterDetailsTrigger>
-                      </p>
-                    </div>
+                      ) : 'Unassigned'}
+                    </DetailRow>
+                    <DetailRow label="Created At" value={formatJobDate(job.createdAt, true)} />
+                    <DetailRow label="Updated At" value={formatJobDate(job.updatedAt, true)} />
                   </div>
-                </div>
+                </DetailSection>
              </div>
-             {job.jdLink && (
-               <div className="bg-zinc-100 dark:bg-zinc-800 p-5 rounded-xl border border-zinc-200 dark:border-zinc-700">
-                 <h4 className="font-semibold mb-2 text-zinc-900 dark:text-zinc-100 text-sm">Job Description Link</h4>
-                 <a href={job.jdLink} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline break-all text-sm">
-                   {job.jdLink}
-                 </a>
+
+             <DetailSection title="Description & Links" icon={Eye}>
+               <div className="space-y-4">
+                 <DetailRow label="JD Link">
+                   {job.jdLink ? (
+                     <a href={job.jdLink} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline break-all dark:text-blue-400">
+                       {job.jdLink}
+                     </a>
+                   ) : '-'}
+                 </DetailRow>
+                 <DetailRow label="Job Description">
+                   {job.jobDescription ? (
+                     <div className="max-h-80 overflow-y-auto rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900">
+                       <p className="whitespace-pre-wrap text-sm leading-6 text-zinc-700 dark:text-zinc-300">
+                         {job.jobDescription}
+                       </p>
+                     </div>
+                   ) : '-'}
+                 </DetailRow>
                </div>
-             )}
-             {job.jobDescription && (
-               <div className="bg-zinc-100 dark:bg-zinc-800 p-5 rounded-xl border border-zinc-200 dark:border-zinc-700">
-                 <h4 className="font-semibold mb-3 text-zinc-900 dark:text-zinc-100 text-sm">Job Description</h4>
-                 <div className="max-h-80 overflow-y-auto rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 p-4">
-                   <p className="text-sm leading-6 text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap">
-                     {job.jobDescription}
-                   </p>
-                 </div>
-               </div>
-             )}
+             </DetailSection>
           </div>
+      </div>
+    </div>
+  );
+};
+
+const CandidateMatchesModal = ({
+  job,
+  mode,
+  rows,
+  loading,
+  expandedCandidateId,
+  onToggleCandidate,
+  onClose,
+}) => {
+  if (!job) return null;
+
+  const title = mode === 'matching' ? 'Matching Candidates' : 'Submitted Candidates';
+  const emptyText = mode === 'matching'
+    ? 'No candidates meet the minimum skill-match threshold for this requirement.'
+    : 'No candidates have been submitted to this requirement yet.';
+
+  const getCandidateName = (candidate = {}) => (
+    candidate.name || `${candidate.firstName || ''} ${candidate.lastName || ''}`.trim() || 'Unnamed Candidate'
+  );
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-800 dark:bg-zinc-900"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-4 border-b border-zinc-100 px-6 py-5 dark:border-zinc-800">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">{title}</p>
+            <h3 className="mt-1 text-xl font-bold text-zinc-900 dark:text-white">{job.position}</h3>
+            <p className="mt-1 text-sm text-zinc-500">
+              {job.jobCode} • {job.clientName}
+            </p>
+          </div>
+          <button onClick={onClose} className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-white">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="min-h-[260px] overflow-y-auto bg-zinc-50 p-5 dark:bg-zinc-950">
+          {loading ? (
+            <div className="flex h-56 flex-col items-center justify-center gap-3 text-zinc-500">
+              <Loader2 className="h-7 w-7 animate-spin" />
+              Loading candidates...
+            </div>
+          ) : rows.length === 0 ? (
+            <div className="flex h-56 items-center justify-center rounded-xl border border-dashed border-zinc-300 bg-white text-sm text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900">
+              {emptyText}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {rows.map((item) => {
+                const candidate = item.candidate || {};
+                const candidateId = item.id || candidate._id || candidate.id;
+                const score = item.scoreData;
+                const expanded = expandedCandidateId === candidateId;
+
+                return (
+                  <div key={candidateId} className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h4 className="font-semibold text-zinc-900 dark:text-white">{getCandidateName(candidate)}</h4>
+                          {candidate.candidateId && (
+                            <span className="rounded-md bg-zinc-100 px-2 py-0.5 text-xs font-mono text-zinc-500 dark:bg-zinc-800">
+                              {candidate.candidateId}
+                            </span>
+                          )}
+                          {item.status && (
+                            <span className="rounded-full border border-blue-100 bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700">
+                              {item.status}
+                            </span>
+                          )}
+                        </div>
+                        <p className="mt-1 text-sm text-zinc-500">
+                          {candidate.position || 'No role'} • {candidate.totalExperience || 'Experience not set'} • {candidate.currentLocation || candidate.preferredLocation || 'Location not set'}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {score && (
+                          <>
+                            <ScoreBadge score={score.matchPercentage} />
+                            <span className="text-xs font-semibold text-zinc-500">{score.matchLevel}</span>
+                          </>
+                        )}
+                        {score && (
+                          <button
+                            type="button"
+                            onClick={() => onToggleCandidate(expanded ? null : candidateId)}
+                            className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-semibold text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                          >
+                            {expanded ? 'Hide Details' : 'Details'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {score && expanded && (
+                      <div className="mt-4 grid gap-4 border-t border-zinc-100 pt-4 dark:border-zinc-800 lg:grid-cols-[1fr_1.2fr]">
+                        <div>
+                          <p className="text-sm text-zinc-600 dark:text-zinc-300">{score.reason}</p>
+                          <MatchBreakdownBar breakdown={score.breakdown} />
+                        </div>
+                        <SkillChips
+                          matchedMandatory={score.matchedMandatorySkills}
+                          missingMandatory={score.missingMandatorySkills}
+                          matchedPreferred={score.matchedPreferredSkills}
+                          missingPreferred={score.missingPreferredSkills}
+                        />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -484,6 +691,7 @@ export default function AdminRequirements() {
   const [jobs, setJobs] = useState([]);
   const [clients, setClients] = useState([]);
   const [recruiters, setRecruiters] = useState([]);
+  const [candidates, setCandidates] = useState([]);
   const [loading, setLoading] = useState(true);
 
   // Filters State
@@ -509,7 +717,13 @@ export default function AdminRequirements() {
   const [showForm, setShowForm] = useState(false);
   const [jobDescriptionModalOpen, setJobDescriptionModalOpen] = useState(false);
   const [mandatorySkillInput, setMandatorySkillInput] = useState("");
+  const [preferredSkillInput, setPreferredSkillInput] = useState("");
   const [isImportingJD, setIsImportingJD] = useState(false);
+  const [candidateModalJob, setCandidateModalJob] = useState(null);
+  const [candidateModalMode, setCandidateModalMode] = useState('submitted');
+  const [jobCandidates, setJobCandidates] = useState([]);
+  const [isLoadingJobCandidates, setIsLoadingJobCandidates] = useState(false);
+  const [expandedCandidateId, setExpandedCandidateId] = useState(null);
   const pdfInputRef = useRef(null);
   const docxInputRef = useRef(null);
 
@@ -524,6 +738,7 @@ export default function AdminRequirements() {
     setEditingJob(null);
     setJobDescriptionModalOpen(false);
     setMandatorySkillInput("");
+    setPreferredSkillInput("");
     setErrors({});
     setForm(initialFormState);
   };
@@ -584,10 +799,11 @@ export default function AdminRequirements() {
     setLoading(true);
     try {
       const headers = await getAuthHeader();
-      const [jobsRes, clientsRes, recRes] = await Promise.all([
+      const [jobsRes, clientsRes, recRes, candidatesRes] = await Promise.all([
         fetch(`${API_URL}/jobs`,       { headers }),
         fetch(`${API_URL}/clients`,    { headers }),
-        fetch(`${API_URL}/recruiters`, { headers })
+        fetch(`${API_URL}/recruiters`, { headers }),
+        fetch(`${API_URL}/candidates?includeSubmissions=true`, { headers })
       ]);
 
       if(jobsRes.ok) {
@@ -609,6 +825,11 @@ export default function AdminRequirements() {
           return { id: r._id || r.id, name: recName, email: r.email };
         }));
       }
+      if(candidatesRes.ok) {
+        const data = await candidatesRes.json();
+        const candidatesArray = Array.isArray(data) ? data : data.data || [];
+        setCandidates(candidatesArray.map((candidate) => ({ ...candidate, id: candidate._id || candidate.id })));
+      }
     } catch (error) {
       toast({ title: "Error loading data", variant: "destructive" });
     } finally {
@@ -623,8 +844,10 @@ export default function AdminRequirements() {
     let newValue = type === 'checkbox' ? checked : value;
 
     if (type !== 'checkbox') {
-      if (name === 'position' || name === 'qualification') {
+      if (name === 'position') {
         newValue = newValue.replace(/[^a-zA-Z\s]/g, '');
+      } else if (name === 'qualification') {
+        newValue = newValue.replace(/[^a-zA-Z\s,/]/g, '');
       } else if (name === 'location') {
         // ✅ Strictly prevent numbers from being accepted in location
         newValue = newValue.replace(/[0-9]/g, '');
@@ -877,6 +1100,8 @@ export default function AdminRequirements() {
       tatTime: form.tatTime || null,
       jobType: form.jobType,
       skills: form.skills.trim(),
+      mandatorySkills: mandatorySkillItems,
+      preferredSkills: parseSkillItems(form.preferredSkills),
       jobDescription: form.jobDescription?.trim() || "",
       jdLink: form.jdLink?.trim() || "",
       customFields: form.customFields || {}
@@ -913,6 +1138,7 @@ export default function AdminRequirements() {
       setShowForm(false);
       setEditingJob(null);
       setMandatorySkillInput("");
+      setPreferredSkillInput("");
       setErrors({});
       setForm(initialFormState);
     } catch (error) {
@@ -924,6 +1150,7 @@ export default function AdminRequirements() {
     setEditingJob(job);
     setErrors({});
     setMandatorySkillInput("");
+    setPreferredSkillInput("");
     setForm({
       ...initialFormState,
       ...job,
@@ -976,6 +1203,92 @@ export default function AdminRequirements() {
     return matchesSearch && matchesClient;
   }), [jobs, searchTerm, selectedClientFilter]);
 
+  const candidateCounts = useMemo(() => {
+    const counts = {};
+    candidates.forEach((candidate) => {
+      (candidate.submissions || []).forEach((submission) => {
+        const jobId = typeof submission.jobId === 'object' ? submission.jobId?._id : submission.jobId;
+        if (!jobId) return;
+        counts[jobId] = (counts[jobId] || 0) + 1;
+      });
+    });
+    return counts;
+  }, [candidates]);
+
+  const matchingCandidatesByJobId = useMemo(
+    () => getMatchingCandidatesByJobId(jobs, candidates, 3),
+    [jobs, candidates]
+  );
+
+  const matchingCounts = useMemo(() => (
+    Object.fromEntries(
+      Object.entries(matchingCandidatesByJobId).map(([jobId, matchingCandidates]) => [jobId, matchingCandidates.length])
+    )
+  ), [matchingCandidatesByJobId]);
+
+  const openCandidatesModalForJob = async (job, mode) => {
+    setCandidateModalJob(job);
+    setCandidateModalMode(mode);
+    setExpandedCandidateId(null);
+    setJobCandidates([]);
+    setIsLoadingJobCandidates(true);
+
+    try {
+      const headers = await getAuthHeader();
+      if (mode === 'matching') {
+        const candidatesToScore = matchingCandidatesByJobId[job._id || job.id] || [];
+        if (candidatesToScore.length === 0) {
+          setJobCandidates([]);
+          return;
+        }
+
+        const res = await fetch(`${API_URL}/score-match/bulk`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            requirementId: job._id || job.id,
+            candidateIds: candidatesToScore.map((candidate) => candidate._id || candidate.id),
+          }),
+        });
+
+        if (!res.ok) throw new Error('Failed to score matching candidates');
+
+        const data = await res.json();
+        const scoredList = (data.scores || []).map((scoreData) => {
+          const matchingCandidate = candidatesToScore.find(
+            (candidate) => String(candidate._id || candidate.id) === String(scoreData.candidateId)
+          );
+          return {
+            id: matchingCandidate?._id || matchingCandidate?.id || scoreData.candidateId,
+            candidate: matchingCandidate,
+            scoreData,
+          };
+        }).filter((item) => item.candidate);
+
+        setJobCandidates(scoredList);
+        return;
+      }
+
+      const res = await fetch(`${API_URL}/submissions?jobId=${job._id || job.id}`, { headers });
+      if (!res.ok) throw new Error('Failed to load submitted candidates');
+
+      const data = await res.json();
+      setJobCandidates((data || []).map((submission) => ({
+        id: submission.candidateId?._id || submission.candidateId || submission._id,
+        status: submission.pipelineStage || submission.status,
+        candidate: submission.candidateId,
+      })).filter((item) => item.candidate));
+    } catch (error) {
+      toast({
+        title: 'Unable to load candidates',
+        description: error.message || 'Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoadingJobCandidates(false);
+    }
+  };
+
   const visibleDefaults = useMemo(
     () => (fieldConfig?.fields || []).filter(field => field.visible),
     [fieldConfig]
@@ -997,7 +1310,7 @@ export default function AdminRequirements() {
     [visibleDefaultByName]
   );
   const assignmentSkillFields = useMemo(
-    () => ['primaryRecruiter', 'secondaryRecruiter', 'preferredSkills']
+    () => ['primaryRecruiter', 'secondaryRecruiter']
       .map(fieldName => visibleDefaultByName.get(fieldName))
       .filter(Boolean),
     [visibleDefaultByName]
@@ -1043,68 +1356,128 @@ export default function AdminRequirements() {
   const getFieldInputClass = (field) => `${inputCls} ${errors[field.fieldName] ? "border-red-500 focus:ring-red-500" : ""}`;
 
   const mandatorySkillItems = useMemo(
-    () => (form.skills || '').split(/[,;|\n]+/).map(skill => skill.trim()).filter(Boolean),
+    () => parseSkillItems(form.skills),
     [form.skills]
   );
 
-  const commitMandatorySkill = (rawValue = mandatorySkillInput) => {
+  const preferredSkillItems = useMemo(
+    () => parseSkillItems(form.preferredSkills),
+    [form.preferredSkills]
+  );
+
+  const commitSkill = (fieldName, items, rawValue, clearInput) => {
     const additions = rawValue.split(/[,;|\n]+/).map(skill => skill.trim()).filter(Boolean);
     if (additions.length === 0) return;
-    const existing = new Set(mandatorySkillItems.map(skill => skill.toLowerCase()));
-    const next = [...mandatorySkillItems];
+    const existing = new Set(items.map(skill => skill.toLowerCase()));
+    const next = [...items];
     additions.forEach(skill => {
       if (!existing.has(skill.toLowerCase())) {
         existing.add(skill.toLowerCase());
         next.push(skill);
       }
     });
-    handleDefaultFieldChange('skills', next.join(', '));
-    setMandatorySkillInput("");
+    handleDefaultFieldChange(fieldName, next.join(', '));
+    clearInput("");
+  };
+
+  const removeSkill = (fieldName, items, skillToRemove) => {
+    const next = items.filter(skill => skill !== skillToRemove);
+    handleDefaultFieldChange(fieldName, next.join(', '));
+  };
+
+  const commitMandatorySkill = (rawValue = mandatorySkillInput) => {
+    commitSkill('skills', mandatorySkillItems, rawValue, setMandatorySkillInput);
   };
 
   const removeMandatorySkill = (skillToRemove) => {
-    const next = mandatorySkillItems.filter(skill => skill !== skillToRemove);
-    handleDefaultFieldChange('skills', next.join(', '));
+    removeSkill('skills', mandatorySkillItems, skillToRemove);
+  };
+
+  const commitPreferredSkill = (rawValue = preferredSkillInput) => {
+    commitSkill('preferredSkills', preferredSkillItems, rawValue, setPreferredSkillInput);
+  };
+
+  const removePreferredSkill = (skillToRemove) => {
+    removeSkill('preferredSkills', preferredSkillItems, skillToRemove);
+  };
+
+  const renderSkillBadgeField = ({
+    label,
+    required = false,
+    items,
+    inputValue,
+    setInputValue,
+    commit,
+    remove,
+    error,
+  }) => {
+    return (
+      <div className="md:col-span-2">
+        <label className="block text-xs font-medium text-zinc-500 mb-1">{label}{required ? ' *' : ''}</label>
+        <div className={`min-h-[42px] w-full rounded-lg border bg-white dark:bg-zinc-900 px-2 py-2 text-sm transition-shadow focus-within:ring-2 focus-within:ring-zinc-500 ${error ? "border-red-500 focus-within:ring-red-500" : "border-zinc-300 dark:border-zinc-700"}`}>
+          <div className="flex flex-wrap items-center gap-2">
+            {items.map(skill => (
+              <span key={skill} className="inline-flex items-center gap-1 rounded-full border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 px-2.5 py-1 text-xs font-medium text-zinc-700 dark:text-zinc-200">
+                {skill}
+                <button type="button" onClick={() => remove(skill)} className="rounded-full text-zinc-400 hover:text-red-500">
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            ))}
+            <input
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ',') {
+                  e.preventDefault();
+                  commit();
+                }
+                if (e.key === 'Backspace' && !inputValue && items.length > 0) {
+                  remove(items[items.length - 1]);
+                }
+              }}
+              onBlur={() => commit()}
+              placeholder={items.length ? "Add more..." : "Type a skill and press Enter"}
+              className="min-w-[160px] flex-1 bg-transparent px-1 py-1 text-sm outline-none text-zinc-900 dark:text-zinc-100 placeholder-zinc-400"
+            />
+          </div>
+        </div>
+        {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
+      </div>
+    );
   };
 
   const renderMandatorySkillsField = () => {
     const skillsField = visibleDefaultByName.get('skills');
     if (!skillsField) return null;
 
-    return (
-      <div className="md:col-span-2">
-        <label className="block text-xs font-medium text-zinc-500 mb-1">Mandatory Skills *</label>
-        <div className={`min-h-[42px] w-full rounded-lg border bg-white dark:bg-zinc-900 px-2 py-2 text-sm transition-shadow focus-within:ring-2 focus-within:ring-zinc-500 ${errors.skills ? "border-red-500 focus-within:ring-red-500" : "border-zinc-300 dark:border-zinc-700"}`}>
-          <div className="flex flex-wrap items-center gap-2">
-            {mandatorySkillItems.map(skill => (
-              <span key={skill} className="inline-flex items-center gap-1 rounded-full border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 px-2.5 py-1 text-xs font-medium text-zinc-700 dark:text-zinc-200">
-                {skill}
-                <button type="button" onClick={() => removeMandatorySkill(skill)} className="rounded-full text-zinc-400 hover:text-red-500">
-                  <X className="h-3 w-3" />
-                </button>
-              </span>
-            ))}
-            <input
-              value={mandatorySkillInput}
-              onChange={(e) => setMandatorySkillInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ',') {
-                  e.preventDefault();
-                  commitMandatorySkill();
-                }
-                if (e.key === 'Backspace' && !mandatorySkillInput && mandatorySkillItems.length > 0) {
-                  removeMandatorySkill(mandatorySkillItems[mandatorySkillItems.length - 1]);
-                }
-              }}
-              onBlur={() => commitMandatorySkill()}
-              placeholder={mandatorySkillItems.length ? "Add more..." : "Type a skill and press Enter"}
-              className="min-w-[160px] flex-1 bg-transparent px-1 py-1 text-sm outline-none text-zinc-900 dark:text-zinc-100 placeholder-zinc-400"
-            />
-          </div>
-        </div>
-        {errors.skills && <p className="text-xs text-red-500 mt-1">{errors.skills}</p>}
-      </div>
-    );
+    return renderSkillBadgeField({
+      fieldName: 'skills',
+      label: 'Mandatory Skills',
+      required: true,
+      items: mandatorySkillItems,
+      inputValue: mandatorySkillInput,
+      setInputValue: setMandatorySkillInput,
+      commit: commitMandatorySkill,
+      remove: removeMandatorySkill,
+      error: errors.skills,
+    });
+  };
+
+  const renderPreferredSkillsField = () => {
+    const skillsField = visibleDefaultByName.get('preferredSkills');
+    if (!skillsField) return null;
+
+    return renderSkillBadgeField({
+      fieldName: 'preferredSkills',
+      label: 'Preferred Skills',
+      items: preferredSkillItems,
+      inputValue: preferredSkillInput,
+      setInputValue: setPreferredSkillInput,
+      commit: commitPreferredSkill,
+      remove: removePreferredSkill,
+      error: errors.preferredSkills,
+    });
   };
 
   const renderDefaultField = (field) => {
@@ -1237,10 +1610,11 @@ export default function AdminRequirements() {
                 onScroll={handleBottomScroll} 
                 className="no-scrollbar max-h-[calc(100vh-16rem)] min-h-[400px] overflow-auto rounded-b-xl w-full"
               >
-                <table ref={tableRef} className="min-w-[1400px] w-full text-left text-sm whitespace-nowrap border-collapse">
+                <table ref={tableRef} className="min-w-[1540px] w-full text-left text-sm whitespace-nowrap border-collapse">
                   <thead className="bg-zinc-50 dark:bg-zinc-900/80 text-xs uppercase text-zinc-500 font-semibold tracking-wider sticky top-0 z-10 shadow-[0_1px_0_0_#e4e4e7] dark:shadow-[0_1px_0_0_#27272a]">
                     <tr>
                       <th className="px-6 py-4 bg-zinc-50 dark:bg-zinc-900">Job Code</th>
+                      <th className="px-6 py-4 bg-zinc-50 dark:bg-zinc-900 text-center">Candidates</th>
                       <th className="px-6 py-4 bg-zinc-50 dark:bg-zinc-900">Role</th>
                       <th className="px-6 py-4 bg-zinc-50 dark:bg-zinc-900">Company</th>
                       <th className="px-6 py-4 bg-zinc-50 dark:bg-zinc-900">Location</th>
@@ -1254,7 +1628,7 @@ export default function AdminRequirements() {
                   
                   <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/50 bg-white dark:bg-zinc-900">
                     {filteredJobs.length === 0 ? (
-                      <tr><td colSpan={9} className="text-center py-12 text-zinc-400">No requirements found.</td></tr>
+                      <tr><td colSpan={10} className="text-center py-12 text-zinc-400">No requirements found.</td></tr>
                     ) : filteredJobs.map(job => (
                       <tr key={job.id} className="hover:bg-zinc-50/50 dark:hover:bg-zinc-800/20">
                         
@@ -1268,6 +1642,30 @@ export default function AdminRequirements() {
                           >
                             {job.jobCode}
                           </button>
+                        </td>
+
+                        {/* Candidates */}
+                        <td className="px-6 py-4 text-center">
+                          <div className="inline-flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => openCandidatesModalForJob(job, 'submitted')}
+                              className="inline-flex items-center gap-1.5 rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700 transition hover:bg-blue-100 dark:border-blue-900/50 dark:bg-blue-900/20 dark:text-blue-300"
+                              title="View submitted candidates"
+                            >
+                              <Users className="h-3.5 w-3.5" />
+                              {candidateCounts[job.id || job._id] || 0}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => openCandidatesModalForJob(job, 'matching')}
+                              className="inline-flex items-center gap-1.5 rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700 transition hover:bg-emerald-100 dark:border-emerald-900/50 dark:bg-emerald-900/20 dark:text-emerald-300"
+                              title="View matching candidates (3+ skills match)"
+                            >
+                              <CheckCircle className="h-3.5 w-3.5" />
+                              {matchingCounts[job.id || job._id] || 0}
+                            </button>
+                          </div>
                         </td>
 
                         {/* Role */}
@@ -1452,7 +1850,7 @@ export default function AdminRequirements() {
                 <div className="grid md:grid-cols-4 gap-4">
                   {assignmentSkillFields.slice(0, 2).map(renderDefaultField)}
                   {renderMandatorySkillsField()}
-                  {assignmentSkillFields.slice(2).map(renderDefaultField)}
+                  {renderPreferredSkillsField()}
                 </div>
               </section>
 
@@ -1598,6 +1996,21 @@ export default function AdminRequirements() {
       )}
 
       {selectedJob && <JobDetailCard job={selectedJob} recruiters={recruiters} onClose={() => setSelectedJob(null)} />}
+      {candidateModalJob && (
+        <CandidateMatchesModal
+          job={candidateModalJob}
+          mode={candidateModalMode}
+          rows={jobCandidates}
+          loading={isLoadingJobCandidates}
+          expandedCandidateId={expandedCandidateId}
+          onToggleCandidate={setExpandedCandidateId}
+          onClose={() => {
+            setCandidateModalJob(null);
+            setJobCandidates([]);
+            setExpandedCandidateId(null);
+          }}
+        />
+      )}
       <FormControlModal
         isOpen={formControlOpen}
         onClose={() => setFormControlOpen(false)}

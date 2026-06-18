@@ -17,6 +17,8 @@ import CandidateExportModal from '@/components/CandidateExportModal';
 import ClientJobSubmissions from '@/components/ClientJobSubmissions';
 import CandidatePipelinePanel from '@/components/CandidatePipelinePanel';
 import { RecruiterDetailsTrigger } from '@/components/RecruiterDetailsModal';
+import CandidateKeywordSearch from '@/components/CandidateKeywordSearch';
+import { candidateMatchesKeywordBadges } from '@/utils/candidateSearch';
 
 // ── ENV Config ────────────────────────────────────────────────────────────────
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
@@ -51,64 +53,6 @@ const normalizeSkills = (skills) => {
       seen.add(key);
       return true;
     });
-};
-
-const normalizeSkillSearchText = (value) =>
-  String(value || '')
-    .toLowerCase()
-    .replace(/[._-]+/g, ' ')
-    .replace(/[^a-z0-9+#\s]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-
-const getSkillTokens = (value) => normalizeSkillSearchText(value).split(' ').filter(Boolean);
-
-const parseSkillQuery = (query) => {
-  const seen = new Set();
-  return String(query || '')
-    .split(/[,\s]+/)
-    .map(normalizeSkillSearchText)
-    .filter(Boolean)
-    .filter((skill) => {
-      if (seen.has(skill)) return false;
-      seen.add(skill);
-      return true;
-    });
-};
-
-const normalizeCandidateSkills = (candidate) =>
-  normalizeSkills(candidate?.skills).map((skill) => ({
-    text: normalizeSkillSearchText(skill),
-    tokens: getSkillTokens(skill),
-  }));
-
-const skillMatchesCandidateSkill = (candidateSkill, searchedSkill) => {
-  if (!searchedSkill) return true;
-  if (candidateSkill.text === searchedSkill) return true;
-  const searchedTokens = searchedSkill.split(' ').filter(Boolean);
-  if (searchedTokens.length > 1) {
-    return searchedTokens.every((token) => candidateSkill.tokens.includes(token));
-  }
-  return candidateSkill.tokens.includes(searchedSkill);
-};
-
-const matchesAllSkills = (candidateSkills, searchedSkills) => {
-  if (searchedSkills.length === 0) return true;
-  return searchedSkills.every((skill) =>
-    candidateSkills.some((candidateSkill) => skillMatchesCandidateSkill(candidateSkill, skill))
-  );
-};
-
-const matchesRoleQuery = (candidate, query) => {
-  const normalizedQuery = String(query || '').trim().toLowerCase();
-  if (!normalizedQuery) return true;
-  const roleText = [
-    candidate?.position,
-    candidate?.currentRole,
-    candidate?.role,
-  ].filter(Boolean).join(' ').toLowerCase();
-  const terms = parseSkillQuery(normalizedQuery);
-  return roleText.includes(normalizedQuery) || terms.every((term) => roleText.includes(term));
 };
 
 const DEFAULT_CANDIDATE_FIELD_CONFIG = [
@@ -586,8 +530,8 @@ export default function AdminCandidates() {
   const [isParsingResume, setIsParsingResume] = useState(false);
   const [resumeSuccess, setResumeSuccess] = useState({ show: false, fileName: '', fieldsCount: 0 });
 
-  const [searchTerm, setSearchTerm] = useState('');
-  const [roleSkillSearchTerm, setRoleSkillSearchTerm] = useState('');
+  const [searchInput, setSearchInput] = useState('');
+  const [searchKeywords, setSearchKeywords] = useState([]);
   const [statusFilter, setStatusFilter] = useState('all');
   const [recruiterFilter, setRecruiterFilter] = useState('all');
   const [clientFilter, setClientFilter] = useState('all');
@@ -602,7 +546,7 @@ export default function AdminCandidates() {
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, roleSkillSearchTerm, statusFilter, recruiterFilter, clientFilter, activeStatFilter]);
+  }, [searchKeywords, statusFilter, recruiterFilter, clientFilter, activeStatFilter]);
 
   // Bulk Assign States
   const [bulkRecruiterId, setBulkRecruiterId] = useState('');
@@ -1272,16 +1216,8 @@ export default function AdminCandidates() {
   };
 
   const filteredCandidates = useMemo(() => {
-    const searchedSkills = parseSkillQuery(roleSkillSearchTerm);
     let result = candidates.filter((c) => {
-      const matchSearch = (c.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (c.email || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (c.candidateId || '').toLowerCase().includes(searchTerm.toLowerCase());
-
-      const matchRoleSkill =
-        !roleSkillSearchTerm.trim() ||
-        matchesRoleQuery(c, roleSkillSearchTerm) ||
-        matchesAllSkills(normalizeCandidateSkills(c), searchedSkills);
+      const matchSearch = candidateMatchesKeywordBadges(c, searchKeywords);
 
       const statusArr = getCandidateStatuses(c);
       const matchStatus = statusFilter === 'all' || statusArr.includes(statusFilter);
@@ -1293,7 +1229,7 @@ export default function AdminCandidates() {
 
       const statMatch = activeStatFilter ? statusArr.includes(activeStatFilter) : true;
 
-      return matchSearch && matchRoleSkill && matchStatus && matchRec && matchClient && statMatch;
+      return matchSearch && matchStatus && matchRec && matchClient && statMatch;
     });
 
     if (sortConfig) {
@@ -1306,7 +1242,7 @@ export default function AdminCandidates() {
       });
     }
     return result;
-  }, [candidates, searchTerm, roleSkillSearchTerm, statusFilter, recruiterFilter, clientFilter, activeStatFilter, sortConfig]);
+  }, [candidates, searchKeywords, statusFilter, recruiterFilter, clientFilter, activeStatFilter, sortConfig]);
 
   const stats = useMemo(() => {
     const count = (s) => candidates.filter((c) => getCandidateStatuses(c).includes(s)).length;
@@ -1478,15 +1414,13 @@ export default function AdminCandidates() {
 
         {/* Filters */}
         <div className="p-4 border border-slate-200 dark:border-slate-800 rounded-xl bg-white shadow-sm flex flex-col md:flex-row gap-4 justify-between">
-          <div className="grid w-full grid-cols-1 gap-3 md:max-w-3xl md:grid-cols-2">
-            <div className="relative w-full">
-              <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-              <input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search name, email, ID..." className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-            </div>
-            <div className="relative w-full">
-              <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-              <input value={roleSkillSearchTerm} onChange={(e) => setRoleSkillSearchTerm(e.target.value)} placeholder="Search role / skills" className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-            </div>
+          <div className="w-full md:max-w-2xl">
+            <CandidateKeywordSearch
+              input={searchInput}
+              keywords={searchKeywords}
+              onInputChange={setSearchInput}
+              onKeywordsChange={setSearchKeywords}
+            />
           </div>
           <div className="flex flex-col sm:flex-row flex-wrap gap-3 w-full md:w-auto">
             <select value={clientFilter} onChange={(e) => setClientFilter(e.target.value)} className="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500">
