@@ -15,6 +15,7 @@ import { format } from 'date-fns';
 import CandidateProfileLink from '@/components/CandidateProfileLink';
 import RecruiterPerformanceModal from '@/components/RecruiterPerformanceModal';
 import { RecruiterDetailsTrigger } from '@/components/RecruiterDetailsModal';
+import RecruiterCandidateGrowthChart from '@/components/RecruiterCandidateGrowthChart';
 
 // ─── API Helpers ──────────────────────────────────────────────────────────────
 // FIX 1: Computed ONCE at module level — not re-computed on every render/call.
@@ -197,9 +198,9 @@ export default function AdminDashboard() {
     const fetchData = async () => {
       try {
         const [candR, recR, jobsR] = await Promise.allSettled([
-          apiFetch('/candidates'),
-          apiFetch('/recruiters'),
-          apiFetch('/jobs'),
+          apiFetch('/candidates?view=dashboard'),
+          apiFetch('/recruiters?view=lookup'),
+          apiFetch('/jobs?view=dashboard'),
           // FIX 9: Removed /clients fetch — clients.length was fetched but
           // the "Total Clients" card was replaced with "Today Submissions".
           // Fetching unused data wastes bandwidth and delays the dashboard.
@@ -224,7 +225,7 @@ export default function AdminDashboard() {
   const fetchModalData = useCallback(async () => {
     setModalLoading(true);
     try {
-      const data = await apiFetch(`/candidates?date=${filterDate}`);
+      const data = await apiFetch(`/candidates?view=dashboard&date=${filterDate}`);
       setModalData(data);
     } catch {
       toast({ title: 'Error', description: 'Failed to fetch day submissions', variant: 'destructive' });
@@ -447,10 +448,11 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* ── Row 4: Chart ── */}
-      <div className="bg-white p-8 rounded-[1.5rem] shadow-sm border border-gray-100">
+      {/* ── Row 4: Charts ── */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        <div className="bg-white p-8 rounded-[1.5rem] shadow-sm border border-gray-100 h-full min-h-[460px] dark:border-white/10 dark:bg-slate-900">
         <div className="flex justify-between items-center mb-6">
-          <h3 className="text-base font-bold text-slate-800">Top Recruiters (Upload Report)</h3>
+          <h3 className="text-base font-bold text-slate-800 dark:text-white">Top Recruiters (Upload Report)</h3>
           <span className="text-xs text-gray-400">
             {recruiterFilter === 'All'
               ? `showing ${Math.min(6, recruiterStats.length)} of ${recruiterStats.length}`
@@ -473,6 +475,13 @@ export default function AdminDashboard() {
             </BarChart>
           </ResponsiveContainer>
         </div>
+      </div>
+
+        <RecruiterCandidateGrowthChart
+          candidates={candidates}
+          recruiters={recruiters}
+          loading={loading}
+        />
       </div>
 
       {/* ── Row 5: Table ── */}

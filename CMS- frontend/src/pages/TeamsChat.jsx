@@ -444,7 +444,7 @@ export default function TeamsChat({ role: roleProp }) {
       try {
         const [chRes, usrRes, msgRes] = await Promise.all([
           fetch(`${API_URL}/channels`,            { headers: getAuthHeader() }),
-          fetch(`${API_URL}/recruiters`,           { headers: getAuthHeader() }),
+          fetch(`${API_URL}/recruiters?view=lookup`, { headers: getAuthHeader() }),
           fetch(`${API_URL}/messages`,             { headers: getAuthHeader() }),
         ]);
         if (chRes.ok)  setChannels(await chRes.json());

@@ -449,7 +449,7 @@ export default function RecruiterAssignments() {
         fetch(`${API_URL}/jobs`, { headers }),
         fetch(`${API_URL}/users/active-list`, { headers }),
         fetch(`${API_URL}/clients`, { headers }),
-        fetch(`${API_URL}/candidates?includeSubmissions=true`, { headers })
+        fetch(`${API_URL}/candidates?view=matching&includeSubmissions=true`, { headers })
       ]);
       if (resJobs.ok) {
         const data = await resJobs.json();

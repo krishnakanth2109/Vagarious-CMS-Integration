@@ -582,7 +582,7 @@ export function ReportsDashboard({ recruiterOnly = false }) {
   const [detailModal, setDetailModal] = useState(null);
 
   const [filters, setFilters] = useState({
-    startDate: firstDayOfMonth(),
+    startDate: "",
     endDate: localDateStr(),
     recruiterId: "all",
     status: "all",
@@ -607,6 +607,7 @@ export function ReportsDashboard({ recruiterOnly = false }) {
     try {
       const headers = await getHeaders();
       const params = new URLSearchParams();
+      params.set("view", "reports");
       if (reportStartDate && reportEndDate) {
         params.set("startDate", reportStartDate);
         params.set("endDate", reportEndDate);
@@ -617,7 +618,7 @@ export function ReportsDashboard({ recruiterOnly = false }) {
       const candidateUrl = `${API_URL}/candidates${params.toString() ? `?${params.toString()}` : ""}`;
       const recruiterRequest = recruiterOnly
         ? Promise.resolve({ ok: true, json: async () => [currentUser].filter(Boolean) })
-        : fetch(`${API_URL}/recruiters`, { headers });
+        : fetch(`${API_URL}/recruiters?view=lookup`, { headers });
       const [candidateRes, recruiterRes] = await Promise.all([
         fetch(candidateUrl, { headers }),
         recruiterRequest,

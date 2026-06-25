@@ -16,6 +16,58 @@ if (!admin.apps.length) {
 
 export { admin };
 
+const USER_CACHE_TTL_MS = 30 * 1000;
+const userCache = new Map();
+const userLookupPromises = new Map();
+
+const getCachedUser = (uid) => {
+  const cached = userCache.get(uid);
+  if (!cached) return null;
+  if (cached.expiresAt <= Date.now()) {
+    userCache.delete(uid);
+    return null;
+  }
+  return cached.user;
+};
+
+const cacheUser = (uid, user) => {
+  if (uid && user) {
+    userCache.set(uid, { user, expiresAt: Date.now() + USER_CACHE_TTL_MS });
+  }
+};
+
+const loadUser = async (uid, email) => {
+  const cached = getCachedUser(uid);
+  if (cached) return cached;
+
+  if (userLookupPromises.has(uid)) {
+    return userLookupPromises.get(uid);
+  }
+
+  const lookupPromise = (async () => {
+    let user = await User.findOne({ firebaseUid: uid }).select('-password').lean();
+
+    if (!user && email) {
+      const userDocument = await User.findOne({ email }).select('-password');
+      if (userDocument) {
+        userDocument.firebaseUid = uid;
+        await userDocument.save();
+        user = userDocument.toObject();
+      }
+    }
+
+    cacheUser(uid, user);
+    return user;
+  })();
+
+  userLookupPromises.set(uid, lookupPromise);
+  try {
+    return await lookupPromise;
+  } finally {
+    userLookupPromises.delete(uid);
+  }
+};
+
 /**
  * protect — verifies Firebase ID token from the Authorization header.
  */
@@ -37,15 +89,7 @@ export const protect = async (req, res, next) => {
     const { uid, email } = decodedToken;
     req.firebaseUser = decodedToken;
 
-    let user = await User.findOne({ firebaseUid: uid }).select('-password');
-
-    if (!user && email) {
-      user = await User.findOne({ email }).select('-password');
-      if (user) {
-        user.firebaseUid = uid;
-        await user.save();
-      }
-    }
+    const user = await loadUser(uid, email);
 
     if (!user) {
       return res.status(401).json({ message: 'User not found. Contact Admin.' });

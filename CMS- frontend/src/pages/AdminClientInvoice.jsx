@@ -140,7 +140,7 @@ const AdminClientInvoice = () => {
         const headers = await getAuthHeader();
         const [resClients, resCandidates] = await Promise.all([
           fetch(`${API_URL}/clients`, { headers }),
-          fetch(`${API_URL}/candidates`, { headers }),
+          fetch(`${API_URL}/candidates?view=invoice`, { headers }),
         ]);
         if (resClients.ok) setClients((await resClients.json()).map((c) => ({ ...c, id: c._id })));
         if (resCandidates.ok) setCandidates((await resCandidates.json()).map((c) => ({ ...c, id: c._id })));

@@ -1,51 +1,53 @@
-import React, { useState, useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
-  Lock, Loader2,
-  Mail, CheckCircle2,
+  CheckCircle2, Loader2, Lock, Mail, Settings2, ShieldCheck,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/context/AuthContext';
 
 const BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/$/, '');
-const API_URL  = `${BASE_URL}/api`;
+const API_URL = `${BASE_URL}/api`;
+const STEPS = { REQUEST: 'request', SENT: 'sent' };
 
-const TBtn = ({ children, onClick, disabled, className = '', variant = 'primary', type = 'button' }) => {
+const SettingsButton = ({
+  children, onClick, disabled, className = '', variant = 'primary', type = 'button',
+}) => {
   const styles = {
-    primary: 'bg-blue-600 text-white hover:bg-blue-700',
-    outline: 'border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700',
+    primary: 'bg-[#3530a0] text-white shadow-md hover:bg-[#242078]',
+    outline: 'border border-slate-300 bg-white text-slate-800 hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-800 dark:text-white dark:hover:bg-slate-700',
   };
   return (
-    <button type={type} onClick={onClick} disabled={disabled}
-      className={`inline-flex items-center justify-center font-medium rounded-lg px-4 py-2 text-sm
-        transition-colors focus:outline-none disabled:opacity-50 disabled:pointer-events-none
-        ${styles[variant] || styles.primary} ${className}`}>
+    <button
+      type={type}
+      onClick={onClick}
+      disabled={disabled}
+      className={`inline-flex h-11 items-center justify-center rounded-lg px-5 text-sm font-bold transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 ${styles[variant]} ${className}`}
+    >
       {children}
     </button>
   );
 };
 
-const STEPS = { REQUEST: 'request', SENT: 'sent' };
-
 export default function RecruiterSettings() {
-  const { toast }       = useToast();
+  const { toast } = useToast();
   const { authHeaders } = useAuth();
+  const [step, setStep] = useState(STEPS.REQUEST);
+  const [sending, setSending] = useState(false);
 
-  const buildHeaders = useCallback(async () => {
-    const ah = await authHeaders();
-    return { 'Content-Type': 'application/json', ...ah };
-  }, [authHeaders]);
+  const buildHeaders = useCallback(async () => ({
+    'Content-Type': 'application/json',
+    ...(await authHeaders()),
+  }), [authHeaders]);
 
   const getUserEmail = () => {
     try {
       const session = JSON.parse(sessionStorage.getItem('currentUser') || '{}');
       return session.email || '';
-    } catch { return ''; }
+    } catch {
+      return '';
+    }
   };
 
-  const [step, setStep] = useState(STEPS.REQUEST);
-  const [sending, setSending] = useState(false);
-
-  // ── Send Reset Link ──────────────────────────────────────────────────────
   const handleSendLink = async () => {
     const email = getUserEmail();
     if (!email) {
@@ -54,128 +56,139 @@ export default function RecruiterSettings() {
     }
     setSending(true);
     try {
-      const headers = await buildHeaders();
-      // Keep your endpoint, but handle it as sending a link
       const res = await fetch(`${API_URL}/auth/send-otp`, {
-        method: 'POST', headers, body: JSON.stringify({ email }),
+        method: 'POST',
+        headers: await buildHeaders(),
+        body: JSON.stringify({ email }),
       });
       const data = await res.json();
-      
       if (!res.ok) throw new Error(data.message || 'Failed to send reset link.');
-
-      toast({
-        title: 'Email Sent!',
-        description: `A reset link has been sent to ${email}.`,
-      });
-      
+      toast({ title: 'Email sent', description: `A reset link has been sent to ${email}.` });
       setStep(STEPS.SENT);
-    } catch (err) {
-      toast({ title: 'Send Failed', description: err.message, variant: 'destructive' });
+    } catch (error) {
+      toast({ title: 'Send failed', description: error.message, variant: 'destructive' });
     } finally {
       setSending(false);
     }
   };
 
-  const resetFlow = () => {
-    setStep(STEPS.REQUEST);
-  };
-
-  const stepIdx  = [STEPS.REQUEST, STEPS.SENT].indexOf(step);
-  const stepMeta = ['Request Link', 'Link Sent'];
+  const stepIndex = [STEPS.REQUEST, STEPS.SENT].indexOf(step);
+  const stepLabels = ['Request Link', 'Link Sent'];
 
   return (
-    <div className="flex-1 p-8 overflow-y-auto">
-      <div className="max-w-2xl mx-auto space-y-6">
-
-        <div>
-          <h1 className="text-4xl font-bold text-gray-900 dark:text-white">Settings</h1>
-          <p className="text-gray-500 dark:text-gray-400 mt-2">Manage your security preferences</p>
-        </div>
-
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-md overflow-hidden">
-
-          {/* Header */}
-          <div className="px-6 pt-6 pb-4 border-b border-gray-100 dark:border-gray-700">
-            <div className="flex items-center gap-2 mb-1">
-              <Lock className="h-5 w-5 text-blue-600" />
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Change Password</h2>
+    <div className="min-h-screen flex-1 overflow-y-auto rounded-[2rem] bg-slate-100 p-4 text-slate-950 sm:p-6 lg:p-8 dark:bg-slate-950 dark:text-white">
+      <div className="mx-auto max-w-4xl space-y-6">
+        <section className="relative overflow-hidden rounded-[1.75rem] bg-gradient-to-br from-[#242078] via-[#3530a0] to-indigo-600 p-7 text-white shadow-xl shadow-indigo-950/15 sm:p-9">
+          <div className="relative z-10 flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="mb-3 flex items-center gap-2 text-xs font-black uppercase tracking-[0.2em] text-indigo-100">
+                <Settings2 className="h-4 w-4" />
+                Recruiter account
+              </div>
+              <h1 className="text-3xl font-black tracking-tight sm:text-4xl">Security Settings</h1>
+              <p className="mt-2 max-w-xl text-sm font-medium leading-6 text-indigo-100 sm:text-base">
+                Manage password recovery and keep your account access secure.
+              </p>
             </div>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              Request a secure password reset link to be sent to your registered email address.
+            <div className="flex w-fit items-center gap-3 rounded-2xl border border-white/20 bg-white/10 px-4 py-3 backdrop-blur-sm">
+              <ShieldCheck className="h-6 w-6 text-emerald-300" />
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-indigo-100">Security</p>
+                <p className="text-sm font-extrabold text-white">Email verified</p>
+              </div>
+            </div>
+          </div>
+          <div className="absolute -right-12 -top-16 h-52 w-52 rounded-full bg-white/10" />
+          <div className="absolute -bottom-24 right-28 h-48 w-48 rounded-full bg-cyan-300/10" />
+        </section>
+
+        <section className="overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white shadow-lg shadow-slate-200/50 dark:border-slate-700 dark:bg-slate-900 dark:shadow-black/20">
+          <header className="border-b border-slate-200 bg-slate-50 px-6 py-5 dark:border-slate-700 dark:bg-slate-800/80">
+            <div className="flex items-center gap-3">
+              <div className="rounded-xl bg-violet-100 p-2.5 dark:bg-violet-500/20">
+                <Lock className="h-5 w-5 text-violet-800 dark:text-violet-300" />
+              </div>
+              <h2 className="text-xl font-extrabold text-slate-950 dark:text-white">Change Password</h2>
+            </div>
+            <p className="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">
+              Request a secure password reset link for your registered email address.
             </p>
-          </div>
+          </header>
 
-          {/* Step indicator */}
-          <div className="px-6 pt-5 flex items-center gap-2">
-            {stepMeta.map((label, i) => {
-              const done   = i < stepIdx || step === STEPS.SENT;
-              const active = i === stepIdx;
-              return (
-                <React.Fragment key={label}>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
-                      done   ? 'bg-green-500 text-white'
-                             : active ? 'bg-blue-600 text-white'
-                             : 'bg-gray-200 dark:bg-gray-600 text-gray-500'
-                    }`}>
-                      {done ? <CheckCircle2 className="w-3.5 h-3.5" /> : i + 1}
+          <div className="px-6 pt-6">
+            <div className="flex items-center gap-2">
+              {stepLabels.map((label, index) => {
+                const done = index < stepIndex || step === STEPS.SENT;
+                const active = index === stepIndex;
+                return (
+                  <React.Fragment key={label}>
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      <div className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${
+                        done ? 'bg-emerald-600 text-white' : active
+                          ? 'bg-[#3530a0] text-white'
+                          : 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200'
+                      }`}>
+                        {done ? <CheckCircle2 className="h-4 w-4" /> : index + 1}
+                      </div>
+                      <span className={`hidden text-xs font-bold sm:block ${
+                        active || done ? 'text-slate-900 dark:text-white' : 'text-slate-500 dark:text-slate-400'
+                      }`}>
+                        {label}
+                      </span>
                     </div>
-                    <span className={`text-xs font-medium hidden sm:block ${active || done ? 'text-gray-800 dark:text-gray-100' : 'text-gray-400'}`}>
-                      {label}
-                    </span>
-                  </div>
-                  {i < 1 && <div className={`flex-1 h-px ${done ? 'bg-green-400' : 'bg-gray-200 dark:bg-gray-600'}`} />}
-                </React.Fragment>
-              );
-            })}
+                    {index < 1 && <div className={`h-0.5 flex-1 ${done ? 'bg-emerald-500' : 'bg-slate-200 dark:bg-slate-700'}`} />}
+                  </React.Fragment>
+                );
+              })}
+            </div>
           </div>
 
-          <div className="px-6 py-6">
-
-            {/* STEP 1 — Request Link */}
+          <div className="px-6 py-7">
             {step === STEPS.REQUEST && (
               <div className="space-y-5">
-                <div className="flex items-start gap-3 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-100 dark:border-blue-800">
-                  <Mail className="h-5 w-5 text-blue-600 mt-0.5 shrink-0" />
+                <div className="flex items-start gap-3 rounded-xl border border-indigo-200 bg-indigo-50 p-5 dark:border-indigo-500/40 dark:bg-indigo-500/10">
+                  <Mail className="mt-0.5 h-5 w-5 shrink-0 text-indigo-800 dark:text-indigo-300" />
                   <div>
-                    <p className="text-sm font-semibold text-blue-800 dark:text-blue-300">Verification Required</p>
-                    <p className="text-sm text-blue-700 dark:text-blue-400 mt-0.5">
-                      A password reset link will be sent to <strong>{getUserEmail() || 'your email'}</strong>.
+                    <p className="text-sm font-extrabold text-indigo-950 dark:text-indigo-200">Identity verification required</p>
+                    <p className="mt-1 text-sm font-medium leading-6 text-slate-700 dark:text-slate-300">
+                      A password reset link will be sent to{' '}
+                      <strong className="text-slate-950 dark:text-white">{getUserEmail() || 'your email'}</strong>.
                       Click the link in the email to securely update your password.
                     </p>
                   </div>
                 </div>
                 <div className="flex justify-end">
-                  <TBtn onClick={handleSendLink} disabled={sending} className="min-w-[160px]">
+                  <SettingsButton onClick={handleSendLink} disabled={sending} className="min-w-[180px]">
                     {sending
                       ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Sending...</>
                       : <><Mail className="mr-2 h-4 w-4" />Send Reset Link</>}
-                  </TBtn>
+                  </SettingsButton>
                 </div>
               </div>
             )}
 
-            {/* STEP 2 — Link Sent UI */}
             {step === STEPS.SENT && (
-              <div className="py-8 flex flex-col items-center gap-4 text-center">
-                <div className="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mb-2">
-                  <Mail className="h-8 w-8 text-green-600" />
+              <div className="flex flex-col items-center gap-4 py-8 text-center">
+                <div className="mb-2 flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-100 dark:bg-emerald-500/20">
+                  <Mail className="h-8 w-8 text-emerald-700 dark:text-emerald-300" />
                 </div>
                 <div>
-                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Check Your Inbox!</h3>
-                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-2 max-w-md mx-auto leading-relaxed">
-                    A reset link has been successfully sent to <strong className="text-gray-800 dark:text-gray-200">{getUserEmail()}</strong>. 
-                    Please check your email and click the link to reset your password.
+                  <h3 className="text-xl font-extrabold text-slate-950 dark:text-white">Check Your Inbox</h3>
+                  <p className="mx-auto mt-2 max-w-md text-sm font-medium leading-relaxed text-slate-600 dark:text-slate-300">
+                    A reset link has been sent to{' '}
+                    <strong className="text-slate-950 dark:text-white">{getUserEmail()}</strong>.
+                    Please open the email and follow the secure link.
                   </p>
                 </div>
-                <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700 w-full flex justify-center">
-                  <TBtn variant="outline" onClick={resetFlow}>Back to Request</TBtn>
+                <div className="mt-4 flex w-full justify-center border-t border-slate-200 pt-5 dark:border-slate-700">
+                  <SettingsButton variant="outline" onClick={() => setStep(STEPS.REQUEST)}>
+                    Back to Request
+                  </SettingsButton>
                 </div>
               </div>
             )}
-
           </div>
-        </div>
+        </section>
       </div>
     </div>
   );

@@ -327,7 +327,7 @@ export function RecruiterDetailsModal({ recruiter, stats, onClose }) {
       setRecordsLoaded(false);
       setLoadError('');
       try {
-        const response = await fetch(`${API_URL}/candidates`, { headers: getAuthHeaders() });
+        const response = await fetch(`${API_URL}/candidates?view=recruiters`, { headers: getAuthHeaders() });
         if (!response.ok) throw new Error('Unable to load candidate records.');
         const payload = await response.json();
         const rows = Array.isArray(payload) ? payload : payload.candidates || payload.data || [];

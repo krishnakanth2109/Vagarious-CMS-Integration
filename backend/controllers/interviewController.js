@@ -17,7 +17,8 @@ export const getInterviews = async (req, res) => {
       // ✅ FIX: Added firstName and lastName to populate string to handle legacy candidate data
       .populate('candidateId', 'name firstName lastName email contact position')
       .populate('recruiterId', 'name firstName lastName email')
-      .sort({ interviewDate: 1 });
+      .sort({ interviewDate: 1 })
+      .lean();
 
     res.json(interviews);
   } catch (error) {

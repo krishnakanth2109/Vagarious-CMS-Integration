@@ -107,7 +107,7 @@ export default function RecruiterSchedules() {
       const headers = await getAuthHeader();
       const [resInterviews, resCandidates, resRecruiters] = await Promise.all([
         fetch(`${API_URL}/interviews`, { headers }),
-        fetch(`${API_URL}/candidates`, { headers }),
+        fetch(`${API_URL}/candidates?view=schedule`, { headers }),
         fetch(`${API_URL}/users/active-list`, { headers })
       ]);
 

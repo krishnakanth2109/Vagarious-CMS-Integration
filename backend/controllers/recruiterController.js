@@ -179,9 +179,15 @@ export const getRecruiters = async (req, res) => {
     // The frontend AdminRecruiters.jsx handles active/inactive display and counts.
     // Filtering by active:true here meant deactivated users were never returned,
     // so the Inactive counter always showed 0 and deactivated cards disappeared.
-    const recruiters = await User.find({
+    const recruiterQuery = User.find({
       role: { $in: ['recruiter', 'admin', 'manager'] }
-    }).select('-password').sort({ role: 1, firstName: 1 }).lean();
+    });
+    if (req.query.view === 'lookup') {
+      recruiterQuery.select('_id recruiterId firstName lastName username email role active');
+    } else {
+      recruiterQuery.select('-password');
+    }
+    const recruiters = await recruiterQuery.sort({ role: 1, firstName: 1 }).lean();
     res.json(recruiters);
   } catch (error) {
     res.status(500).json({ message: error.message });

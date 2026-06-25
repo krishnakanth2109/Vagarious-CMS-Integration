@@ -58,7 +58,7 @@ export default function AdminSchedules() {
     setLoading(true);
     try {
       const [resCandidates, resInterviews] = await Promise.all([
-        fetch(`${API_URL}/candidates`, { headers: buildHeaders() }),
+        fetch(`${API_URL}/candidates?view=schedule`, { headers: buildHeaders() }),
         fetch(`${API_URL}/interviews`, { headers: buildHeaders() })
       ]);
 

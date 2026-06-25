@@ -15,6 +15,15 @@ import { sendJobInvitationEmail } from '../services/email.js';
 
 const router = express.Router();
 
+const CANDIDATE_VIEWS = {
+  dashboard: 'candidateId name firstName lastName email position status recruiterId recruiterName client currentCompany dateAdded createdAt',
+  recruiters: 'candidateId name firstName lastName email contact position skills totalExperience status recruiterId recruiterName client currentCompany dateAdded createdAt active',
+  reports: 'candidateId name firstName lastName email contact position client source status recruiterId recruiterName dateAdded createdAt updatedAt remarks notes',
+  schedule: 'candidateId name firstName lastName email contact position status recruiterId recruiterName active',
+  invoice: 'candidateId name firstName lastName email position client ctc status recruiterId recruiterName dateAdded createdAt',
+  matching: 'candidateId name firstName lastName email contact alternateNumber currentLocation preferredLocation position skills totalExperience relevantExperience education ctc ectc noticePeriod linkedin source status recruiterId recruiterName client currentCompany remarks dateAdded createdAt active',
+};
+
 // ─── Shared helper — defined ONCE at module level ─────────────────────────────
 // FIX 4: Was copy-pasted 3× inside POST /, PUT /bulk-assign, and PUT /:id.
 //         A single module-level function guarantees consistency everywhere.
@@ -215,10 +224,12 @@ router.get('/', async (req, res) => {
     const candidates = await Candidate.find(query)
       .populate('recruiterId', 'name firstName lastName email')
       .sort({ createdAt: -1 })
+      .select(CANDIDATE_VIEWS[req.query.view] || '')
       .lean(); // FIX 2: plain objects — faster serialisation on large lists
     if (req.query.includeSubmissions === 'true' && candidates.length > 0) {
       const candidateIds = candidates.map((candidate) => candidate._id);
       const submissions = await CandidateSubmission.find({ candidateId: { $in: candidateIds } })
+        .select('candidateId jobId jobCode clientName position pipelineStage status submittedBy submittedByName submittedAt createdAt updatedAt')
         .populate('submittedBy', 'name firstName lastName email')
         .sort({ submittedAt: -1, createdAt: -1 })
         .lean();

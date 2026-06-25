@@ -16,7 +16,13 @@ export const getJobs = async (req, res) => {
         ]
       };
     }
-    const jobs = await Job.find(query).sort({ createdAt: -1 }).lean();
+    const jobQuery = Job.find(query).sort({ createdAt: -1 });
+    if (req.query.view === 'lookup') {
+      jobQuery.select('_id jobCode clientName position location active primaryRecruiter secondaryRecruiter');
+    } else if (req.query.view === 'dashboard') {
+      jobQuery.select('_id jobCode clientName position location active primaryRecruiter secondaryRecruiter assignedRecruiter recruiterId createdAt');
+    }
+    const jobs = await jobQuery.lean();
     res.json(jobs);
   } catch (error) {
     res.status(500).json({ message: error.message });

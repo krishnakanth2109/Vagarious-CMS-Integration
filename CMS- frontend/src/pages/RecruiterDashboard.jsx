@@ -105,8 +105,8 @@ export default function RecruiterDashboard() {
         const headers = await getAuthHeader();
 
         const [candRes, jobRes, intRes] = await Promise.allSettled([
-          fetch(`${API_URL}/candidates`, { headers }),
-          fetch(`${API_URL}/jobs`,        { headers }),
+          fetch(`${API_URL}/candidates?view=dashboard`, { headers }),
+          fetch(`${API_URL}/jobs?view=dashboard`, { headers }),
           fetch(`${API_URL}/interviews`,  { headers }),
         ]);
 

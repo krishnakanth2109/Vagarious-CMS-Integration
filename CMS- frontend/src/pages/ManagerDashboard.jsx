@@ -14,6 +14,7 @@ import { useAuth } from '@/context/AuthContext';
 import { format } from 'date-fns';
 import RecruiterPerformanceModal from '@/components/RecruiterPerformanceModal';
 import { RecruiterDetailsTrigger } from '@/components/RecruiterDetailsModal';
+import RecruiterCandidateGrowthChart from '@/components/RecruiterCandidateGrowthChart';
 
 // ─── API Helpers ──────────────────────────────────────────────────────────────
 // Module-level constants — computed once, never re-derived on re-render.
@@ -171,10 +172,10 @@ export default function AdminDashboard() {
     const fetchData = async () => {
       try {
         const [candR, recR, jobsR, clientR] = await Promise.allSettled([
-          apiFetch('/candidates'),
-          apiFetch('/recruiters'),
-          apiFetch('/jobs'),
-          apiFetch('/clients'),
+          apiFetch('/candidates?view=dashboard'),
+          apiFetch('/recruiters?view=lookup'),
+          apiFetch('/jobs?view=dashboard'),
+          apiFetch('/clients?view=lookup'),
         ]);
         if (cancelled) return;
         if (candR.status   === 'fulfilled') setCandidates(candR.value);
@@ -331,10 +332,11 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* ── Row 4: Chart ── */}
-      <div className="bg-white p-8 rounded-[1.5rem] shadow-sm border border-gray-100">
-        <div className="flex justify-between items-center mb-6">
-          <h3 className="text-base font-bold text-slate-800">Top Recruiters (Upload Report)</h3>
+      {/* ── Row 4: Charts ── */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        <div className="bg-white p-8 rounded-[1.5rem] shadow-sm border border-gray-100 h-full min-h-[460px] dark:border-white/10 dark:bg-slate-900">
+          <div className="flex justify-between items-center mb-6">
+          <h3 className="text-base font-bold text-slate-800 dark:text-white">Top Recruiters (Upload Report)</h3>
           <span className="text-xs text-gray-400">showing {Math.min(6, recruiters.length)} of {recruiters.length}</span>
         </div>
         <div className="h-72">
@@ -350,6 +352,13 @@ export default function AdminDashboard() {
             </BarChart>
           </ResponsiveContainer>
         </div>
+      </div>
+
+        <RecruiterCandidateGrowthChart
+          candidates={candidates}
+          recruiters={recruiters}
+          loading={loading}
+        />
       </div>
 
       {/* ── Row 5: Table ── */}

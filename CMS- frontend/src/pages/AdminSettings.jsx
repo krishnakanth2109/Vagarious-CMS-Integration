@@ -1,98 +1,122 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
-  Lock, User, Mail, Loader2,
-  CheckCircle2,
+  CheckCircle2, Loader2, Lock, Mail, Settings2, ShieldCheck, User,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/context/AuthContext';
 
-// ── ENV ───────────────────────────────────────────────────────────────────────
-// VITE_API_URL="http://localhost:5000"  (no trailing /api in .env)
-// We always append /api here so every fetch hits the correct endpoint.
 const BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/$/, '');
-const API_URL  = `${BASE_URL}/api`;
-
+const API_URL = `${BASE_URL}/api`;
 const STEPS = { REQUEST: 'request', SENT: 'sent' };
 
+const SettingsHero = () => (
+  <section className="relative overflow-hidden rounded-[1.75rem] bg-gradient-to-br from-[#242078] via-[#3530a0] to-indigo-600 p-7 text-white shadow-xl shadow-indigo-950/15 sm:p-9">
+    <div className="relative z-10 flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <div className="mb-3 flex items-center gap-2 text-xs font-black uppercase tracking-[0.2em] text-indigo-100">
+          <Settings2 className="h-4 w-4" />
+          Administration
+        </div>
+        <h1 className="text-3xl font-black tracking-tight sm:text-4xl">Account Settings</h1>
+        <p className="mt-2 max-w-xl text-sm font-medium leading-6 text-indigo-100 sm:text-base">
+          Keep your profile information accurate and manage your account security.
+        </p>
+      </div>
+      <div className="flex w-fit items-center gap-3 rounded-2xl border border-white/20 bg-white/10 px-4 py-3 backdrop-blur-sm">
+        <ShieldCheck className="h-6 w-6 text-emerald-300" />
+        <div>
+          <p className="text-xs font-bold uppercase tracking-wider text-indigo-100">Account</p>
+          <p className="text-sm font-extrabold text-white">Protected</p>
+        </div>
+      </div>
+    </div>
+    <div className="absolute -right-12 -top-16 h-52 w-52 rounded-full bg-white/10" />
+    <div className="absolute -bottom-24 right-28 h-48 w-48 rounded-full bg-cyan-300/10" />
+  </section>
+);
+
 export default function AdminSettings() {
-  const { toast }      = useToast();
-  const { authHeaders } = useAuth();   // ← async token getter from AuthContext
-
-  const [loading,   setLoading]   = useState(true);
-  const [saving,    setSaving]    = useState(false);
-
-  // Profile form
+  const { toast } = useToast();
+  const { authHeaders } = useAuth();
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState({ name: '', email: '', username: '' });
+  const [step, setStep] = useState(STEPS.REQUEST);
+  const [sending, setSending] = useState(false);
 
-  // Password Link flow
-  const [step,      setStep]      = useState(STEPS.REQUEST);
-  const [sending,   setSending]   = useState(false);
+  const buildHeaders = useCallback(async () => ({
+    'Content-Type': 'application/json',
+    ...(await authHeaders()),
+  }), [authHeaders]);
 
-  // ── Auth header builder ───────────────────────────────────────────────────
-  // Uses AuthContext.authHeaders() which auto-refreshes the Firebase token
-  // if it's within 5 minutes of expiry, and respects the 9-hour session cap.
-  // MUST be awaited: const headers = await buildHeaders();
-  const buildHeaders = useCallback(async () => {
-    const ah = await authHeaders();    // { Authorization: 'Bearer <fresh-token>' }
-    return { 'Content-Type': 'application/json', ...ah };
-  }, [authHeaders]);
-
-  // ── Read email from session ───────────────────────────────────────────────
   const getUserEmail = useCallback(() => {
     try {
       const session = JSON.parse(sessionStorage.getItem('currentUser') || '{}');
       return session.email || formData.email || '';
-    } catch { return formData.email || ''; }
+    } catch {
+      return formData.email || '';
+    }
   }, [formData.email]);
 
-  // ── Fetch profile on mount ────────────────────────────────────────────────
   useEffect(() => {
-    (async () => {
+    let cancelled = false;
+    const loadProfile = async () => {
       try {
-        const headers = await buildHeaders();
-        const res     = await fetch(`${API_URL}/auth/profile`, { headers });
+        const res = await fetch(`${API_URL}/auth/profile`, { headers: await buildHeaders() });
         if (!res.ok) throw new Error('Failed to load profile');
         const data = await res.json();
-        setFormData({ name: data.name || '', email: data.email || '', username: data.username || '' });
-      } catch (err) {
-        toast({ title: 'Error', description: 'Could not load user profile.', variant: 'destructive' });
+        if (!cancelled) {
+          setFormData({
+            name: data.name || '',
+            email: data.email || '',
+            username: data.username || '',
+          });
+        }
+      } catch {
+        if (!cancelled) {
+          toast({ title: 'Error', description: 'Could not load user profile.', variant: 'destructive' });
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
-    })();
-  }, []);    // eslint-disable-line react-hooks/exhaustive-deps
+    };
+    loadProfile();
+    return () => { cancelled = true; };
+  }, [buildHeaders, toast]);
 
-  // ── Profile save ──────────────────────────────────────────────────────────
   const handleSaveProfile = async () => {
     setSaving(true);
     try {
-      const headers = await buildHeaders();
-      const res     = await fetch(`${API_URL}/auth/profile`, {
-        method: 'PUT', headers,
+      const res = await fetch(`${API_URL}/auth/profile`, {
+        method: 'PUT',
+        headers: await buildHeaders(),
         body: JSON.stringify({ name: formData.name, email: formData.email }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Failed to update profile');
 
-      // Sync sessionStorage so getUserEmail() stays accurate
       try {
         const session = JSON.parse(sessionStorage.getItem('currentUser') || '{}');
-        sessionStorage.setItem('currentUser', JSON.stringify({ ...session, name: data.name, email: data.email }));
-      } catch {}
-
+        sessionStorage.setItem('currentUser', JSON.stringify({
+          ...session,
+          name: data.name,
+          email: data.email,
+        }));
+      } catch {
+        // The profile is still saved when local session synchronization fails.
+      }
       toast({ title: 'Profile saved', description: 'Your profile has been updated.' });
-    } catch (err) {
-      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    } catch (error) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
     } finally {
       setSaving(false);
     }
   };
 
-  // ── Send Reset Link ──────────────────────────────────────────────────────
   const handleSendLink = async () => {
     const email = getUserEmail();
     if (!email) {
@@ -101,146 +125,153 @@ export default function AdminSettings() {
     }
     setSending(true);
     try {
-      const headers = await buildHeaders();
       const res = await fetch(`${API_URL}/auth/send-otp`, {
-        method: 'POST', headers, body: JSON.stringify({ email }),
+        method: 'POST',
+        headers: await buildHeaders(),
+        body: JSON.stringify({ email }),
       });
       const data = await res.json();
-      
       if (!res.ok) throw new Error(data.message || 'Failed to send reset link.');
-
-      toast({
-        title: 'Email Sent!',
-        description: `A reset link has been sent to ${email}.`,
-      });
-      
+      toast({ title: 'Email sent', description: `A reset link has been sent to ${email}.` });
       setStep(STEPS.SENT);
-    } catch (err) {
-      toast({ title: 'Send Failed', description: err.message, variant: 'destructive' });
+    } catch (error) {
+      toast({ title: 'Send failed', description: error.message, variant: 'destructive' });
     } finally {
       setSending(false);
     }
   };
 
-  const resetFlow = () => {
-    setStep(STEPS.REQUEST);
-  };
-
-  const stepIdx  = [STEPS.REQUEST, STEPS.SENT].indexOf(step);
-  const stepMeta = ['Request Link', 'Link Sent'];
+  const stepIndex = [STEPS.REQUEST, STEPS.SENT].indexOf(step);
+  const stepLabels = ['Request Link', 'Link Sent'];
 
   if (loading) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-[#f3f6fd] p-8">
-        <Loader2 className="h-8 w-8 animate-spin text-[#283086]" />
+      <div className="flex min-h-[70vh] items-center justify-center rounded-3xl bg-slate-100 p-8 dark:bg-slate-950">
+        <Loader2 className="h-9 w-9 animate-spin text-indigo-700 dark:text-indigo-300" />
       </div>
     );
   }
 
   return (
-    <div className="flex-1 min-h-screen bg-[#f3f6fd] p-6 lg:p-8 overflow-y-auto">
-      <div className="max-w-4xl mx-auto space-y-6 animate-fade-in">
+    <div className="min-h-screen flex-1 overflow-y-auto rounded-[2rem] bg-slate-100 p-4 text-slate-950 sm:p-6 lg:p-8 dark:bg-slate-950 dark:text-white">
+      <div className="mx-auto max-w-5xl space-y-6 animate-fade-in">
+        <SettingsHero />
 
-        <div className="bg-white/70 p-6 rounded-[1.5rem] border border-gray-100 shadow-sm">
-          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#283086] mb-2">Administration</p>
-          <h1 className="text-3xl font-black text-slate-900">Settings</h1>
-          <p className="text-gray-500 mt-1">Manage your account and preferences</p>
-        </div>
-
-        {/* ── Profile Card ── */}
-        <Card className="rounded-[1.5rem] border border-gray-100 shadow-sm bg-white overflow-hidden">
-          <CardHeader className="bg-[#f8faff] border-b border-gray-100">
-            <div className="flex items-center gap-2">
-              <div className="rounded-xl bg-[#e3f2fd] p-2">
-                <User className="h-5 w-5 text-[#283086]" />
+        <Card className="overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white shadow-lg shadow-slate-200/50 dark:border-slate-700 dark:bg-slate-900 dark:shadow-black/20">
+          <CardHeader className="border-b border-slate-200 bg-slate-50 px-6 py-5 dark:border-slate-700 dark:bg-slate-800/80">
+            <div className="flex items-center gap-3">
+              <div className="rounded-xl bg-indigo-100 p-2.5 dark:bg-indigo-500/20">
+                <User className="h-5 w-5 text-indigo-800 dark:text-indigo-300" />
               </div>
-              <CardTitle className="text-slate-900">Profile Information</CardTitle>
+              <CardTitle className="text-xl font-extrabold text-slate-950 dark:text-white">Profile Information</CardTitle>
             </div>
-            <CardDescription>Update your personal details</CardDescription>
+            <CardDescription className="text-sm font-medium text-slate-600 dark:text-slate-300">
+              Update the name and email connected to your account.
+            </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4 p-6">
-            <div className="space-y-2">
-              <Label htmlFor="name">Full Name</Label>
-              <Input id="name" value={formData.name}
-                onChange={e => setFormData(p => ({ ...p, name: e.target.value }))}
-                className="border-gray-200 focus-visible:ring-[#283086]" />
+          <CardContent className="grid gap-5 p-6 sm:p-7">
+            <div className="space-y-2.5">
+              <Label htmlFor="name" className="text-sm font-bold text-slate-800 dark:text-slate-100">Full Name</Label>
+              <Input
+                id="name"
+                value={formData.name}
+                onChange={(event) => setFormData((previous) => ({ ...previous, name: event.target.value }))}
+                className="h-12 border-slate-300 bg-white px-4 text-base font-medium text-slate-950 shadow-sm focus-visible:border-indigo-600 focus-visible:ring-indigo-600 dark:border-slate-600 dark:bg-slate-950 dark:text-white"
+              />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+            <div className="space-y-2.5">
+              <Label htmlFor="email" className="text-sm font-bold text-slate-800 dark:text-slate-100">Email Address</Label>
               <div className="relative">
-                <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                <Input id="email" type="email" value={formData.email}
-                  onChange={e => setFormData(p => ({ ...p, email: e.target.value }))}
-                  className="pl-10 border-gray-200 focus-visible:ring-[#283086]" />
+                <Mail className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500 dark:text-slate-400" />
+                <Input
+                  id="email"
+                  type="email"
+                  value={formData.email}
+                  onChange={(event) => setFormData((previous) => ({ ...previous, email: event.target.value }))}
+                  className="h-12 border-slate-300 bg-white pl-11 text-base font-medium text-slate-950 shadow-sm focus-visible:border-indigo-600 focus-visible:ring-indigo-600 dark:border-slate-600 dark:bg-slate-950 dark:text-white"
+                />
               </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="username">Username</Label>
-              <Input id="username" value={formData.username} disabled className="bg-slate-100 border-gray-200" />
-              <p className="text-xs text-gray-500">Username cannot be changed.</p>
+            <div className="space-y-2.5">
+              <Label htmlFor="username" className="text-sm font-bold text-slate-800 dark:text-slate-100">Username</Label>
+              <Input
+                id="username"
+                value={formData.username}
+                disabled
+                className="h-12 border-slate-300 bg-slate-200 px-4 text-base font-semibold text-slate-700 opacity-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
+              />
+              <p className="text-xs font-medium text-slate-600 dark:text-slate-400">Username is fixed and cannot be changed.</p>
             </div>
-            <div className="flex justify-end pt-2">
-              <Button onClick={handleSaveProfile} disabled={saving} className="bg-[#283086] hover:bg-[#1f256f]">
-                {saving
-                  ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving...</>
-                  : 'Save Profile'}
+            <div className="flex justify-end border-t border-slate-200 pt-5 dark:border-slate-700">
+              <Button
+                onClick={handleSaveProfile}
+                disabled={saving}
+                className="h-11 min-w-36 bg-[#3530a0] px-6 font-bold text-white shadow-md hover:bg-[#242078]"
+              >
+                {saving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving...</> : 'Save Profile'}
               </Button>
             </div>
           </CardContent>
         </Card>
 
-        {/* ── Password Reset Card ── */}
-        <Card className="rounded-[1.5rem] border border-gray-100 shadow-sm bg-white overflow-hidden">
-          <CardHeader className="bg-[#f8faff] border-b border-gray-100">
-            <div className="flex items-center gap-2">
-              <div className="rounded-xl bg-[#f3e5f5] p-2">
-                <Lock className="h-5 w-5 text-[#283086]" />
+        <Card className="overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white shadow-lg shadow-slate-200/50 dark:border-slate-700 dark:bg-slate-900 dark:shadow-black/20">
+          <CardHeader className="border-b border-slate-200 bg-slate-50 px-6 py-5 dark:border-slate-700 dark:bg-slate-800/80">
+            <div className="flex items-center gap-3">
+              <div className="rounded-xl bg-violet-100 p-2.5 dark:bg-violet-500/20">
+                <Lock className="h-5 w-5 text-violet-800 dark:text-violet-300" />
               </div>
-              <CardTitle className="text-slate-900">Change Password</CardTitle>
+              <CardTitle className="text-xl font-extrabold text-slate-950 dark:text-white">Password & Security</CardTitle>
             </div>
-            <CardDescription>Request a secure password reset link to be sent to your registered email address.</CardDescription>
+            <CardDescription className="text-sm font-medium text-slate-600 dark:text-slate-300">
+              Request a secure reset link for your registered email address.
+            </CardDescription>
           </CardHeader>
-          <CardContent className="p-6">
-
-            {/* Step indicator */}
-            <div className="flex items-center gap-2 mb-6">
-              {stepMeta.map((label, i) => {
-                const done   = i < stepIdx || step === STEPS.SENT;
-                const active = i === stepIdx;
+          <CardContent className="p-6 sm:p-7">
+            <div className="mb-6 flex items-center gap-2">
+              {stepLabels.map((label, index) => {
+                const done = index < stepIndex || step === STEPS.SENT;
+                const active = index === stepIndex;
                 return (
                   <React.Fragment key={label}>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
-                        done   ? 'bg-green-500 text-white'
-                               : active ? 'bg-[#283086] text-white'
-                               : 'bg-slate-100 text-slate-500'
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      <div className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${
+                        done ? 'bg-emerald-600 text-white' : active
+                          ? 'bg-[#3530a0] text-white'
+                          : 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200'
                       }`}>
-                        {done ? <CheckCircle2 className="w-3.5 h-3.5" /> : i + 1}
+                        {done ? <CheckCircle2 className="h-4 w-4" /> : index + 1}
                       </div>
-                      <span className={`text-xs font-medium hidden sm:block ${active || done ? 'text-slate-900' : 'text-slate-500'}`}>
+                      <span className={`hidden text-xs font-bold sm:block ${
+                        active || done ? 'text-slate-900 dark:text-white' : 'text-slate-500 dark:text-slate-400'
+                      }`}>
                         {label}
                       </span>
                     </div>
-                    {i < 1 && <div className={`flex-1 h-px ${done ? 'bg-green-400' : 'bg-gray-200'}`} />}
+                    {index < 1 && <div className={`h-0.5 flex-1 ${done ? 'bg-emerald-500' : 'bg-slate-200 dark:bg-slate-700'}`} />}
                   </React.Fragment>
                 );
               })}
             </div>
 
-            {/* STEP 1 — Request Link */}
             {step === STEPS.REQUEST && (
-              <div className="space-y-4">
-                <div className="flex items-start gap-3 p-4 bg-[#f8faff] rounded-xl border border-blue-100">
-                  <Mail className="h-5 w-5 text-[#283086] mt-0.5 shrink-0" />
+              <div className="space-y-5">
+                <div className="flex items-start gap-3 rounded-xl border border-indigo-200 bg-indigo-50 p-5 dark:border-indigo-500/40 dark:bg-indigo-500/10">
+                  <Mail className="mt-0.5 h-5 w-5 shrink-0 text-indigo-800 dark:text-indigo-300" />
                   <div>
-                    <p className="text-sm font-semibold text-[#283086]">Identity Verification Required</p>
-                    <p className="text-sm text-slate-600 mt-0.5">
-                      A password reset link will be sent to <strong>{getUserEmail()}</strong>. Click the link in the email to securely update your password.
+                    <p className="text-sm font-extrabold text-indigo-950 dark:text-indigo-200">Identity verification required</p>
+                    <p className="mt-1 text-sm font-medium leading-6 text-slate-700 dark:text-slate-300">
+                      A password reset link will be sent to{' '}
+                      <strong className="text-slate-950 dark:text-white">{getUserEmail()}</strong>.
+                      Click the link in the email to securely update your password.
                     </p>
                   </div>
                 </div>
                 <div className="flex justify-end">
-                  <Button onClick={handleSendLink} disabled={sending} className="min-w-[160px] bg-[#283086] hover:bg-[#1f256f]">
+                  <Button
+                    onClick={handleSendLink}
+                    disabled={sending}
+                    className="h-11 min-w-[180px] bg-[#3530a0] px-6 font-bold text-white shadow-md hover:bg-[#242078]"
+                  >
                     {sending
                       ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Sending...</>
                       : <><Mail className="mr-2 h-4 w-4" />Send Reset Link</>}
@@ -249,28 +280,32 @@ export default function AdminSettings() {
               </div>
             )}
 
-            {/* STEP 2 — Link Sent UI */}
             {step === STEPS.SENT && (
-              <div className="py-8 flex flex-col items-center gap-4 text-center">
-                <div className="w-16 h-16 bg-green-100 rounded-2xl flex items-center justify-center mb-2">
-                  <Mail className="h-8 w-8 text-green-600" />
+              <div className="flex flex-col items-center gap-4 py-8 text-center">
+                <div className="mb-2 flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-100 dark:bg-emerald-500/20">
+                  <Mail className="h-8 w-8 text-emerald-700 dark:text-emerald-300" />
                 </div>
                 <div>
-                  <h3 className="text-xl font-semibold text-slate-900">Check Your Inbox!</h3>
-                  <p className="text-sm text-slate-500 mt-2 max-w-md mx-auto leading-relaxed">
-                    A reset link has been successfully sent to <strong className="text-slate-900">{getUserEmail()}</strong>.
-                    Please check your email and click the link to reset your password.
+                  <h3 className="text-xl font-extrabold text-slate-950 dark:text-white">Check Your Inbox</h3>
+                  <p className="mx-auto mt-2 max-w-md text-sm font-medium leading-relaxed text-slate-600 dark:text-slate-300">
+                    A reset link has been sent to{' '}
+                    <strong className="text-slate-950 dark:text-white">{getUserEmail()}</strong>.
+                    Please open the email and follow the secure link.
                   </p>
                 </div>
-                <div className="mt-4 pt-4 border-t border-gray-100 w-full flex justify-center">
-                  <Button variant="outline" onClick={resetFlow}>Back to Request</Button>
+                <div className="mt-4 flex w-full justify-center border-t border-slate-200 pt-5 dark:border-slate-700">
+                  <Button
+                    variant="outline"
+                    onClick={() => setStep(STEPS.REQUEST)}
+                    className="border-slate-300 bg-white font-bold text-slate-800 hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-800 dark:text-white dark:hover:bg-slate-700"
+                  >
+                    Back to Request
+                  </Button>
                 </div>
               </div>
             )}
-
           </CardContent>
         </Card>
-
       </div>
     </div>
   );

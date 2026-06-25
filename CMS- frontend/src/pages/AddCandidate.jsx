@@ -678,9 +678,9 @@ export default function AdminCandidates() {
       const headers = getAuthHeader();
       const [resCand, resRec, resCli, resJobs] = await Promise.all([
         fetch(`${API_URL}/candidates?includeSubmissions=true`, { headers }),
-        fetch(`${API_URL}/recruiters`, { headers }),
-        fetch(`${API_URL}/clients`, { headers }),
-        fetch(`${API_URL}/jobs`, { headers }),
+        fetch(`${API_URL}/recruiters?view=lookup`, { headers }),
+        fetch(`${API_URL}/clients?view=lookup`, { headers }),
+        fetch(`${API_URL}/jobs?view=lookup`, { headers }),
       ]);
 
       if (resCand.ok) {

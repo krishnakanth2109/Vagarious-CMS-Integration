@@ -4,7 +4,11 @@ import Client from '../models/Client.js';
 // @route   GET /api/clients
 export const getClients = async (req, res) => {
   try {
-    const clients = await Client.find({}).sort({ createdAt: -1 });
+    const clientQuery = Client.find({}).sort({ createdAt: -1 });
+    if (req.query.view === 'lookup') {
+      clientQuery.select('_id clientId companyName active');
+    }
+    const clients = await clientQuery.lean();
     res.json(clients);
   } catch (error) {
     res.status(500).json({ message: error.message });

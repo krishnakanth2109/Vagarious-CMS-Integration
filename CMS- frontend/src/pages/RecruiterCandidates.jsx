@@ -769,8 +769,8 @@ export default function RecruiterCandidates() {
 
       const [candRes, jobRes, clientRes] = await Promise.all([
         fetch(candidateUrl, { headers }),
-        fetch(`${API_URL}/jobs`, { headers }),
-        fetch(`${API_URL}/clients`, { headers })
+        fetch(`${API_URL}/jobs?view=lookup`, { headers }),
+        fetch(`${API_URL}/clients?view=lookup`, { headers })
       ]);
 
       if (candRes.ok) {

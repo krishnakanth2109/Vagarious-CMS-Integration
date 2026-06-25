@@ -993,8 +993,8 @@ export default function AdminRequirements() {
       const [jobsRes, clientsRes, recRes, candidatesRes] = await Promise.all([
         fetch(`${API_URL}/jobs`,       { headers }),
         fetch(`${API_URL}/clients`,    { headers }),
-        fetch(`${API_URL}/recruiters`, { headers }),
-        fetch(`${API_URL}/candidates?includeSubmissions=true`, { headers })
+        fetch(`${API_URL}/recruiters?view=lookup`, { headers }),
+        fetch(`${API_URL}/candidates?view=matching&includeSubmissions=true`, { headers })
       ]);
 
       if(jobsRes.ok) {

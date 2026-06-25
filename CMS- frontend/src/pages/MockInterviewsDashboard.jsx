@@ -203,7 +203,7 @@ export default function MockInterviewsDashboard() {
 
   const fetchRecruiters = useCallback(async () => {
     try {
-      const res = await fetch(`${API_URL}/recruiters`, {
+      const res = await fetch(`${API_URL}/recruiters?view=lookup`, {
         headers: { 'Authorization': `Bearer ${getFirebaseToken()}` }
       });
       if (res.ok) {
@@ -218,7 +218,7 @@ export default function MockInterviewsDashboard() {
 
   const fetchAllCandidates = useCallback(async () => {
     try {
-      const res = await fetch(`${API_URL}/candidates`, {
+      const res = await fetch(`${API_URL}/candidates?view=schedule`, {
         headers: { 'Authorization': `Bearer ${getFirebaseToken()}` }
       });
       if (res.ok) {
