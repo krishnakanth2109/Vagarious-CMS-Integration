@@ -51,6 +51,7 @@ async function sendBrevoEmail({ toEmail, toName, subject, htmlContent, attachmen
   }
 }
 
+import nodemailer from 'nodemailer';
 import PDFDocument from 'pdfkit';
 
 async function generatePdfBase64(text, title = "Job Description") {
@@ -163,6 +164,165 @@ async function sendOtpEmail({ email, name, otp }) {
   });
 }
 
+async function sendBrevoEmailDetailed({ toEmail, toName, subject, htmlContent }) {
+  const apiKey = process.env.BREVO_API_KEY;
+  const senderName = process.env.BREVO_SENDER_NAME || "Arah Info Tech Pvt ltd";
+  const senderEmail = process.env.BREVO_SENDER_EMAIL || "career.arahinfotech@gmail.com";
+
+  if (!apiKey || !senderEmail) {
+    return {
+      ok: false,
+      provider: "brevo",
+      message: "Brevo is not configured. Missing BREVO_API_KEY or BREVO_SENDER_EMAIL."
+    };
+  }
+
+  try {
+    const payload = {
+      sender: { name: senderName, email: senderEmail },
+      to: [{ email: toEmail, name: toName || "Candidate" }],
+      subject,
+      htmlContent
+    };
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 20000);
+
+    const response = await fetch("https://api.brevo.com/v3/smtp/email", {
+      method: "POST",
+      headers: {
+        accept: "application/json",
+        "api-key": apiKey,
+        "content-type": "application/json"
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal
+    });
+
+    clearTimeout(timeoutId);
+
+    const responseText = await response.text();
+    let data = {};
+    try {
+      data = responseText ? JSON.parse(responseText) : {};
+    } catch {
+      data = { raw: responseText };
+    }
+
+    if (!response.ok) {
+      console.error("[Brevo][JobInvite] API Error:", response.status, response.statusText, data);
+      return {
+        ok: false,
+        provider: "brevo",
+        statusCode: response.status,
+        message: data?.message || data?.raw || response.statusText || "Brevo rejected the email.",
+      };
+    }
+
+    return {
+      ok: true,
+      provider: "brevo",
+      statusCode: response.status,
+      messageId: data?.messageId || data?.messageIds?.[0] || "",
+      message: "Brevo accepted the email for delivery."
+    };
+  } catch (error) {
+    const message = error.name === "AbortError"
+      ? "Brevo request timed out after 20 seconds."
+      : error.message || "Brevo send failed.";
+    console.error("[Brevo][JobInvite] Error:", message);
+    return { ok: false, provider: "brevo", message };
+  }
+}
+
+async function sendJobInviteViaSmtp({ recipientEmail, candidateName, subject, htmlBody }) {
+  const user = process.env.MAIL_USERNAME;
+  const pass = process.env.MAIL_PASSWORD;
+  const host = process.env.SMTP_HOST || "smtp.gmail.com";
+  const port = Number(process.env.SMTP_PORT || 587);
+  const secure = String(process.env.SMTP_SECURE || "").toLowerCase() === "true";
+  const from = process.env.MAIL_FROM || user;
+
+  if (!user || !pass || !from) {
+    return {
+      ok: false,
+      provider: "smtp",
+      message: "SMTP fallback is not configured. Missing MAIL_USERNAME or MAIL_PASSWORD."
+    };
+  }
+
+  try {
+    const transporter = nodemailer.createTransport({
+      host,
+      port,
+      secure,
+      auth: { user, pass }
+    });
+
+    const info = await transporter.sendMail({
+      from,
+      to: recipientEmail,
+      subject,
+      html: htmlBody
+    });
+
+    return {
+      ok: true,
+      provider: "smtp",
+      messageId: info?.messageId || "",
+      message: "SMTP accepted the email for delivery."
+    };
+  } catch (error) {
+    console.error("[SMTP][JobInvite] Error:", error.message);
+    return {
+      ok: false,
+      provider: "smtp",
+      message: error.message || "SMTP send failed."
+    };
+  }
+}
+
+async function sendJobInvitationEmail({ recipientEmail, candidateName, subject, htmlBody }) {
+  const brevoResult = await sendBrevoEmailDetailed({
+    toEmail: recipientEmail,
+    toName: candidateName || "Candidate",
+    subject,
+    htmlContent: htmlBody
+  });
+
+  if (brevoResult.ok) {
+    return {
+      status: "success",
+      message: brevoResult.message,
+      provider: brevoResult.provider,
+      providerMessageId: brevoResult.messageId || "",
+    };
+  }
+
+  const smtpResult = await sendJobInviteViaSmtp({
+    recipientEmail,
+    candidateName,
+    subject,
+    htmlBody
+  });
+
+  if (smtpResult.ok) {
+    return {
+      status: "success",
+      message: smtpResult.message,
+      provider: smtpResult.provider,
+      providerMessageId: smtpResult.messageId || "",
+      fallbackFrom: brevoResult.provider,
+    };
+  }
+
+  return {
+    status: "error",
+    message: `${brevoResult.provider}: ${brevoResult.message}; ${smtpResult.provider}: ${smtpResult.message}`,
+    provider: "none",
+  };
+}
+
 async function sendDecisionEmail({ email, name, decision, overallRecommendation, avgScore, strengths, weaknesses }) {
   const status = String(decision || "").toLowerCase();
   const subject =
@@ -234,5 +394,6 @@ export {
   sendBrevoEmail,
   sendDecisionEmail,
   sendInterviewEmail,
+  sendJobInvitationEmail,
   sendOtpEmail
  };

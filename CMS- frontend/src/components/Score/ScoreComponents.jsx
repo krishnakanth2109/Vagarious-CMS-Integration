@@ -1,11 +1,16 @@
 import React from 'react';
 
 export const ScoreBadge = ({ score = 0 }) => {
-  let colorCls = 'bg-red-50 text-red-700 border-red-200';
-  if (score >= 85) colorCls = 'bg-emerald-50 text-emerald-700 border-emerald-200';
-  else if (score >= 70) colorCls = 'bg-teal-50 text-teal-700 border-teal-200';
-  else if (score >= 50) colorCls = 'bg-amber-50 text-amber-700 border-amber-200';
-  else if (score >= 30) colorCls = 'bg-orange-50 text-orange-700 border-orange-200';
+  let colorCls = 'bg-zinc-100 text-zinc-700 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700'; // Default gray
+  if (score >= 85) {
+    colorCls = 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/20 dark:text-emerald-400 dark:border-emerald-800/50';
+  } else if (score >= 70) {
+    colorCls = 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/20 dark:text-blue-400 dark:border-blue-800/50';
+  } else if (score >= 55) {
+    colorCls = 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/20 dark:text-amber-400 dark:border-amber-800/50';
+  } else if (score > 0) {
+    colorCls = 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/20 dark:text-red-400 dark:border-red-800/50';
+  }
 
   return (
     <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-sm font-bold border ${colorCls}`}>

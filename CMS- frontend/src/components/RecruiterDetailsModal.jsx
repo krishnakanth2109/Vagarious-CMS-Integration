@@ -1,5 +1,28 @@
-import React, { useState } from 'react';
-import { CalendarDays, Hash, Mail, MapPin, Phone, Shield, UserRound, X } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { ClipboardList, Loader2, Search, UserRound, X } from 'lucide-react';
+import CandidateProfileLink from '@/components/CandidateProfileLink';
+
+const API_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:5000')
+  .replace(/\/api\/?$/, '')
+  .replace(/\/+$/, '');
+const API_URL = `${API_BASE}/api`;
+
+const STATUS_COLUMNS = [
+  { key: 'total', label: 'Total Candidates' },
+  { key: 'submitted', label: 'Submitted' },
+  { key: 'sharedProfiles', label: 'Shared Profiles' },
+  { key: 'yetToAttend', label: 'Yet to attend' },
+  { key: 'turnups', label: 'Turnups' },
+  { key: 'selected', label: 'Selected' },
+  { key: 'rejected', label: 'Rejected' },
+  { key: 'hold', label: 'Hold' },
+  { key: 'joined', label: 'Joined' },
+  { key: 'backout', label: 'Backout' },
+  { key: 'pipeline', label: 'Pipeline' },
+];
+
+const normalizeText = (value) => String(value || '').trim().toLowerCase();
 
 const getRecruiterName = (recruiter = {}) => {
   if (typeof recruiter === 'string') return recruiter;
@@ -17,122 +40,414 @@ const getRecruiterId = (recruiter = {}) => (
   recruiter.recruiterId || recruiter.employeeId || recruiter.userId || recruiter._id || recruiter.id || '-'
 );
 
+const getRecruiterKeys = (recruiter = {}) => {
+  const data = typeof recruiter === 'string' ? { name: recruiter } : recruiter;
+  return {
+    ids: [
+      data._id,
+      data.id,
+      data.userId,
+      data.recruiterId,
+      data.employeeId,
+    ].filter(Boolean).map(String),
+    names: [
+      getRecruiterName(data),
+      data.username,
+      data.email,
+    ].filter(Boolean).map(normalizeText),
+  };
+};
+
+const getCandidateName = (candidate = {}) => (
+  candidate.name || `${candidate.firstName || ''} ${candidate.lastName || ''}`.trim() || 'Unknown Candidate'
+);
+
+const getCandidateRecruiterValues = (candidate = {}) => {
+  const recruiter = candidate.recruiterId || candidate.recruiter || candidate.assignedRecruiter;
+  const values = [];
+
+  if (recruiter && typeof recruiter === 'object') {
+    values.push(recruiter._id, recruiter.id, recruiter.userId, recruiter.recruiterId, recruiter.employeeId);
+    values.push(getRecruiterName(recruiter), recruiter.username, recruiter.email);
+  } else {
+    values.push(recruiter);
+  }
+
+  values.push(candidate.recruiterName, candidate.submittedByName, candidate.assignedRecruiterName);
+  return values.filter(Boolean);
+};
+
+const candidateBelongsToRecruiter = (candidate, recruiter) => {
+  if (!recruiter) return true;
+  const recruiterKeys = getRecruiterKeys(recruiter);
+  const candidateValues = getCandidateRecruiterValues(candidate);
+
+  return candidateValues.some((value) => {
+    const asString = String(value);
+    return recruiterKeys.ids.includes(asString) || recruiterKeys.names.includes(normalizeText(value));
+  });
+};
+
+const getStatusList = (candidate = {}) => {
+  const raw = Array.isArray(candidate.status) ? candidate.status : [candidate.status || 'Submitted'];
+  const cleaned = raw.map((item) => String(item || '').trim()).filter(Boolean);
+  return cleaned.length ? [...new Set(cleaned)] : ['Submitted'];
+};
+
+const candidateHasStatus = (candidate, statusLabel) => (
+  getStatusList(candidate).some((status) => normalizeText(status) === normalizeText(statusLabel))
+);
+
+const getCandidateSubmissions = (candidate = {}) => (
+  Array.isArray(candidate.submissions)
+    ? [...candidate.submissions].sort((a, b) => {
+        const aTime = new Date(a?.submittedAt || a?.createdAt || a?.updatedAt || 0).getTime();
+        const bTime = new Date(b?.submittedAt || b?.createdAt || b?.updatedAt || 0).getTime();
+        return bTime - aTime;
+      })
+    : []
+);
+
+const getMatchingSubmission = (candidate, statusLabel) => {
+  const submissions = getCandidateSubmissions(candidate);
+  if (!statusLabel) return submissions[0] || null;
+  return submissions.find((submission) => {
+    const status = submission?.pipelineStage || submission?.status;
+    return normalizeText(status) === normalizeText(statusLabel);
+  }) || submissions[0] || null;
+};
+
+const getRecordRows = (candidates, recruiter, column) => {
+  const scoped = candidates.filter((candidate) => candidateBelongsToRecruiter(candidate, recruiter));
+  if (!column || column.key === 'total') return scoped;
+  return scoped.filter((candidate) => candidateHasStatus(candidate, column.label));
+};
+
+const countColumn = (candidates, recruiter, column) => getRecordRows(candidates, recruiter, column).length;
+
+const getFallbackCount = (stats = {}, column) => {
+  if (!stats || !column) return 0;
+  const fallbackKeys = {
+    total: ['total', 'totalCandidates', 'submissions'],
+    submitted: ['submitted', 'pending', 'submissions'],
+    sharedProfiles: ['sharedProfiles'],
+    yetToAttend: ['yetToAttend'],
+    turnups: ['turnups'],
+    selected: ['selected'],
+    rejected: ['rejected'],
+    hold: ['hold'],
+    joined: ['joined'],
+    backout: ['backout'],
+    pipeline: ['pipeline'],
+  };
+  const keys = fallbackKeys[column.key] || [column.key];
+  return keys.reduce((value, key) => value || Number(stats[key] || 0), 0);
+};
+
 const formatDate = (value) => {
   if (!value) return '-';
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? '-' : date.toLocaleDateString('en-GB');
 };
 
-const formatRole = (value) => (
-  value ? value.toString().charAt(0).toUpperCase() + value.toString().slice(1) : '-'
-);
+const getAuthHeaders = () => {
+  try {
+    const stored = sessionStorage.getItem('currentUser');
+    const token = stored ? JSON.parse(stored)?.idToken : null;
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  } catch {
+    return {};
+  }
+};
 
-const DetailItem = ({ label, value }) => (
-  <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
-    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{label}</p>
-    <p className="mt-1 text-sm font-semibold text-slate-800 break-words">{value || '-'}</p>
-  </div>
-);
+const ModalPortal = ({ children }) => {
+  if (typeof document === 'undefined') return children;
+  return createPortal(children, document.body);
+};
 
-const StatItem = ({ label, value, color = 'text-slate-800' }) => (
-  <div className="rounded-xl border border-slate-100 bg-white px-4 py-3 text-center shadow-sm">
-    <p className={`text-lg font-black ${color}`}>{value ?? 0}</p>
-    <p className="mt-0.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">{label}</p>
-  </div>
-);
+const CountButton = ({ value, onClick, disabled = false }) => {
+  const count = Number(value) || 0;
+  if (count <= 0) {
+    return <span className="font-semibold text-slate-400">0</span>;
+  }
 
-export function RecruiterDetailsModal({ recruiter, stats, onClose }) {
-  if (!recruiter) return null;
-
-  const data = typeof recruiter === 'string' ? { name: recruiter } : recruiter;
-  const name = getRecruiterName(data);
-  const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase() || 'R';
-  const active = data.active !== false && data.status !== 'inactive';
-  const statValues = stats || data.stats;
+  if (disabled) {
+    return <span className="font-semibold text-slate-500">{count}</span>;
+  }
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-3xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
-        <div className="flex items-start justify-between gap-4 border-b border-slate-100 bg-[#f8faff] px-6 py-5">
-          <div className="flex items-center gap-4">
-            <div className="h-16 w-16 overflow-hidden rounded-2xl bg-[#283086] text-white flex items-center justify-center text-xl font-black shadow-sm">
-              {data.profilePicture
-                ? <img src={data.profilePicture} alt={name} className="h-full w-full object-cover" />
-                : initials}
-            </div>
+    <button
+      type="button"
+      onClick={onClick}
+      className="font-semibold text-blue-600 underline-offset-4 hover:underline cursor-pointer"
+    >
+      {count}
+    </button>
+  );
+};
+
+const CandidateRecordsModal = ({ detail, onClose }) => {
+  const [searchTerm, setSearchTerm] = useState('');
+  if (!detail) return null;
+
+  const rows = Array.isArray(detail.rows) ? detail.rows : [];
+  const filteredRows = rows.filter((candidate) => {
+    const haystack = [
+      getCandidateName(candidate),
+      candidate.email,
+      candidate.contact,
+      candidate.phone,
+      candidate.client,
+      candidate.position,
+      candidate.source,
+      getStatusList(candidate).join(' '),
+    ].join(' ').toLowerCase();
+    return haystack.includes(searchTerm.toLowerCase());
+  });
+
+  return (
+    <ModalPortal>
+      <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+        <div className="flex max-h-[88vh] w-full max-w-7xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+          <div className="flex flex-col gap-4 border-b border-slate-100 bg-[#f8faff] px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 className="text-xl font-black text-slate-900">{name}</h2>
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <span className="inline-flex items-center gap-1 rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-semibold text-[#283086]">
-                  <Shield className="h-3.5 w-3.5" />
-                  {(data.role || 'Recruiter').toString()}
-                </span>
-                <span className={`rounded-full px-3 py-1 text-xs font-semibold ${active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                  {active ? 'Active' : 'Inactive'}
-                </span>
+              <h3 className="flex items-center gap-2 text-xl font-black text-slate-900">
+                <ClipboardList className="h-5 w-5 text-blue-600" />
+                {detail.title}
+              </h3>
+              <p className="mt-1 text-sm font-medium text-slate-500">
+                Showing {filteredRows.length} of {rows.length} matching record(s)
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input
+                  value={searchTerm}
+                  onChange={(event) => setSearchTerm(event.target.value)}
+                  placeholder="Search records"
+                  className="w-64 rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                />
               </div>
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-full bg-white p-2 text-slate-500 shadow-sm transition hover:bg-red-50 hover:text-red-500"
+              >
+                <X className="h-5 w-5" />
+              </button>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-full bg-white p-2 text-slate-500 shadow-sm transition hover:bg-red-50 hover:text-red-500"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
 
-        <div className="space-y-5 p-6">
-          {statValues && (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-              <StatItem label="Total" value={statValues.total} color="text-blue-600" />
-              <StatItem label="Turnups" value={statValues.turnups} color="text-teal-600" />
-              <StatItem label="Selected" value={statValues.selected} color="text-purple-600" />
-              <StatItem label="Joined" value={statValues.joined} color="text-green-600" />
-              <StatItem label="Rejected" value={statValues.rejected} color="text-red-600" />
-              <StatItem label="No Show" value={statValues.noShow} color="text-slate-600" />
-            </div>
-          )}
+          <div className="flex-1 overflow-auto">
+            <table className="w-full min-w-[1050px] text-sm">
+              <thead className="sticky top-0 z-10 border-b border-slate-100 bg-white text-[10px] font-black uppercase tracking-widest text-slate-500 shadow-sm">
+                <tr>
+                  <th className="px-5 py-4 text-left">Candidate Name</th>
+                  <th className="px-5 py-4 text-left">Email</th>
+                  <th className="px-5 py-4 text-left">Contact</th>
+                  <th className="px-5 py-4 text-left">Client</th>
+                  <th className="px-5 py-4 text-left">Job Code</th>
+                  <th className="px-5 py-4 text-left">Position</th>
+                  <th className="px-5 py-4 text-left">Status</th>
+                  <th className="px-5 py-4 text-left">Source</th>
+                  <th className="px-5 py-4 text-left">Date</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filteredRows.map((candidate) => {
+                  const submission = getMatchingSubmission(candidate, detail.column?.label);
+                  const statusText = detail.column?.key === 'total'
+                    ? getStatusList(candidate).join(', ')
+                    : detail.column?.label;
+                  return (
+                    <tr key={`${candidate._id || candidate.id || candidate.candidateId}-${statusText}`} className="hover:bg-blue-50/30">
+                      <td className="px-5 py-4 font-semibold text-slate-900">
+                        <CandidateProfileLink candidate={candidate} className="text-slate-900">
+                          {getCandidateName(candidate)}
+                        </CandidateProfileLink>
+                      </td>
+                      <td className="px-5 py-4 text-slate-600">{candidate.email || '-'}</td>
+                      <td className="px-5 py-4 text-slate-600">{candidate.contact || candidate.phone || '-'}</td>
+                      <td className="px-5 py-4 text-slate-600">{submission?.clientName || candidate.client || '-'}</td>
+                      <td className="px-5 py-4 font-mono text-xs font-bold text-blue-700">{submission?.jobCode || candidate.jobCode || '-'}</td>
+                      <td className="px-5 py-4 text-slate-600">{submission?.position || candidate.position || '-'}</td>
+                      <td className="px-5 py-4">
+                        <span className="inline-flex rounded-full border border-blue-100 bg-blue-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-blue-700">
+                          {statusText || '-'}
+                        </span>
+                      </td>
+                      <td className="px-5 py-4 text-slate-600">{candidate.source || '-'}</td>
+                      <td className="px-5 py-4 text-slate-600">
+                        {formatDate(submission?.submittedAt || candidate.dateAdded || candidate.createdAt || candidate.updatedAt)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
 
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <DetailItem label="Recruiter ID" value={getRecruiterId(data)} />
-            <DetailItem label="Username" value={data.username} />
-            <DetailItem label="Full Name" value={name} />
-            <DetailItem label="Role" value={formatRole(data.role || 'Recruiter')} />
-            <DetailItem label="Email" value={data.email} />
-            <DetailItem label="Phone" value={data.phone || data.contact || data.mobile} />
-            <DetailItem label="Location" value={data.location || data.city || data.branch} />
-            <DetailItem label="Department" value={data.department || data.team} />
-            <DetailItem label="Designation" value={data.designation || data.title} />
-            <DetailItem label="Joined Date" value={formatDate(data.createdAt || data.dateAdded)} />
-            <DetailItem label="Last Updated" value={formatDate(data.updatedAt)} />
+            {filteredRows.length === 0 && (
+              <div className="flex h-56 flex-col items-center justify-center text-center">
+                <ClipboardList className="mb-3 h-9 w-9 text-slate-300" />
+                <p className="font-bold text-slate-800">No records found</p>
+                <p className="mt-1 text-sm text-slate-500">Try a different search term.</p>
+              </div>
+            )}
           </div>
 
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <div className="flex items-center gap-3 rounded-xl border border-slate-100 px-4 py-3">
-              <Mail className="h-4 w-4 text-[#283086]" />
-              <span className="text-sm font-medium text-slate-700">{data.email || '-'}</span>
-            </div>
-            <div className="flex items-center gap-3 rounded-xl border border-slate-100 px-4 py-3">
-              <Phone className="h-4 w-4 text-[#283086]" />
-              <span className="text-sm font-medium text-slate-700">{data.phone || data.contact || data.mobile || '-'}</span>
-            </div>
-            <div className="flex items-center gap-3 rounded-xl border border-slate-100 px-4 py-3">
-              <Hash className="h-4 w-4 text-[#283086]" />
-              <span className="text-sm font-medium text-slate-700">{getRecruiterId(data)}</span>
-            </div>
-            <div className="flex items-center gap-3 rounded-xl border border-slate-100 px-4 py-3">
-              <MapPin className="h-4 w-4 text-[#283086]" />
-              <span className="text-sm font-medium text-slate-700">{data.location || data.city || data.branch || '-'}</span>
-            </div>
-            <div className="flex items-center gap-3 rounded-xl border border-slate-100 px-4 py-3">
-              <CalendarDays className="h-4 w-4 text-[#283086]" />
-              <span className="text-sm font-medium text-slate-700">{formatDate(data.createdAt || data.dateAdded)}</span>
-            </div>
+          <div className="flex items-center justify-between border-t border-slate-100 bg-slate-50 px-6 py-3 text-xs font-medium text-slate-500">
+            <span>{rows.length} record(s)</span>
+            <button type="button" onClick={onClose} className="font-bold uppercase tracking-wider text-slate-700 hover:text-blue-700">
+              Close Window
+            </button>
           </div>
         </div>
       </div>
-    </div>
+    </ModalPortal>
+  );
+};
+
+export function RecruiterDetailsModal({ recruiter, stats, onClose }) {
+  const [candidates, setCandidates] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [recordsLoaded, setRecordsLoaded] = useState(false);
+  const [loadError, setLoadError] = useState('');
+  const [detail, setDetail] = useState(null);
+
+  const data = typeof recruiter === 'string' ? { name: recruiter } : recruiter || {};
+  const name = getRecruiterName(data);
+
+  useEffect(() => {
+    if (!recruiter) return;
+    let cancelled = false;
+
+    const fetchCandidates = async () => {
+      setLoading(true);
+      setRecordsLoaded(false);
+      setLoadError('');
+      try {
+        const response = await fetch(`${API_URL}/candidates`, { headers: getAuthHeaders() });
+        if (!response.ok) throw new Error('Unable to load candidate records.');
+        const payload = await response.json();
+        const rows = Array.isArray(payload) ? payload : payload.candidates || payload.data || [];
+        if (!cancelled) {
+          setCandidates(Array.isArray(rows) ? rows : []);
+          setRecordsLoaded(true);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setCandidates([]);
+          setRecordsLoaded(false);
+          setLoadError(error.message || 'Unable to load candidate records.');
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    fetchCandidates();
+    return () => {
+      cancelled = true;
+    };
+  }, [recruiter]);
+
+  const hasLoadedRecords = recordsLoaded;
+  const tableCounts = useMemo(() => (
+    STATUS_COLUMNS.reduce((acc, column) => {
+      acc[column.key] = hasLoadedRecords
+        ? countColumn(candidates, data, column)
+        : getFallbackCount(stats || data.stats, column);
+      return acc;
+    }, {})
+  ), [candidates, data, hasLoadedRecords, stats]);
+
+  const openRecords = (column, recruiterScope = data, titleName = name) => {
+    const rows = getRecordRows(candidates, recruiterScope, column);
+    setDetail({
+      column,
+      rows,
+      title: column.key === 'total'
+        ? `${titleName} - Total Candidates`
+        : `${titleName} - ${column.label} Candidates`,
+    });
+  };
+
+  if (!recruiter) return null;
+
+  return (
+    <>
+      <ModalPortal>
+      <div className="fixed inset-0 z-[9000] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+        <div className="flex max-h-[90vh] w-full max-w-7xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+          <div className="flex items-start justify-between gap-4 border-b border-slate-100 bg-[#f8faff] px-6 py-5">
+            <div>
+              <p className="text-xs font-black uppercase tracking-widest text-blue-600">Recruiter Performance</p>
+              <h2 className="mt-1 text-2xl font-black text-slate-900">{name}</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                ID: {getRecruiterId(data)}{data.email ? ` • ${data.email}` : ''}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-full bg-white p-2 text-slate-500 shadow-sm transition hover:bg-red-50 hover:text-red-500"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-auto bg-white p-6">
+            {loadError && (
+              <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
+                {loadError} Showing available summary counts only.
+              </div>
+            )}
+
+            <table className="w-full min-w-[1150px] text-sm">
+              <thead className="sticky top-0 z-10 border-b border-slate-100 bg-white text-[10px] font-black uppercase tracking-widest text-slate-500 shadow-sm">
+                <tr>
+                  <th className="px-5 py-4 text-left">Recruiter Name</th>
+                  {STATUS_COLUMNS.map((column) => (
+                    <th key={column.key} className="px-4 py-4 text-center">{column.label}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                <tr className="hover:bg-blue-50/30">
+                  <td className="px-5 py-5 font-bold text-slate-900">{name}</td>
+                  {STATUS_COLUMNS.map((column) => (
+                    <td key={column.key} className="px-4 py-5 text-center">
+                      <CountButton
+                        value={tableCounts[column.key]}
+                        disabled={!hasLoadedRecords}
+                        onClick={() => openRecords(column)}
+                      />
+                    </td>
+                  ))}
+                </tr>
+              </tbody>
+            </table>
+
+            {loading && (
+              <div className="mt-5 flex items-center gap-2 text-sm font-medium text-slate-500">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading exact candidate records...
+              </div>
+            )}
+          </div>
+
+          <div className="flex items-center justify-between border-t border-slate-100 bg-slate-50 px-6 py-3 text-xs font-medium text-slate-500">
+            <span>Click any non-zero count to view matching candidates.</span>
+            <button type="button" onClick={onClose} className="font-bold uppercase tracking-wider text-slate-700 hover:text-blue-700">
+              Close Window
+            </button>
+          </div>
+        </div>
+      </div>
+      </ModalPortal>
+      <CandidateRecordsModal detail={detail} onClose={() => setDetail(null)} />
+    </>
   );
 }
 

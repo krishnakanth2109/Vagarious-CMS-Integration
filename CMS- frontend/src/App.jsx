@@ -28,6 +28,7 @@ const MockInterviewsDashboard = lazy(() => import('@/pages/MockInterviewsDashboa
 const InterviewSession        = lazy(() => import('@/pages/InterviewSession'));
 const JobApplications         = lazy(() => import('@/pages/JobApplications'));
 const CandidateProfile        = lazy(() => import('@/pages/CandidateProfile'));
+const UserGuide               = lazy(() => import('@/pages/UserGuide'));
 
 // Manager Specific Pages (Lazy)
 const ManagerDashboard = lazy(() => import('@/pages/ManagerDashboard'));
@@ -110,6 +111,7 @@ function AppRoutes() {
           <Route path="settings" element={<AdminSettings />} />
           <Route path="agreements" element={<AgreementGenerator />} />
           <Route path="job-applications" element={<JobApplications />} />
+          <Route path="user-guide" element={<UserGuide />} />
         </Route>
 
         {/* ===================== RECRUITER ROUTES ===================== */}
@@ -128,6 +130,7 @@ function AppRoutes() {
           <Route path="mock" element={<MockInterviewsDashboard />} />
           <Route path="profile" element={<RecruiterProfile />} />
           <Route path="settings" element={<RecruiterSettings />} />
+          <Route path="user-guide" element={<UserGuide />} />
         </Route>
 
         {/* Fallback */}

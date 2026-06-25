@@ -1,5 +1,6 @@
-﻿// --- START OF FILE AdminRequirements.jsx ---
+// --- START OF FILE AdminRequirements.jsx ---
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/AuthContext";
 import {
@@ -14,6 +15,11 @@ const BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000').repla
 const API_URL  = `${BASE_URL}/api`;
 
 const inputCls = "w-full px-3 py-2 border border-zinc-300 dark:border-zinc-700 rounded-lg text-sm outline-none focus:ring-2 focus:ring-zinc-500 bg-white dark:bg-zinc-900 dark:text-zinc-100 placeholder-zinc-400";
+
+const ModalPortal = ({ children }) => {
+  if (typeof document === 'undefined') return children;
+  return createPortal(children, document.body);
+};
 
 const getRecruiterDetailsByName = (name, recruiters = []) => {
   const displayName = name || 'Unassigned';
@@ -191,6 +197,7 @@ const FormControlModal = ({ isOpen, onClose, config, onConfigChange }) => {
   const visibleCustomCount = config.customFields.filter(field => field.visible).length;
 
   return (
+    <ModalPortal>
     <div className="fixed inset-0 bg-zinc-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div
         className="bg-slate-50 dark:bg-zinc-950 rounded-2xl shadow-2xl max-w-5xl w-full max-h-[92vh] overflow-hidden border border-zinc-200 dark:border-zinc-800"
@@ -376,6 +383,7 @@ const FormControlModal = ({ isOpen, onClose, config, onConfigChange }) => {
         </div>
       </div>
     </div>
+    </ModalPortal>
   );
 };
 
@@ -443,6 +451,7 @@ const parseSkillItems = (value) => {
 
 const JobDetailCard = ({ job, onClose, recruiters = [] }) => {
   return (
+    <ModalPortal>
     <div
       className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"
       onClick={onClose}
@@ -553,6 +562,131 @@ const JobDetailCard = ({ job, onClose, recruiters = [] }) => {
           </div>
       </div>
     </div>
+    </ModalPortal>
+  );
+};
+
+const getCandidateDetailName = (candidate = {}) => (
+  candidate.name || `${candidate.firstName || ''} ${candidate.lastName || ''}`.trim() || 'Unnamed Candidate'
+);
+
+const getCandidateDetailCode = (candidate = {}) => (
+  candidate.candidateId || candidate._id?.slice(-6)?.toUpperCase() || candidate.id?.slice?.(-6)?.toUpperCase?.() || 'N/A'
+);
+
+const normalizeCandidateSkills = (skills) => {
+  if (Array.isArray(skills)) return skills.filter(Boolean);
+  if (typeof skills === 'string') return skills.split(/[,;\n]+/).map((item) => item.trim()).filter(Boolean);
+  return [];
+};
+
+const getCandidateStatusList = (candidate = {}) => {
+  if (Array.isArray(candidate.status)) return candidate.status.filter(Boolean);
+  return candidate.status ? [candidate.status] : ['Pipeline'];
+};
+
+const CandidateDetailRow = ({ label, value, children }) => (
+  <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-950">
+    <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">{label}</p>
+    <div className="mt-1 break-words text-sm font-semibold text-zinc-900 dark:text-white">{children || value || 'N/A'}</div>
+  </div>
+);
+
+const CandidateDetailsModal = ({ candidate, onClose }) => {
+  if (!candidate) return null;
+
+  const skills = normalizeCandidateSkills(candidate.skills);
+  const statuses = getCandidateStatusList(candidate);
+
+  return (
+    <ModalPortal>
+    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-800 dark:bg-zinc-900"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-4 border-b border-zinc-100 px-6 py-5 dark:border-zinc-800">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Candidate Details</p>
+            <h3 className="mt-1 break-words text-xl font-bold text-zinc-900 dark:text-white">{getCandidateDetailName(candidate)}</h3>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <span className="rounded-md bg-zinc-100 px-2 py-1 font-mono text-xs text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+                {getCandidateDetailCode(candidate)}
+              </span>
+              {statuses.map((status) => (
+                <span key={status} className="rounded-full border border-blue-100 bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 dark:border-blue-900/50 dark:bg-blue-900/20 dark:text-blue-300">
+                  {status}
+                </span>
+              ))}
+            </div>
+          </div>
+          <button onClick={onClose} className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-white">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="overflow-y-auto bg-zinc-50 p-5 dark:bg-zinc-950">
+          <div className="grid gap-5 lg:grid-cols-2">
+            <section className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+              <h4 className="mb-4 text-sm font-bold text-zinc-900 dark:text-white">Contact</h4>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <CandidateDetailRow label="Email" value={candidate.email} />
+                <CandidateDetailRow label="Phone" value={candidate.contact || candidate.phone} />
+                <CandidateDetailRow label="Alternate Number" value={candidate.alternateNumber} />
+                <CandidateDetailRow label="LinkedIn">
+                  {candidate.linkedin ? <a href={candidate.linkedin} target="_blank" rel="noopener noreferrer" className="break-all text-blue-700 hover:underline dark:text-blue-300">{candidate.linkedin}</a> : 'N/A'}
+                </CandidateDetailRow>
+              </div>
+            </section>
+
+            <section className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+              <h4 className="mb-4 text-sm font-bold text-zinc-900 dark:text-white">Profile</h4>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <CandidateDetailRow label="Current Role" value={candidate.position} />
+                <CandidateDetailRow label="Current Company" value={candidate.currentCompany} />
+                <CandidateDetailRow label="Current Location" value={candidate.currentLocation} />
+                <CandidateDetailRow label="Preferred Location" value={candidate.preferredLocation} />
+              </div>
+            </section>
+
+            <section className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+              <h4 className="mb-4 text-sm font-bold text-zinc-900 dark:text-white">Experience & Salary</h4>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <CandidateDetailRow label="Total Experience" value={candidate.totalExperience ? `${candidate.totalExperience} Years` : ''} />
+                <CandidateDetailRow label="Relevant Experience" value={candidate.relevantExperience ? `${candidate.relevantExperience} Years` : ''} />
+                <CandidateDetailRow label="Current CTC" value={candidate.ctc} />
+                <CandidateDetailRow label="Expected CTC" value={candidate.ectc} />
+                <CandidateDetailRow label="Notice Period" value={candidate.noticePeriod} />
+                <CandidateDetailRow label="Source" value={candidate.source} />
+              </div>
+            </section>
+
+            <section className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+              <h4 className="mb-4 text-sm font-bold text-zinc-900 dark:text-white">Skills</h4>
+              {skills.length ? (
+                <div className="flex flex-wrap gap-2">
+                  {skills.map((skill) => (
+                    <span key={skill} className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700 dark:border-blue-900/50 dark:bg-blue-900/20 dark:text-blue-300">
+                      {skill}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-zinc-500">No skills added.</p>
+              )}
+            </section>
+          </div>
+
+          {candidate.remarks && (
+            <section className="mt-5 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+              <h4 className="text-sm font-bold text-zinc-900 dark:text-white">Remarks</h4>
+              <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-6 text-zinc-600 dark:text-zinc-300">{candidate.remarks}</p>
+            </section>
+          )}
+        </div>
+      </div>
+    </div>
+    </ModalPortal>
   );
 };
 
@@ -565,6 +699,8 @@ const CandidateMatchesModal = ({
   onToggleCandidate,
   onClose,
 }) => {
+  const [selectedCandidate, setSelectedCandidate] = useState(null);
+
   if (!job) return null;
 
   const title = mode === 'matching' ? 'Matching Candidates' : 'Submitted Candidates';
@@ -577,6 +713,7 @@ const CandidateMatchesModal = ({
   );
 
   return (
+    <ModalPortal>
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={onClose}>
       <div
         className="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-800 dark:bg-zinc-900"
@@ -618,7 +755,14 @@ const CandidateMatchesModal = ({
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
-                          <h4 className="font-semibold text-zinc-900 dark:text-white">{getCandidateName(candidate)}</h4>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedCandidate(candidate)}
+                            className="text-left font-semibold text-zinc-900 underline-offset-4 hover:text-blue-700 hover:underline dark:text-white dark:hover:text-blue-300"
+                            title="Open candidate details"
+                          >
+                            {getCandidateName(candidate)}
+                          </button>
                           {candidate.candidateId && (
                             <span className="rounded-md bg-zinc-100 px-2 py-0.5 text-xs font-mono text-zinc-500 dark:bg-zinc-800">
                               {candidate.candidateId}
@@ -637,8 +781,16 @@ const CandidateMatchesModal = ({
                       <div className="flex items-center gap-2">
                         {score && (
                           <>
-                            <ScoreBadge score={score.matchPercentage} />
-                            <span className="text-xs font-semibold text-zinc-500">{score.matchLevel}</span>
+                            {score.eligibleForAI === false ? (
+                              <span className="rounded-full bg-zinc-100 text-zinc-500 border border-zinc-200 px-2.5 py-1 text-xs font-semibold dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-400">
+                                Not shortlisted for AI scoring
+                              </span>
+                            ) : (
+                              <>
+                                <ScoreBadge score={score.matchPercentage} />
+                                <span className="text-xs font-semibold text-zinc-500">{score.matchLevel}</span>
+                              </>
+                            )}
                           </>
                         )}
                         {score && (
@@ -654,17 +806,54 @@ const CandidateMatchesModal = ({
                     </div>
 
                     {score && expanded && (
-                      <div className="mt-4 grid gap-4 border-t border-zinc-100 pt-4 dark:border-zinc-800 lg:grid-cols-[1fr_1.2fr]">
-                        <div>
-                          <p className="text-sm text-zinc-600 dark:text-zinc-300">{score.reason}</p>
-                          <MatchBreakdownBar breakdown={score.breakdown} />
+                      <div className="mt-4 border-t border-zinc-100 pt-4 dark:border-zinc-800 space-y-4">
+                        {score.scoringSource === 'fallback' && (
+                          <div className="rounded-lg bg-amber-50 px-4 py-2 text-xs font-semibold text-amber-800 border border-amber-200 dark:bg-amber-950/20 dark:text-amber-300 dark:border-amber-800/50">
+                            AI analysis unavailable. Showing rule-based score.
+                          </div>
+                        )}
+                        <div className="grid gap-4 lg:grid-cols-2">
+                          <div className="space-y-3 bg-zinc-50 dark:bg-zinc-900/50 p-4 rounded-xl border border-zinc-100 dark:border-zinc-800">
+                            <h4 className="text-sm font-bold text-zinc-950 dark:text-zinc-50">Match Overview</h4>
+                            <p className="text-sm text-zinc-600 dark:text-zinc-300 leading-relaxed font-medium">{score.reason}</p>
+                            
+                            <div className="grid grid-cols-2 gap-2 mt-4 pt-3 border-t border-zinc-200 dark:border-zinc-700">
+                              <div className="text-xs">
+                                <span className="text-zinc-400 block uppercase font-bold tracking-wider text-[10px]">Role Match</span>
+                                <span className="font-semibold text-zinc-900 dark:text-zinc-100 text-sm capitalize">{score.roleMatchLevel || 'N/A'}</span>
+                              </div>
+                              <div className="text-xs">
+                                <span className="text-zinc-400 block uppercase font-bold tracking-wider text-[10px]">Experience</span>
+                                <span className="font-semibold text-zinc-900 dark:text-zinc-100 text-sm">{score.experienceMatch || 'N/A'}</span>
+                              </div>
+                              <div className="text-xs mt-2">
+                                <span className="text-zinc-400 block uppercase font-bold tracking-wider text-[10px]">Qualification</span>
+                                <span className="font-semibold text-zinc-900 dark:text-zinc-100 text-sm">{score.qualificationMatch || 'N/A'}</span>
+                              </div>
+                              <div className="text-xs mt-2">
+                                <span className="text-zinc-400 block uppercase font-bold tracking-wider text-[10px]">Scoring Model</span>
+                                <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-semibold border mt-0.5 ${score.scoringSource === 'groq' ? 'bg-indigo-50 border-indigo-200 text-indigo-700 dark:bg-indigo-900/20 dark:text-indigo-300' : 'bg-zinc-100 border-zinc-200 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400'}`}>
+                                  {score.scoringSource === 'groq' ? 'Groq AI scored' : 'Deterministic'}
+                                </span>
+                              </div>
+                            </div>
+
+                            {score.breakdown && (
+                              <div className="mt-4 pt-3 border-t border-zinc-200 dark:border-zinc-700">
+                                <MatchBreakdownBar breakdown={score.breakdown} />
+                              </div>
+                            )}
+                          </div>
+                          <div className="bg-zinc-50 dark:bg-zinc-900/50 p-4 rounded-xl border border-zinc-100 dark:border-zinc-800">
+                            <h4 className="text-sm font-bold text-zinc-950 dark:text-white mb-3">Skill Alignments</h4>
+                            <SkillChips
+                              matchedMandatory={score.matchedMandatorySkills}
+                              missingMandatory={score.missingMandatorySkills}
+                              matchedPreferred={score.matchedPreferredSkills}
+                              missingPreferred={score.missingPreferredSkills}
+                            />
+                          </div>
                         </div>
-                        <SkillChips
-                          matchedMandatory={score.matchedMandatorySkills}
-                          missingMandatory={score.missingMandatorySkills}
-                          matchedPreferred={score.matchedPreferredSkills}
-                          missingPreferred={score.missingPreferredSkills}
-                        />
                       </div>
                     )}
                   </div>
@@ -674,7 +863,9 @@ const CandidateMatchesModal = ({
           )}
         </div>
       </div>
+      <CandidateDetailsModal candidate={selectedCandidate} onClose={() => setSelectedCandidate(null)} />
     </div>
+    </ModalPortal>
   );
 };
 
@@ -1782,6 +1973,7 @@ export default function AdminRequirements() {
       </div>
 
       {showForm && (
+        <ModalPortal>
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={closeRequirementForm}>
           <div
             className="w-full max-w-[1400px] max-h-[94vh] flex flex-col rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-2xl overflow-hidden"
@@ -1907,6 +2099,7 @@ export default function AdminRequirements() {
           </div>
 
           {jobDescriptionModalOpen && (
+            <ModalPortal>
             <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setJobDescriptionModalOpen(false)}>
               <div
                 className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-3xl max-h-[88vh] flex flex-col border border-zinc-200 dark:border-zinc-800 overflow-hidden"
@@ -1991,8 +2184,10 @@ export default function AdminRequirements() {
                 </div>
               </div>
             </div>
+            </ModalPortal>
           )}
         </div>
+        </ModalPortal>
       )}
 
       {selectedJob && <JobDetailCard job={selectedJob} recruiters={recruiters} onClose={() => setSelectedJob(null)} />}

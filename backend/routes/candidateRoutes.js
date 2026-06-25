@@ -2,6 +2,7 @@ import express from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import mongoose from 'mongoose';
 import Candidate from '../models/Candidate.js';
 import User from '../models/User.js';
 import Job from '../models/Job.js';
@@ -10,6 +11,7 @@ import { parseResume } from './resumeParser.js';
 import { protect } from '../middleware/authMiddleware.js';
 import { bulkImportCandidates } from '../controllers/bulkImportController.js';
 import { updateCandidateStatus, updateCandidateRemarks, inlineUpdateCandidate } from '../controllers/candidateStatusController.js';
+import { sendJobInvitationEmail } from '../services/email.js';
 
 const router = express.Router();
 
@@ -23,6 +25,58 @@ const resolveUserName = (u) => {
 };
 
 const normalizeName = (value) => String(value || '').trim().toLowerCase();
+
+const MAX_JOB_INVITE_RECIPIENTS = Number(process.env.MAX_JOB_INVITE_RECIPIENTS || 100);
+const JOB_INVITE_BATCH_SIZE = Math.min(Math.max(Number(process.env.JOB_INVITE_BATCH_SIZE || 10), 1), 20);
+const JOB_INVITE_BATCH_DELAY_MS = Math.max(Number(process.env.JOB_INVITE_BATCH_DELAY_MS || 300), 0);
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const stripUnsafeHtml = (html = '') => String(html)
+  .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '')
+  .replace(/<style[\s\S]*?>[\s\S]*?<\/style>/gi, '')
+  .replace(/<iframe[\s\S]*?>[\s\S]*?<\/iframe>/gi, '')
+  .replace(/\son\w+=(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+  .replace(/\s(href|src)\s*=\s*(?:"\s*javascript:[^"]*"|'\s*javascript:[^']*'|\s*javascript:[^\s>]*)/gi, '');
+
+const isHtmlEmpty = (html = '') => !String(html)
+  .replace(/<[^>]*>/g, '')
+  .replace(/&nbsp;/gi, ' ')
+  .trim();
+
+const getUserLookupValues = (user) => [
+  user?.firstName && user?.lastName ? `${user.firstName} ${user.lastName}` : null,
+  user?.name,
+  user?.fullName,
+  user?.username,
+  user?.email,
+].filter(Boolean);
+
+const recruiterCanUseJob = (job, user) => {
+  if (!job || !user) return false;
+  if (user.role === 'admin' || user.role === 'manager') return true;
+  const names = new Set(getUserLookupValues(user).map(normalizeName));
+  return names.has(normalizeName(job.primaryRecruiter)) || names.has(normalizeName(job.secondaryRecruiter));
+};
+
+const canAccessCandidate = (candidate, user) => {
+  if (!candidate || !user) return false;
+  if (user.role === 'admin' || user.role === 'manager') return true;
+  return String(candidate.recruiterId) === String(user._id);
+};
+
+const personalizeInviteHtml = (html, candidate) => {
+  const firstName = String(candidate.firstName || candidate.name || '').trim().split(/\s+/)[0] || 'Candidate';
+  const safeName = firstName.replace(/[<>&"]/g, (ch) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[ch]));
+  const personalized = String(html || '').replace(
+    /Dear\s+(Candidate|\{Candidate First Name\}|\{firstName\}|\{\{firstName\}\})/i,
+    `Dear ${safeName}`
+  );
+  return personalized === html && !/Dear\s+/i.test(html)
+    ? `<p>Dear ${safeName},</p>${html}`
+    : personalized;
+};
 
 // ─── Multer Setup ─────────────────────────────────────────────────────────────
 const UPLOAD_DIR = 'uploads/';
@@ -231,6 +285,129 @@ router.get('/check-phone', async (req, res) => {
 });
 
 // ── Create Candidate ──────────────────────────────────────────────────────────
+router.post('/send-job-invite', express.json({ limit: '1mb' }), async (req, res) => {
+  try {
+    const { candidateIds, jobId, subject, htmlBody } = req.body || {};
+    const uniqueCandidateIds = [...new Set(Array.isArray(candidateIds) ? candidateIds.map(String) : [])];
+    const cleanSubject = String(subject || '').trim();
+    const cleanHtmlBody = stripUnsafeHtml(htmlBody);
+
+    if (uniqueCandidateIds.length === 0) {
+      return res.status(400).json({ message: 'Select at least one candidate.' });
+    }
+    if (uniqueCandidateIds.length > MAX_JOB_INVITE_RECIPIENTS) {
+      return res.status(400).json({ message: `You can send up to ${MAX_JOB_INVITE_RECIPIENTS} invitations at a time.` });
+    }
+    if (!jobId || !mongoose.Types.ObjectId.isValid(jobId)) {
+      return res.status(400).json({ message: 'Select a job requirement.' });
+    }
+    if (!cleanSubject) {
+      return res.status(400).json({ message: 'Email subject is required.' });
+    }
+    if (isHtmlEmpty(cleanHtmlBody)) {
+      return res.status(400).json({ message: 'Email body is required.' });
+    }
+
+    const invalidIds = uniqueCandidateIds.filter((id) => !mongoose.Types.ObjectId.isValid(id));
+    if (invalidIds.length > 0) {
+      return res.status(400).json({ message: 'One or more candidate IDs are invalid.' });
+    }
+
+    const job = await Job.findById(jobId).lean();
+    if (!job || job.active === false || !recruiterCanUseJob(job, req.user)) {
+      return res.status(404).json({ message: 'Job requirement not found or not available for this user.' });
+    }
+
+    const candidates = await Candidate.find({ _id: { $in: uniqueCandidateIds } })
+      .select('_id firstName lastName name email recruiterId')
+      .lean();
+
+    const candidatesById = new Map(candidates.map((candidate) => [String(candidate._id), candidate]));
+    const results = [];
+    const sendableCandidates = [];
+
+    for (const candidateId of uniqueCandidateIds) {
+      const candidate = candidatesById.get(candidateId);
+      if (!candidate) {
+        results.push({ candidateId, email: '', status: 'skipped', error: 'Candidate not found.' });
+        continue;
+      }
+      if (!canAccessCandidate(candidate, req.user)) {
+        results.push({ candidateId, email: '', status: 'skipped', error: 'Candidate is outside your allowed scope.' });
+        continue;
+      }
+
+      const email = String(candidate.email || '').trim().toLowerCase();
+      if (!EMAIL_RE.test(email)) {
+        results.push({ candidateId, email, status: 'skipped', error: 'Candidate email is unavailable.' });
+        continue;
+      }
+
+      sendableCandidates.push({ ...candidate, email });
+    }
+
+    for (let i = 0; i < sendableCandidates.length; i += JOB_INVITE_BATCH_SIZE) {
+      const batch = sendableCandidates.slice(i, i + JOB_INVITE_BATCH_SIZE);
+      const batchResults = await Promise.all(batch.map(async (candidate) => {
+        try {
+          const result = await sendJobInvitationEmail({
+            recipientEmail: candidate.email,
+            candidateName: candidate.name || `${candidate.firstName || ''} ${candidate.lastName || ''}`.trim() || 'Candidate',
+            subject: cleanSubject,
+            htmlBody: personalizeInviteHtml(cleanHtmlBody, candidate),
+          });
+
+          if (result.status === 'success') {
+            return {
+              candidateId: String(candidate._id),
+              email: candidate.email,
+              status: 'sent',
+              provider: result.provider || '',
+              providerMessageId: result.providerMessageId || '',
+              message: result.message || '',
+            };
+          }
+
+          return {
+            candidateId: String(candidate._id),
+            email: candidate.email,
+            status: 'failed',
+            error: result.message || 'Failed to send email.',
+          };
+        } catch (error) {
+          return {
+            candidateId: String(candidate._id),
+            email: candidate.email,
+            status: 'failed',
+            error: error.message || 'Failed to send email.',
+          };
+        }
+      }));
+
+      results.push(...batchResults);
+      if (i + JOB_INVITE_BATCH_SIZE < sendableCandidates.length && JOB_INVITE_BATCH_DELAY_MS > 0) {
+        await sleep(JOB_INVITE_BATCH_DELAY_MS);
+      }
+    }
+
+    const sent = results.filter((item) => item.status === 'sent').length;
+    const failed = results.filter((item) => item.status === 'failed').length;
+    const skipped = results.filter((item) => item.status === 'skipped').length;
+
+    return res.json({
+      success: failed === 0,
+      total: uniqueCandidateIds.length,
+      sent,
+      failed,
+      skipped,
+      results,
+    });
+  } catch (error) {
+    console.error('Send job invite error:', error);
+    res.status(500).json({ message: error.message || 'Failed to send job invitations.' });
+  }
+});
+
 router.post('/', upload.single('resume'), async (req, res) => {
   try {
     let candidateData = sanitizeBody(req.body);

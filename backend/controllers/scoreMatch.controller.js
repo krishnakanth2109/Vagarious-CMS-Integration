@@ -1,7 +1,6 @@
 import Candidate from '../models/Candidate.js';
 import Job from '../models/Job.js';
-import MatchScore from '../models/MatchScore.js';
-import { buildFallbackMatchResult } from '../services/matchingService.js';
+import { processMatchingCandidates } from '../services/groqMatchingService.js';
 
 export const scoreMatchesForRequirement = async (req, res) => {
   try {
@@ -27,37 +26,21 @@ export const scoreMatchesForRequirement = async (req, res) => {
     }
 
     const candidates = await Candidate.find(query).lean();
-    const tenantOwnerId = requirement.createdBy || req.user?._id;
 
-    const scores = candidates.map((candidate) => {
-      const score = buildFallbackMatchResult(candidate, requirement);
-      return {
-        candidateId: candidate._id,
-        ...score,
-      };
+    const matchResult = await processMatchingCandidates(candidates, requirement, req.user);
+    const scores = matchResult.candidates;
+
+    return res.json({
+      requirementId,
+      success: true,
+      totalEvaluated: matchResult.totalEvaluated,
+      locallyRejected: matchResult.locallyRejected,
+      aiScored: matchResult.aiScored,
+      cached: matchResult.cached,
+      failed: matchResult.failed,
+      candidates: scores,
+      scores
     });
-
-    scores.sort((a, b) => b.matchPercentage - a.matchPercentage);
-
-    await Promise.all(scores.map((score) => MatchScore.findOneAndUpdate(
-      {
-        tenantOwnerId,
-        candidateId: score.candidateId,
-        requirementId: requirement._id,
-      },
-      {
-        tenantOwnerId,
-        candidateId: score.candidateId,
-        requirementId: requirement._id,
-        candidateUpdatedAt: candidates.find((candidate) => String(candidate._id) === String(score.candidateId))?.updatedAt,
-        requirementUpdatedAt: requirement.updatedAt,
-        source: score.source,
-        result: score,
-      },
-      { upsert: true, new: true, setDefaultsOnInsert: true }
-    )));
-
-    return res.json({ requirementId, scores });
   } catch (err) {
     console.error('[scoreMatch] bulk score failed:', err);
     return res.status(500).json({ message: err.message });

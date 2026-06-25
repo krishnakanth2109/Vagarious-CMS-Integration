@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Textarea } from '@/components/ui/textarea';
 import * as XLSX from 'xlsx';
 import {
@@ -18,11 +19,18 @@ import ClientJobSubmissions from '@/components/ClientJobSubmissions';
 import CandidatePipelinePanel from '@/components/CandidatePipelinePanel';
 import { RecruiterDetailsTrigger } from '@/components/RecruiterDetailsModal';
 import CandidateKeywordSearch from '@/components/CandidateKeywordSearch';
+import JobDetailsModal from '@/components/JobDetailsModal';
+import JobInvitationModal from '@/components/JobInvitationModal';
 import { candidateMatchesKeywordBadges } from '@/utils/candidateSearch';
 
 // ── ENV Config ────────────────────────────────────────────────────────────────
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 const API_URL = `${BASE_URL}/api`;
+
+const ModalPortal = ({ children }) => {
+  if (typeof document === 'undefined') return children;
+  return createPortal(children, document.body);
+};
 
 const getAuthHeader = () => {
   try {
@@ -72,6 +80,7 @@ const DEFAULT_CANDIDATE_FIELD_CONFIG = [
   { fieldName: 'totalExperience', label: 'Total Experience', fieldType: 'number', visible: true, isDefault: true },
   { fieldName: 'relevantExperience', label: 'Relevant Experience', fieldType: 'number', visible: true, isDefault: true },
   { fieldName: 'skills', label: 'Skills', fieldType: 'textarea', visible: true, isDefault: true },
+  { fieldName: 'education', label: 'Qualification', fieldType: 'text', visible: true, isDefault: true },
   { fieldName: 'ctc', label: 'Current CTC', fieldType: 'text', visible: true, isDefault: true },
   { fieldName: 'currentTakeHome', label: 'Current Take Home', fieldType: 'text', visible: true, isDefault: true },
   { fieldName: 'ectc', label: 'Expected CTC', fieldType: 'text', visible: true, isDefault: true },
@@ -187,6 +196,7 @@ const CandidateFormControlModal = ({ isOpen, onClose, config, onConfigChange }) 
   const visibleCustomCount = config.customFields.filter(field => field.visible).length;
 
   return (
+    <ModalPortal>
     <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-[60] flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-slate-50 rounded-2xl shadow-2xl max-w-5xl w-full max-h-[92vh] overflow-hidden border border-slate-200" onClick={(e) => e.stopPropagation()}>
         <div className="bg-white px-6 py-5 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -250,6 +260,7 @@ const CandidateFormControlModal = ({ isOpen, onClose, config, onConfigChange }) 
         </div>
       </div>
     </div>
+    </ModalPortal>
   );
 };
 
@@ -438,6 +449,27 @@ const getCandidateStatuses = (candidate) => {
   return [...new Set(statuses.filter(Boolean))];
 };
 
+const getSubmissionJobDetails = (submission, jobs = []) => {
+  const jobRef = submission?.jobId;
+  const populatedJob = jobRef && typeof jobRef === 'object' ? jobRef : null;
+  const jobId = populatedJob?._id || populatedJob?.id || jobRef;
+  const job = jobs.find((item) => {
+    const itemId = item?._id || item?.id;
+    return (
+      (jobId && itemId && String(itemId) === String(jobId)) ||
+      (submission?.jobCode && item?.jobCode === submission.jobCode)
+    );
+  });
+
+  return {
+    ...(populatedJob || {}),
+    ...(job || {}),
+    jobCode: submission?.jobCode || job?.jobCode || populatedJob?.jobCode,
+    clientName: submission?.clientName || job?.clientName || populatedJob?.clientName,
+    position: submission?.position || job?.position || populatedJob?.position,
+  };
+};
+
 const candidateMatchesClient = (candidate, clientFilter) => {
   if (clientFilter === 'all') return true;
   const submissions = getCandidateSubmissions(candidate);
@@ -471,10 +503,12 @@ const CandidateClientCell = ({ candidate, onShowMore }) => {
 };
 
 // ── Main Component ────────────────────────────────────────────────────────────
-const ClientSubmissionsModal = ({ candidate, onClose }) => {
+const ClientSubmissionsModal = ({ candidate, jobs = [], onClose }) => {
   const submissions = getCandidateSubmissions(candidate);
+  const [selectedJob, setSelectedJob] = useState(null);
 
   return (
+    <ModalPortal>
     <div className="fixed inset-0 bg-slate-900/40 flex items-center justify-center z-[60] p-4 backdrop-blur-sm">
       <div className="w-full max-w-3xl overflow-hidden rounded-xl bg-white shadow-2xl border border-slate-200">
         <div className="flex items-start justify-between gap-4 border-b border-slate-200 bg-slate-50 p-5">
@@ -502,7 +536,20 @@ const ClientSubmissionsModal = ({ candidate, onClose }) => {
                 {submissions.map((submission) => (
                   <tr key={submission._id || `${submission.jobId}-${submission.jobCode}`} className="align-top">
                     <td className="px-4 py-3 font-semibold text-slate-800">{submission.clientName || 'N/A'}</td>
-                    <td className="px-4 py-3 font-mono text-xs text-blue-700">{submission.jobCode || 'N/A'}</td>
+                    <td className="px-4 py-3">
+                      {submission.jobCode ? (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedJob(getSubmissionJobDetails(submission, jobs))}
+                          className="font-mono text-xs font-bold text-blue-700 underline decoration-blue-300 underline-offset-4 hover:text-blue-900"
+                          title="Open job details"
+                        >
+                          {submission.jobCode}
+                        </button>
+                      ) : (
+                        <span className="font-mono text-xs text-slate-500">N/A</span>
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-slate-700">{submission.position || 'N/A'}</td>
                     <td className="px-4 py-3"><StatusBadge status={getSubmissionStatus(submission)} /></td>
                     <td className="px-4 py-3 text-slate-600">{formatSubmissionDate(submission)}</td>
@@ -513,7 +560,9 @@ const ClientSubmissionsModal = ({ candidate, onClose }) => {
           </div>
         </div>
       </div>
+      <JobDetailsModal job={selectedJob} onClose={() => setSelectedJob(null)} />
     </div>
+    </ModalPortal>
   );
 };
 
@@ -538,6 +587,7 @@ export default function AdminCandidates() {
   const [activeStatFilter, setActiveStatFilter] = useState(null);
   const [sortConfig, setSortConfig] = useState(null);
   const [selectedIds, setSelectedIds] = useState([]);
+  const [isJobInviteOpen, setIsJobInviteOpen] = useState(false);
 
   // --- Pagination States ---
   const [currentPage, setCurrentPage] = useState(1);
@@ -592,7 +642,7 @@ export default function AdminCandidates() {
     firstName: '', lastName: '', contact: '', alternateNumber: '', email: '',
     dateOfBirth: '', dateAdded: todayStr,
     currentLocation: '', preferredLocation: '', position: '', positionOther: '', client: '', currentCompany: '',
-    totalExperience: '', relevantExperience: '',
+    totalExperience: '', relevantExperience: '', education: '',
     ctc: '', currentTakeHome: '', ectc: '', expectedTakeHome: '',
     noticePeriod: '', servingNoticePeriod: 'false', lwd: '',
     reasonForChange: '', offersInHand: 'false', offerPackage: '', source: 'Portal',
@@ -786,6 +836,7 @@ export default function AdminCandidates() {
         contact: prev.contact || data.contact || '',
         skills: normalizeSkills(prev.skills).length ? prev.skills : normalizeSkills(data.skills),
         totalExperience: prev.totalExperience || data.totalExperience || '',
+        education: prev.education || data.education || '',
         currentCompany: prev.currentCompany || data.currentCompany || '',
         currentLocation: prev.currentLocation || data.currentLocation || '',
       }));
@@ -796,6 +847,7 @@ export default function AdminCandidates() {
         fieldsCount: Object.values({
           name: data.name, email: data.email, contact: data.contact,
           skills: data.skills, experience: data.totalExperience,
+          education: data.education,
           company: data.currentCompany, location: data.currentLocation,
         }).filter(Boolean).length,
       });
@@ -922,6 +974,10 @@ export default function AdminCandidates() {
     // 🔴 Validation for Multi-Select Status
     if (!d.status || d.status.length === 0) {
       e.status = 'At least one status is required';
+    }
+
+    if (d.education && d.education.trim().length > 200) {
+      e.education = 'Qualification must be under 200 characters';
     }
 
     setErrors(e);
@@ -1160,6 +1216,7 @@ export default function AdminCandidates() {
       currentCompany: c.currentCompany || '',
       totalExperience: c.totalExperience || '',
       relevantExperience: c.relevantExperience || '',
+      education: c.education || '',
       ctc: c.ctc || '',
       currentTakeHome: c.currentTakeHome || '',
       ectc: c.ectc || '',
@@ -1266,6 +1323,14 @@ export default function AdminCandidates() {
     (currentPage - 1) * ITEMS_PER_PAGE,
     currentPage * ITEMS_PER_PAGE
   );
+  const visibleCandidateIds = paginatedCandidates.map((candidate) => candidate._id);
+  const allVisibleCandidatesSelected = visibleCandidateIds.length > 0
+    && visibleCandidateIds.every((candidateId) => selectedIds.includes(candidateId));
+  const selectedCandidateRecords = useMemo(() => {
+    const candidatesById = new Map(candidates.map((candidate) => [String(candidate._id), candidate]));
+    return selectedIds.map((candidateId) => candidatesById.get(String(candidateId))).filter(Boolean);
+  }, [candidates, selectedIds]);
+  const selectedInvalidEmailCount = selectedCandidateRecords.filter((candidate) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(candidate.email || '').trim())).length;
 
   const candidateExportColumns = useMemo(() => [
     { key: 'candidateId', label: 'Candidate ID', value: c => c.candidateId || c._id?.slice(-6).toUpperCase() || '' },
@@ -1284,6 +1349,7 @@ export default function AdminCandidates() {
     { key: 'preferredLocation', label: 'Preferred Location', value: c => c.preferredLocation || '' },
     { key: 'totalExperience', label: 'Total Experience', value: c => c.totalExperience || '' },
     { key: 'relevantExperience', label: 'Relevant Experience', value: c => c.relevantExperience || '' },
+    { key: 'education', label: 'Qualification', value: c => c.education || '' },
     { key: 'currentCompany', label: 'Current Company', value: c => c.currentCompany || '' },
     { key: 'reasonForChange', label: 'Reason For Change', value: c => c.reasonForChange || '' },
     { key: 'ctc', label: 'Current CTC', value: c => c.ctc || '' },
@@ -1310,10 +1376,11 @@ export default function AdminCandidates() {
   };
 
   const handleSelectAll = (e) => {
+    const visibleSet = new Set(visibleCandidateIds);
     if (e.target.checked) {
-      setSelectedIds(filteredCandidates.map(c => c._id));
+      setSelectedIds(prev => [...new Set([...prev, ...visibleCandidateIds])]);
     } else {
-      setSelectedIds([]);
+      setSelectedIds(prev => prev.filter(id => !visibleSet.has(id)));
     }
   };
 
@@ -1361,6 +1428,16 @@ export default function AdminCandidates() {
     } finally {
       setIsBulkAssigning(false);
     }
+  };
+
+  const handleJobInviteResult = (result) => {
+    if (!result || result.error) return;
+    const hasIssues = (result.failed || 0) > 0 || (result.skipped || 0) > 0;
+    toast({
+      title: hasIssues ? 'Invitations partially sent' : 'Invitations sent',
+      description: `${result.sent || 0} invitations sent, ${result.failed || 0} failed, ${result.skipped || 0} skipped.`,
+      variant: hasIssues ? 'destructive' : 'default',
+    });
   };
 
   const handleWhatsApp = (c) => {
@@ -1444,6 +1521,13 @@ export default function AdminCandidates() {
             <span className="text-sm font-semibold text-blue-800 bg-blue-100 px-3 py-1 rounded-full">
               {selectedIds.length} Selected
             </span>
+            <button
+              onClick={() => setIsJobInviteOpen(true)}
+              className="flex items-center gap-2 px-4 py-1.5 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition"
+            >
+              <Mail className="h-4 w-4" />
+              Send Job Invite ({selectedIds.length})
+            </button>
             <div className="flex items-center gap-2">
               <Users className="h-4 w-4 text-blue-600" />
               <select
@@ -1467,6 +1551,11 @@ export default function AdminCandidates() {
                 Assign Candidates
               </button>
             </div>
+            {selectedInvalidEmailCount > 0 && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-800">
+                {selectedInvalidEmailCount} selected candidate(s) will be skipped because email is unavailable.
+              </div>
+            )}
             <button
               onClick={() => setSelectedIds([])}
               className="ml-auto text-sm text-slate-500 hover:text-slate-800 font-medium px-2 py-1"
@@ -1507,8 +1596,9 @@ export default function AdminCandidates() {
                       <th className="px-4 py-3 w-12 text-center whitespace-nowrap">
                         <input
                           type="checkbox"
-                          checked={selectedIds.length === filteredCandidates.length && filteredCandidates.length > 0}
+                          checked={allVisibleCandidatesSelected}
                           onChange={handleSelectAll}
+                          title="Select all visible candidates"
                           className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 h-4 w-4 cursor-pointer"
                         />
                       </th>
@@ -1620,11 +1710,13 @@ export default function AdminCandidates() {
       {clientPopoverCandidate && (
         <ClientSubmissionsModal
           candidate={clientPopoverCandidate}
+          jobs={jobs}
           onClose={() => setClientPopoverCandidate(null)}
         />
       )}
 
       {isDialogOpen && (
+        <ModalPortal>
         <div className="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
           <div className="bg-white rounded-xl shadow-2xl max-w-7xl w-full max-h-[90vh] flex flex-col overflow-hidden border border-slate-200">
             <div className="p-6 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
@@ -1898,6 +1990,25 @@ export default function AdminCandidates() {
                 </div>
               </section>
 
+              {isCandidateFieldVisible('education') && (
+                <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                  <h3 className="text-base font-semibold text-blue-700 border-b border-blue-100 pb-2 mb-4 flex items-center gap-2">
+                    <GraduationCap className="h-5 w-5" /> Education & Qualification
+                  </h3>
+                  <div>
+                    <label className="block text-sm font-medium mb-1 text-slate-700">Qualification</label>
+                    <input
+                      type="text"
+                      value={formData.education}
+                      onChange={(e) => handleInputChange('education', e.target.value)}
+                      className={inputCls(errors.education)}
+                      placeholder="e.g. B.Tech from IIT Delhi"
+                    />
+                    {errors.education && <p className="text-xs text-red-500 mt-1">{errors.education}</p>}
+                  </div>
+                </section>
+              )}
+
               <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
                 <h3 className="text-base font-semibold text-blue-700 border-b border-blue-100 pb-2 mb-4">Financial & Availability</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1979,8 +2090,6 @@ export default function AdminCandidates() {
                     </select>
                   </div>}
 
-                  {/* 🔴 Multi-Select Status UI — removed from add/edit form */}
-
                   {isCandidateFieldVisible('recruiterId') && <div className="md:col-span-2">
                     <label className="block text-sm font-medium mb-1 text-slate-700">Assign to User</label>
                     <select value={formData.recruiterId} onChange={(e) => handleInputChange('recruiterId', e.target.value)} className={inputCls(false)}>
@@ -2033,6 +2142,7 @@ export default function AdminCandidates() {
             </div>
           </div>
         </div>
+        </ModalPortal>
       )}
 
       {/* ── View Full Details Dialog ────────────────────────────────────────── */}
@@ -2059,7 +2169,18 @@ export default function AdminCandidates() {
         customFields={candidateFieldConfig.customFields}
       />
 
+      <JobInvitationModal
+        open={isJobInviteOpen}
+        onClose={() => setIsJobInviteOpen(false)}
+        candidates={selectedCandidateRecords}
+        jobs={jobs}
+        apiUrl={API_URL}
+        authHeaders={getAuthHeader}
+        onSent={handleJobInviteResult}
+      />
+
       {isViewDialogOpen && viewCandidate && (
+        <ModalPortal>
         <div className="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
           <div className="bg-white rounded-xl shadow-2xl max-w-7xl w-full max-h-[90vh] flex flex-col overflow-hidden border border-slate-200">
             {/* Header */}
@@ -2170,6 +2291,7 @@ export default function AdminCandidates() {
             </div>
           </div>
         </div>
+        </ModalPortal>
       )}
 
       {/* Today Submissions Modal — Admin only */}
@@ -2220,6 +2342,7 @@ function AdminTodaySubmissionsModal({ candidates, recruiters, onClose, getCandid
     : getRecruiterDisplayName(recruiterFilter);
 
   return (
+    <ModalPortal>
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
       <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[85vh] overflow-hidden flex flex-col">
@@ -2349,5 +2472,6 @@ function AdminTodaySubmissionsModal({ candidates, recruiters, onClose, getCandid
         </div>
       </div>
     </div>
+    </ModalPortal>
   );
 }

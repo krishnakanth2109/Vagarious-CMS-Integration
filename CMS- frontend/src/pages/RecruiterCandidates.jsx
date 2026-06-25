@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { createPortal } from 'react-dom';
 import { useAuth } from '@/context/AuthContext';
 import * as XLSX from 'xlsx';
 import {
@@ -16,10 +17,17 @@ import CandidateExportModal from '@/components/CandidateExportModal';
 import ClientJobSubmissions from '@/components/ClientJobSubmissions';
 import CandidatePipelinePanel from '@/components/CandidatePipelinePanel';
 import CandidateKeywordSearch from '@/components/CandidateKeywordSearch';
+import JobDetailsModal from '@/components/JobDetailsModal';
+import JobInvitationModal from '@/components/JobInvitationModal';
 import { candidateMatchesKeywordBadges } from '@/utils/candidateSearch';
 
 const BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/$/, '');
 const API_URL = `${BASE_URL}/api`;
+
+const ModalPortal = ({ children }) => {
+  if (typeof document === 'undefined') return children;
+  return createPortal(children, document.body);
+};
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const getRecruiterName = (r) => {
@@ -100,6 +108,27 @@ const getCandidateStatuses = (candidate) => {
   return [...new Set(statuses.filter(Boolean))];
 };
 
+const getSubmissionJobDetails = (submission, jobs = []) => {
+  const jobRef = submission?.jobId;
+  const populatedJob = jobRef && typeof jobRef === 'object' ? jobRef : null;
+  const jobId = populatedJob?._id || populatedJob?.id || jobRef;
+  const job = jobs.find((item) => {
+    const itemId = item?._id || item?.id;
+    return (
+      (jobId && itemId && String(itemId) === String(jobId)) ||
+      (submission?.jobCode && item?.jobCode === submission.jobCode)
+    );
+  });
+
+  return {
+    ...(populatedJob || {}),
+    ...(job || {}),
+    jobCode: submission?.jobCode || job?.jobCode || populatedJob?.jobCode,
+    clientName: submission?.clientName || job?.clientName || populatedJob?.clientName,
+    position: submission?.position || job?.position || populatedJob?.position,
+  };
+};
+
 const CandidateClientCell = ({ candidate, onShowMore }) => {
   const submissions = getCandidateSubmissions(candidate);
   if (submissions.length === 0) {
@@ -123,10 +152,12 @@ const CandidateClientCell = ({ candidate, onShowMore }) => {
   );
 };
 
-const ClientSubmissionsModal = ({ candidate, onClose }) => {
+const ClientSubmissionsModal = ({ candidate, jobs = [], onClose }) => {
   const submissions = getCandidateSubmissions(candidate);
+  const [selectedJob, setSelectedJob] = useState(null);
 
   return (
+    <ModalPortal>
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm">
       <div className="w-full max-w-3xl overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl">
         <div className="flex items-start justify-between gap-4 border-b border-slate-200 bg-slate-50 p-5">
@@ -154,7 +185,20 @@ const ClientSubmissionsModal = ({ candidate, onClose }) => {
                 {submissions.map((submission) => (
                   <tr key={submission._id || `${submission.jobId}-${submission.jobCode}`} className="align-top">
                     <td className="px-4 py-3 font-semibold text-slate-800">{submission.clientName || 'N/A'}</td>
-                    <td className="px-4 py-3 font-mono text-xs text-blue-700">{submission.jobCode || 'N/A'}</td>
+                    <td className="px-4 py-3">
+                      {submission.jobCode ? (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedJob(getSubmissionJobDetails(submission, jobs))}
+                          className="font-mono text-xs font-bold text-blue-700 underline decoration-blue-300 underline-offset-4 hover:text-blue-900"
+                          title="Open job details"
+                        >
+                          {submission.jobCode}
+                        </button>
+                      ) : (
+                        <span className="font-mono text-xs text-slate-500">N/A</span>
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-slate-700">{submission.position || 'N/A'}</td>
                     <td className="px-4 py-3"><StatusBadge status={getSubmissionStatus(submission)} /></td>
                     <td className="px-4 py-3 text-slate-600">{formatSubmissionDate(submission)}</td>
@@ -165,7 +209,9 @@ const ClientSubmissionsModal = ({ candidate, onClose }) => {
           </div>
         </div>
       </div>
+      <JobDetailsModal job={selectedJob} onClose={() => setSelectedJob(null)} />
     </div>
+    </ModalPortal>
   );
 };
 
@@ -212,12 +258,14 @@ const Badge = ({ children, variant = 'default', className = '' }) => {
 const Modal = ({ open, onClose, children, maxWidth = 'max-w-2xl' }) => {
   if (!open) return null;
   return (
+    <ModalPortal>
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
       <div className={`relative flex max-h-[90vh] w-full ${maxWidth} flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl dark:bg-slate-900`}>
         {children}
       </div>
     </div>
+    </ModalPortal>
   );
 };
 const ModalHeader = ({ children }) => <div className="border-b border-slate-200 bg-slate-50 px-6 py-5">{children}</div>;
@@ -403,6 +451,7 @@ const CandidateFormControlModal = ({ isOpen, onClose, config, onConfigChange }) 
   };
 
   return (
+    <ModalPortal>
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" onClick={onClose} />
       <div className="relative w-full max-w-5xl max-h-[92vh] overflow-hidden rounded-2xl bg-white shadow-2xl border border-slate-200 flex flex-col">
@@ -475,6 +524,7 @@ const CandidateFormControlModal = ({ isOpen, onClose, config, onConfigChange }) 
         </div>
       </div>
     </div>
+    </ModalPortal>
   );
 };
 
@@ -496,6 +546,7 @@ export default function RecruiterCandidates() {
   const [viewMode, setViewMode] = useState('table');
   const [activeStatFilter, setActiveStatFilter] = useState(null);
   const [selectedCandidates, setSelectedCandidates] = useState([]);
+  const [isJobInviteOpen, setIsJobInviteOpen] = useState(false);
 
   // --- PAGINATION STATES ---
   const [currentPage, setCurrentPage] = useState(1);
@@ -896,6 +947,15 @@ export default function RecruiterCandidates() {
     (currentPage - 1) * ITEMS_PER_PAGE,
     currentPage * ITEMS_PER_PAGE
   );
+  const visibleCandidateIds = paginatedCandidates.map((candidate) => candidate._id);
+  const allVisibleCandidatesSelected = visibleCandidateIds.length > 0
+    && visibleCandidateIds.every((candidateId) => selectedCandidates.includes(candidateId));
+  const selectedCandidateRecords = useMemo(() => {
+    const candidatesById = new Map(candidates.map((candidate) => [String(candidate._id), candidate]));
+    return selectedCandidates.map((candidateId) => candidatesById.get(String(candidateId))).filter(Boolean);
+  }, [candidates, selectedCandidates]);
+  const selectedInvalidEmailCount = selectedCandidateRecords.filter((candidate) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(candidate.email || '').trim())).length;
+
 
   const candidateExportColumns = useMemo(() => [
     { key: 'candidateId', label: 'Candidate ID', value: c => c.candidateId || c._id?.slice(-6).toUpperCase() || '' },
@@ -911,6 +971,7 @@ export default function RecruiterCandidates() {
     { key: 'noticePeriod', label: 'Notice Period', value: c => c.noticePeriod || '' },
     { key: 'currentCompany', label: 'Current Company', value: c => c.currentCompany || '' },
     { key: 'currentLocation', label: 'Location', value: c => c.currentLocation || '' },
+    { key: 'education', label: 'Qualification', value: c => c.education || '' },
     { key: 'skills', label: 'Skills', value: c => Array.isArray(c.skills) ? c.skills.join(', ') : (c.skills || '') },
     { key: 'dateAdded', label: 'Date Added', value: c => (c.dateAdded || c.createdAt) ? new Date(c.dateAdded || c.createdAt).toLocaleDateString('en-GB') : '' },
   ], []);
@@ -925,7 +986,16 @@ export default function RecruiterCandidates() {
   const formatDate = (dateString) => dateString ? new Date(dateString).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A';
 
   const toggleSelectCandidate = (id) => setSelectedCandidates(prev => prev.includes(id) ? prev.filter(cid => cid !== id) : [...prev, id]);
-  const selectAllCandidates = () => setSelectedCandidates(selectedCandidates.length === getFilteredCandidates.length ? [] : getFilteredCandidates.map(c => c._id));
+  const selectAllCandidates = () => {
+    setSelectedCandidates((prev) => {
+      const visibleSet = new Set(visibleCandidateIds);
+      if (visibleCandidateIds.length === 0) return prev;
+      if (visibleCandidateIds.every((id) => prev.includes(id))) {
+        return prev.filter((id) => !visibleSet.has(id));
+      }
+      return [...new Set([...prev, ...visibleCandidateIds])];
+    });
+  };
   const openViewDialog = (c) => { setViewingCandidate(c); setIsViewDialogOpen(true); };
 
   const openEditDialog = (c) => {
@@ -1216,6 +1286,16 @@ export default function RecruiterCandidates() {
     finally { setIsDeleting(false); }
   };
 
+  const handleJobInviteResult = (result) => {
+    if (!result || result.error) return;
+    const hasIssues = (result.failed || 0) > 0 || (result.skipped || 0) > 0;
+    toast({
+      title: hasIssues ? 'Invitations partially sent' : 'Invitations sent',
+      description: `${result.sent || 0} invitations sent, ${result.failed || 0} failed, ${result.skipped || 0} skipped.`,
+      variant: hasIssues ? 'destructive' : 'default',
+    });
+  };
+
   const handleImportExcel = async () => {
     if (!importFile) { toast({ title: 'No file selected', variant: 'destructive' }); return; }
     setIsImporting(true); setImportResult(null);
@@ -1297,24 +1377,6 @@ export default function RecruiterCandidates() {
         </NativeSelect>
         {errors.gender && <span className="text-xs text-red-500">{errors.gender}</span>}
       </div>
-      <div className={`space-y-1 ${isCandidateFieldVisible('linkedin') ? '' : 'hidden'}`}>
-        <Label className={errors.linkedin ? "text-red-500" : ""}>LinkedIn URL</Label>
-        <div className="relative">
-          <Linkedin className="absolute left-2 top-2.5 h-4 w-4 text-slate-400" />
-          <Input className={`pl-8 ${errors.linkedin ? "border-red-500" : ""}`} value={formData.linkedin} onChange={e => handleInputChange('linkedin', e.target.value)} placeholder="https://linkedin.com/in/..." />
-        </div>
-        {errors.linkedin && <span className="text-xs text-red-500">{errors.linkedin}</span>}
-      </div>
-      <div className={`space-y-1 ${isCandidateFieldVisible('currentLocation') ? '' : 'hidden'}`}>
-        <Label className={errors.currentLocation ? "text-red-500" : ""}>Current Location</Label>
-        <Input value={formData.currentLocation} onChange={e => handleInputChange('currentLocation', e.target.value)} className={errors.currentLocation ? "border-red-500" : ""} />
-        {errors.currentLocation && <span className="text-xs text-red-500">{errors.currentLocation}</span>}
-      </div>
-      <div className={`space-y-1 ${isCandidateFieldVisible('preferredLocation') ? '' : 'hidden'}`}>
-        <Label className={errors.preferredLocation ? "text-red-500" : ""}>Preferred Location</Label>
-        <Input value={formData.preferredLocation} onChange={e => handleInputChange('preferredLocation', e.target.value)} className={errors.preferredLocation ? "border-red-500" : ""} />
-        {errors.preferredLocation && <span className="text-xs text-red-500">{errors.preferredLocation}</span>}
-      </div>
 
       <div className="md:col-span-3 font-semibold border-b pb-1 text-slate-500 mt-4 flex items-center gap-2"><Briefcase className="h-4 w-4" /> Professional Information</div>
 
@@ -1349,12 +1411,12 @@ export default function RecruiterCandidates() {
           isEditMode={isEditDialogOpen}
           onDeleteExisting={handleDeleteSubmission}
         />
-        {isLoadingSubmissions && (
+        {isLoadingSubmissions &&
           <div className="flex items-center gap-2 mt-3 text-xs text-slate-500">
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
             Loading existing submissions...
           </div>
-        )}
+        }
       </div>
 
       <div className="md:col-span-3 font-semibold text-slate-500 border-b pb-1 mt-4 flex items-center gap-2"><GraduationCap className="h-4 w-4" /> Education</div>
@@ -1413,13 +1475,13 @@ export default function RecruiterCandidates() {
         {errors.servingNoticePeriod && <span className="text-xs text-red-500">{errors.servingNoticePeriod}</span>}
       </div>
 
-      {isCandidateFieldVisible('servingNoticePeriod') && formData.servingNoticePeriod === 'true' && (
+      {isCandidateFieldVisible('servingNoticePeriod') && formData.servingNoticePeriod === 'true' &&
         <div className="space-y-1">
           <Label className={errors.lwd ? "text-red-500" : ""}>LWD (Last Working Day) *</Label>
           <Input type="date" value={formData.lwd} onChange={e => handleInputChange('lwd', e.target.value)} className={errors.lwd ? "border-red-500" : ""} />
           {errors.lwd && <span className="text-xs text-red-500">{errors.lwd}</span>}
         </div>
-      )}
+      }
 
       <div className={`space-y-1 md:col-span-2 ${isCandidateFieldVisible('reasonForChange') ? '' : 'hidden'}`}>
         <Label className={errors.reasonForChange ? "text-red-500" : ""}>Reason For Change</Label>
@@ -1435,13 +1497,13 @@ export default function RecruiterCandidates() {
         {errors.offersInHand && <span className="text-xs text-red-500">{errors.offersInHand}</span>}
       </div>
       
-      {isCandidateFieldVisible('offersInHand') && formData.offersInHand === 'true' && (
+      {isCandidateFieldVisible('offersInHand') && formData.offersInHand === 'true' &&
         <div className="space-y-1">
           <Label className={errors.offerPackage ? "text-red-500" : ""}>Package Amount *</Label>
           <Input value={formData.offerPackage} onChange={e => handleInputChange('offerPackage', e.target.value)} className={errors.offerPackage ? "border-red-500" : ""} placeholder="e.g. 15 LPA" />
           {errors.offerPackage && <span className="text-xs text-red-500">{errors.offerPackage}</span>}
         </div>
-      )}
+      }
 
       <div className="md:col-span-3 font-semibold text-slate-500 border-b pb-1 mt-4 flex items-center gap-2"><Target className="h-4 w-4" /> Recruitment Details</div>
 
@@ -1524,9 +1586,22 @@ export default function RecruiterCandidates() {
             </div>
             <div className="flex gap-3 flex-wrap">
               {selectedCandidates.length > 0 && (
-                <Button variant="destructive" onClick={() => setIsDeleteConfirmOpen(true)}>
-                  <Trash2 className="mr-2 h-4 w-4" /> Delete ({selectedCandidates.length})
-                </Button>
+                <>
+                  <Button onClick={() => setIsJobInviteOpen(true)} className="bg-indigo-600 hover:bg-indigo-700">
+                    <Mail className="mr-2 h-4 w-4" /> Send Job Invite ({selectedCandidates.length})
+                  </Button>
+                  <Button variant="outline" onClick={() => setSelectedCandidates([])}>
+                    Clear Selection
+                  </Button>
+                  <Button variant="destructive" onClick={() => setIsDeleteConfirmOpen(true)}>
+                    <Trash2 className="mr-2 h-4 w-4" /> Delete ({selectedCandidates.length})
+                  </Button>
+                  {selectedInvalidEmailCount > 0 && (
+                    <div className="flex items-center rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
+                      {selectedInvalidEmailCount} selected candidate(s) will be skipped because email is unavailable.
+                    </div>
+                  )}
+                </>
               )}
               <Button variant="outline" onClick={handleExport}><Download className="mr-2 h-4 w-4" /> Export</Button>
               <Button variant="outline" className="border-green-500 text-green-700 hover:bg-green-50" onClick={() => setIsImportDialogOpen(true)}>
@@ -1591,7 +1666,7 @@ export default function RecruiterCandidates() {
                 <table className="w-full text-sm text-left border-collapse min-w-[1600px]">
                   <thead className="bg-slate-50 text-slate-500 font-semibold border-b">
                     <tr>
-                      <th className="p-4 w-12 whitespace-nowrap"><input type="checkbox" checked={getFilteredCandidates.length > 0 && selectedCandidates.length === getFilteredCandidates.length} onChange={selectAllCandidates} className="h-4 w-4 rounded border-slate-300" /></th>
+                      <th className="p-4 w-12 whitespace-nowrap"><input type="checkbox" checked={allVisibleCandidatesSelected} onChange={selectAllCandidates} className="h-4 w-4 rounded border-slate-300" title="Select all visible candidates" /></th>
                       <th className="p-3 whitespace-nowrap">ID</th>
                       <th className="p-3 whitespace-nowrap">Name</th>
                       <th className="p-3 whitespace-nowrap">Phone</th>
@@ -1687,6 +1762,13 @@ export default function RecruiterCandidates() {
                   <div key={c._id} className="bg-white border border-slate-200 rounded-xl hover:shadow-lg transition-all p-6">
                     <div className="flex justify-between mb-4">
                       <div className="flex gap-3">
+                        <input
+                          type="checkbox"
+                          checked={selectedCandidates.includes(c._id)}
+                          onChange={() => toggleSelectCandidate(c._id)}
+                          className="mt-1 h-4 w-4 rounded border-slate-300"
+                          title="Select candidate"
+                        />
                         <div>
                           <h3 className="font-bold text-slate-900">
                             <CandidateProfileLink candidate={c}>{c.name}</CandidateProfileLink>
@@ -1751,9 +1833,20 @@ export default function RecruiterCandidates() {
       {clientPopoverCandidate && (
         <ClientSubmissionsModal
           candidate={clientPopoverCandidate}
+          jobs={jobs}
           onClose={() => setClientPopoverCandidate(null)}
         />
       )}
+
+      <JobInvitationModal
+        open={isJobInviteOpen}
+        onClose={() => setIsJobInviteOpen(false)}
+        candidates={selectedCandidateRecords}
+        jobs={jobs}
+        apiUrl={API_URL}
+        authHeaders={authHeaders}
+        onSent={handleJobInviteResult}
+      />
 
       {/* Delete Confirm Modal */}
       <Modal open={isDeleteConfirmOpen} onClose={() => setIsDeleteConfirmOpen(false)}>
