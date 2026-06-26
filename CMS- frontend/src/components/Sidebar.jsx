@@ -1,26 +1,35 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import {
   LayoutDashboard, UserPlus, Briefcase,
   Building2, Receipt, ClipboardList, MessageSquare,
   BarChart3, Settings, Power, User, Users, Calendar,
-  Video, FileText, Handshake, FileInput, ContactRound, ChevronDown, Mail
+  Video, FileText, Handshake, FileInput, ContactRound, ChevronDown, Mail,
+  X, Lock
 } from 'lucide-react';
 import clsx from 'clsx';
 
-export default function Sidebar({ isOpen, toggleSidebar }) {
+export default function Sidebar({ isOpen, toggleSidebar, isMobileOpen, setIsMobileOpen }) {
   const { userRole, logout, currentUser } = useAuth();
   const location = useLocation();
 
-  const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [expandedMenus, setExpandedMenus] = useState({});
+  const [showSettingsDropdown, setShowSettingsDropdown] = useState(false);
 
   const sidebarBg = "bg-[#283086]";
   const mainBackgroundColor = "#f3f6fd";
   const activeBgClass = "bg-[#f3f6fd]";
   const activeTextClass = "text-[#283086] font-extrabold";
   const inactiveTextClass = "text-white font-medium hover:bg-white/10";
+
+  // Auto-close mobile sidebar and settings dropdown when path changes
+  useEffect(() => {
+    if (setIsMobileOpen) {
+      setIsMobileOpen(false);
+    }
+    setShowSettingsDropdown(false);
+  }, [location.pathname, setIsMobileOpen]);
 
   const externalImportsMenu = {
     name: 'External Imports',
@@ -31,7 +40,12 @@ export default function Sidebar({ isOpen, toggleSidebar }) {
       { name: 'External Clients', path: '/admin/external-imports/clients', icon: Building2 },
     ],
   };
-  // Manager links
+
+  // Paths based on user role
+  const profilePath = userRole === 'recruiter' ? '/recruiter/profile' : '/admin/profile';
+  const passwordPath = userRole === 'recruiter' ? '/recruiter/change-password' : '/admin/change-password';
+
+  // Manager links (Removed Settings)
   const managerLinks = [
     { name: 'Dashboard', path: '/admin', icon: LayoutDashboard },
     { name: 'OverAll Candidates', path: '/admin/add-candidate', icon: Users },
@@ -47,12 +61,10 @@ export default function Sidebar({ isOpen, toggleSidebar }) {
     { name: 'Mock Interviews', path: '/admin/mock', icon: Video },
     { name: 'Contact Inquiries', path: '/admin/contact-inquiries', icon: Mail },
     { name: 'Offer Letters', isExternal: true, url: 'https://automated-offer-letter-generator-mocha.vercel.app/?jr_id=l_4387424181', icon: FileText },
-
     { name: 'Reports', path: '/admin/reports', icon: BarChart3 },
-    { name: 'Settings', path: '/admin/settings', icon: Settings },
   ];
 
-  // Recruiter links
+  // Recruiter links (Removed Settings)
   const recruiterLinks = [
     { name: 'Dashboard', path: '/recruiter', icon: LayoutDashboard },
     { name: 'My Candidates', path: '/recruiter/candidates', icon: UserPlus },
@@ -62,13 +74,13 @@ export default function Sidebar({ isOpen, toggleSidebar }) {
     { name: 'Mock Interviews', path: '/recruiter/mock', icon: Video },
     { name: 'Reports', path: '/recruiter/reports', icon: BarChart3 },
     { name: 'My Profile', path: '/recruiter/profile', icon: User },
-    { name: 'Settings', path: '/recruiter/settings', icon: Settings },
   ];
 
   let links = [];
   if (userRole === 'manager') {
     links = managerLinks;
   } else if (userRole === 'admin') {
+    // Removed Settings
     links = [
       { name: 'Dashboard', path: '/admin', icon: LayoutDashboard },
       { name: 'OverAll Candidates', path: '/admin/add-candidate', icon: Users },
@@ -82,10 +94,7 @@ export default function Sidebar({ isOpen, toggleSidebar }) {
       { name: 'Agreements', path: '/admin/agreements', icon: Handshake },
       { name: 'Mock Interviews', path: '/admin/mock', icon: Video },
       { name: 'Contact Inquiries', path: '/admin/contact-inquiries', icon: Mail },
-      // { name: 'Offer Letters',      isExternal: true, url: 'https://automated-offer-letter-generator-mocha.vercel.app/?jr_id=l_4387424181',     icon: FileText }, 
-
       { name: 'Reports', path: '/admin/reports', icon: BarChart3 },
-      { name: 'Settings', path: '/admin/settings', icon: Settings },
     ];
   } else {
     links = recruiterLinks;
@@ -93,12 +102,27 @@ export default function Sidebar({ isOpen, toggleSidebar }) {
 
   return (
     <>
-      <div className={clsx("flex flex-col inset-y-0 fixed left-0 z-40 transition-all duration-300", sidebarBg, isOpen ? "w-80" : "w-20")}>
+      {/* Mobile backdrop/overlay */}
+      {isMobileOpen && (
+        <div
+          className="fixed inset-0 bg-black/40 backdrop-blur-sm z-30 md:hidden transition-opacity duration-300 animate-in fade-in"
+          onClick={() => setIsMobileOpen(false)}
+        />
+      )}
+
+      <div className={clsx(
+        "flex flex-col inset-y-0 fixed left-0 z-40 transition-all duration-300", 
+        sidebarBg, 
+        isOpen ? "md:w-80" : "md:w-20", 
+        "w-80", 
+        isMobileOpen ? "translate-x-0" : "-translate-x-full", 
+        "md:translate-x-0"
+      )}>
 
         {/* --- Toggle Button --- */}
         <button
           onClick={toggleSidebar}
-          className="absolute -right-4 top-12 bg-white text-[#283086] rounded-lg p-1.5 shadow-md z-50 border border-gray-200 hover:bg-gray-50 transition-colors"
+          className="hidden md:block absolute -right-4 top-12 bg-white text-[#283086] rounded-lg p-1.5 shadow-md z-50 border border-gray-200 hover:bg-gray-50 transition-colors"
           aria-label="Toggle Sidebar"
         >
           {isOpen ? (
@@ -117,22 +141,30 @@ export default function Sidebar({ isOpen, toggleSidebar }) {
         </button>
 
         {/* --- Header / Logo --- */}
-        <div className={clsx("h-28 flex items-center transition-all duration-300", isOpen ? "px-8" : "justify-center px-0")}>
+        <div className={clsx("h-28 flex items-center transition-all duration-300 relative", isOpen ? "px-8" : "justify-center px-0")}>
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 bg-white/10 backdrop-blur-sm rounded-xl flex items-center justify-center flex-shrink-0 border border-white/10">
               <span className="text-white font-extrabold text-2xl">V</span>
             </div>
-            <span className={clsx("text-white font-bold text-2xl tracking-tight transition-opacity", isOpen ? "opacity-100 block" : "opacity-0 hidden")}>VTS Tracker</span>
+            <span className={clsx("text-white font-bold text-2xl tracking-tight transition-opacity md:transition-opacity", (isOpen || isMobileOpen) ? "opacity-100 block" : "opacity-0 hidden")}>VTS Tracker</span>
           </div>
+          {/* Close button on mobile */}
+          <button
+            onClick={() => setIsMobileOpen && setIsMobileOpen(false)}
+            className="absolute right-4 top-10 md:hidden p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors focus:outline-none"
+            aria-label="Close menu"
+          >
+            <X className="h-6 w-6" />
+          </button>
         </div>
 
         {/* --- User Profile Card --- */}
-        <div className={clsx("mb-2 transition-all duration-300", isOpen ? "px-6" : "px-2")}>
-          <div className={clsx("bg-white/10 backdrop-blur-md rounded-full flex items-center overflow-hidden border border-white/10 transition-all", isOpen ? "p-3 gap-4" : "p-2 justify-center")}>
+        <div className={clsx("mb-2 transition-all duration-300", (isOpen || isMobileOpen) ? "px-6" : "px-2")}>
+          <div className={clsx("bg-white/10 backdrop-blur-md rounded-full flex items-center overflow-hidden border border-white/10 transition-all", (isOpen || isMobileOpen) ? "p-3 gap-4" : "p-2 justify-center")}>
             <div className="w-10 h-10 rounded-full border-2 border-white/20 flex-shrink-0 overflow-hidden bg-gray-200">
               {currentUser?.profilePicture ? <img src={currentUser.profilePicture} className="w-full h-full object-cover" alt="Profile" /> : <User className="h-full w-full p-2 text-gray-500" />}
             </div>
-            {isOpen && (
+            {(isOpen || isMobileOpen) && (
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-bold text-white truncate">{currentUser?.name || currentUser?.username || currentUser?.email || 'User'}</p>
                 <p className="text-[10px] text-blue-200 uppercase font-bold tracking-wider">
@@ -144,7 +176,7 @@ export default function Sidebar({ isOpen, toggleSidebar }) {
         </div>
 
         {/* --- Navigation Links --- */}
-        <div className={clsx("flex-1 overflow-y-auto space-y-1 pt-8 pb-8 pr-0 relative [&::-webkit-scrollbar]:hidden", isOpen ? "pl-6" : "pl-2")}>
+        <div className={clsx("flex-1 overflow-y-auto space-y-1 pt-8 pb-8 pr-0 relative [&::-webkit-scrollbar]:hidden", (isOpen || isMobileOpen) ? "pl-6" : "pl-2")}>
           {links.map((link) => {
             // Handle External Links (Opens in new tab)
             if (link.children) {
@@ -154,7 +186,7 @@ export default function Sidebar({ isOpen, toggleSidebar }) {
               );
 
               return (
-                <div key={link.key || link.name} className={clsx(isOpen ? "pr-0" : "pr-2")}>
+                <div key={link.key || link.name} className={clsx((isOpen || isMobileOpen) ? "pr-0" : "pr-2")}>
                   <button
                     type="button"
                     onClick={() =>
@@ -168,21 +200,21 @@ export default function Sidebar({ isOpen, toggleSidebar }) {
                       childActive
                         ? `${activeBgClass} ${activeTextClass}`
                         : `${inactiveTextClass}`,
-                      isOpen
+                      (isOpen || isMobileOpen)
                         ? "pl-8 rounded-l-[40px]"
                         : "justify-center pl-0 rounded-xl mx-2"
                     )}
                   >
-                    <div className={clsx("flex items-center", isOpen ? "gap-5" : "gap-0")}>
+                    <div className={clsx("flex items-center", (isOpen || isMobileOpen) ? "gap-5" : "gap-0")}>
                       <link.icon className="h-5 w-5" />
-                      {isOpen && (
+                      {(isOpen || isMobileOpen) && (
                         <span className="text-[15px] whitespace-nowrap">
                           {link.name}
                         </span>
                       )}
                     </div>
 
-                    {isOpen && (
+                    {(isOpen || isMobileOpen) && (
                       <ChevronDown
                         className={clsx(
                           "ml-auto mr-6 h-4 w-4 transition-transform",
@@ -192,12 +224,13 @@ export default function Sidebar({ isOpen, toggleSidebar }) {
                     )}
                   </button>
 
-                  {isOpen && expanded && (
+                  {(isOpen || isMobileOpen) && expanded && (
                     <div className="mt-1 space-y-1 pl-8 pr-4">
                       {link.children.map((child) => (
                         <NavLink
                           key={child.path}
                           to={child.path}
+                          onClick={() => setIsMobileOpen && setIsMobileOpen(false)}
                           className={({ isActive }) =>
                             clsx(
                               "flex items-center gap-3 rounded-l-[28px] px-5 py-3 text-sm",
@@ -226,12 +259,12 @@ export default function Sidebar({ isOpen, toggleSidebar }) {
                   className={clsx(
                     "group flex items-center relative py-4 select-none outline-none focus:outline-none focus:ring-0",
                     `${inactiveTextClass} transition-colors duration-200`,
-                    isOpen ? "pl-8 rounded-l-[40px]" : "justify-center pl-0 rounded-xl mx-2"
+                    (isOpen || isMobileOpen) ? "pl-8 rounded-l-[40px]" : "justify-center pl-0 rounded-xl mx-2"
                   )}
                 >
-                  <div className={clsx("flex items-center z-20 relative", isOpen ? "gap-5" : "gap-0")}>
+                  <div className={clsx("flex items-center z-20 relative", (isOpen || isMobileOpen) ? "gap-5" : "gap-0")}>
                     <link.icon className="h-5 w-5 stroke-[2.5px]" />
-                    {isOpen && <span className="text-[15px] tracking-wide whitespace-nowrap">{link.name}</span>}
+                    {(isOpen || isMobileOpen) && <span className="text-[15px] tracking-wide whitespace-nowrap">{link.name}</span>}
                   </div>
                 </a>
               );
@@ -243,19 +276,20 @@ export default function Sidebar({ isOpen, toggleSidebar }) {
                 key={link.path}
                 to={link.path}
                 end={link.path === '/admin' || link.path === '/recruiter'}
+                onClick={() => setIsMobileOpen && setIsMobileOpen(false)}
                 className={({ isActive }) =>
                   clsx(
                     "group flex items-center relative py-4 select-none outline-none focus:outline-none focus:ring-0",
                     isActive
                       ? `${activeBgClass} ${activeTextClass}`
                       : `${inactiveTextClass} transition-colors duration-200`,
-                    isOpen ? "pl-8 rounded-l-[40px]" : "justify-center pl-0 rounded-xl mx-2"
+                    (isOpen || isMobileOpen) ? "pl-8 rounded-l-[40px]" : "justify-center pl-0 rounded-xl mx-2"
                   )
                 }
               >
                 {({ isActive }) => (
                   <>
-                    {isActive && isOpen && (
+                    {isActive && (isOpen || isMobileOpen) && (
                       <>
                         <div
                           className="absolute right-0 -top-[30px] w-[30px] h-[30px] bg-transparent pointer-events-none"
@@ -273,12 +307,12 @@ export default function Sidebar({ isOpen, toggleSidebar }) {
                         />
                       </>
                     )}
-                    <div className={clsx("flex items-center z-20 relative", isOpen ? "gap-5" : "gap-0")}>
+                    <div className={clsx("flex items-center z-20 relative", (isOpen || isMobileOpen) ? "gap-5" : "gap-0")}>
                       <link.icon className={clsx(
                         "h-5 w-5",
                         isActive ? "scale-110 stroke-[3px]" : "stroke-[2.5px]"
                       )} />
-                      {isOpen && <span className="text-[15px] tracking-wide whitespace-nowrap">{link.name}</span>}
+                      {(isOpen || isMobileOpen) && <span className="text-[15px] tracking-wide whitespace-nowrap">{link.name}</span>}
                     </div>
                   </>
                 )}
@@ -287,46 +321,65 @@ export default function Sidebar({ isOpen, toggleSidebar }) {
           })}
         </div>
 
-        {/* --- Sign Out Button --- */}
-        <div className={clsx("mt-auto p-4 mb-4", isOpen ? "px-6" : "px-2")}>
+        {/* --- Settings Dropdown Button --- */}
+        <div className={clsx("mt-auto p-4 mb-4 relative", (isOpen || isMobileOpen) ? "px-6" : "px-2")}>
+          {showSettingsDropdown && (
+            <div className={clsx(
+              "absolute bottom-[76px] z-50 bg-[#191e57] border border-white/10 rounded-2xl p-2 shadow-2xl animate-in fade-in slide-in-from-bottom-2 duration-200",
+              (isOpen || isMobileOpen) ? "left-6 right-6" : "left-2 w-48"
+            )}>
+              <NavLink
+                to={profilePath}
+                className={({ isActive }) =>
+                  clsx(
+                    "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
+                    isActive ? "bg-white/20 text-white font-bold" : "text-white hover:bg-white/10"
+                  )
+                }
+                onClick={() => setShowSettingsDropdown(false)}
+              >
+                <User className="h-4 w-4 text-blue-300" />
+                <span>Profile</span>
+              </NavLink>
+              <NavLink
+                to={passwordPath}
+                className={({ isActive }) =>
+                  clsx(
+                    "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
+                    isActive ? "bg-white/20 text-white font-bold" : "text-white hover:bg-white/10"
+                  )
+                }
+                onClick={() => setShowSettingsDropdown(false)}
+              >
+                <Lock className="h-4 w-4 text-amber-300" />
+                <span>Password</span>
+              </NavLink>
+              <hr className="border-white/10 my-1.5" />
+              <button
+                onClick={() => {
+                  setShowSettingsDropdown(false);
+                  logout();
+                }}
+                className="flex w-full items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-bold text-red-300 hover:bg-red-500/20 transition-colors text-left"
+              >
+                <Power className="h-4 w-4" />
+                <span>Sign Out</span>
+              </button>
+            </div>
+          )}
+
           <button
-            onClick={() => setShowLogoutModal(true)}
-            className={clsx("flex items-center w-full bg-red-600 hover:bg-red-700 text-white py-4 gap-4 transition-all shadow-lg", isOpen ? "rounded-2xl px-8" : "rounded-xl justify-center")}
+            onClick={() => setShowSettingsDropdown(!showSettingsDropdown)}
+            className={clsx(
+              "flex items-center w-full text-white py-4 gap-4 transition-all shadow-lg border border-white/10 bg-white/10 hover:bg-white/20",
+              (isOpen || isMobileOpen) ? "rounded-2xl px-8" : "rounded-xl justify-center"
+            )}
           >
-            <Power className="h-6 w-6 flex-shrink-0" />
-            {isOpen && <span className="font-extrabold whitespace-nowrap">Sign Out</span>}
+            <Settings className="h-6 w-6 flex-shrink-0 text-white" />
+            {(isOpen || isMobileOpen) && <span className="font-extrabold whitespace-nowrap">Settings</span>}
           </button>
         </div>
       </div>
-
-      {/* --- Logout Confirmation Modal --- */}
-      {showLogoutModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            <div className="p-6 text-center">
-              <div className="mx-auto w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mb-4">
-                <Power className="h-6 w-6 text-red-600" />
-              </div>
-              <h3 className="text-xl font-bold text-slate-900 mb-2">Sign Out</h3>
-              <p className="text-slate-500 text-sm mb-6">Are you sure you want to sign out of your account?</p>
-              <div className="flex gap-3 w-full">
-                <button
-                  onClick={() => setShowLogoutModal(false)}
-                  className="flex-1 px-4 py-2.5 rounded-xl font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={logout}
-                  className="flex-1 px-4 py-2.5 rounded-xl font-semibold text-white bg-red-600 hover:bg-red-700 shadow-md shadow-red-200 transition-colors"
-                >
-                  Yes, Sign Out
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </>
   );
 }

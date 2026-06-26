@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import {
   LayoutDashboard, Users, Briefcase, Calendar, MessageSquare,
@@ -18,7 +18,6 @@ const adminLinks = [
   { to: '/admin/messages', label: 'Messages', icon: MessageSquare },
   { to: '/admin/mock', label: 'AI Mock', icon: BrainCircuit },
   { to: '/admin/reports', label: 'Reports', icon: BarChart2 },
-  { to: '/admin/settings', label: 'Settings', icon: Settings },
 ];
 
 const recruiterLinks = [
@@ -30,15 +29,25 @@ const recruiterLinks = [
   { to: '/recruiter/mock', label: 'AI Mock', icon: BrainCircuit },
   { to: '/recruiter/reports', label: 'Reports', icon: BarChart2 },
   { to: '/recruiter/profile', label: 'Profile', icon: User },
-  { to: '/recruiter/settings', label: 'Settings', icon: Settings },
 ];
 
-export function DashboardSidebar({ collapsed, onToggle }) {
+export function DashboardSidebar({ collapsed, onToggle, mobileOpen, setMobileOpen }) {
   const { user, userRole, logout } = useAuth();
   const navigate = useNavigate();
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const location = useLocation();
+  const [showSettingsDropdown, setShowSettingsDropdown] = useState(false);
+
+  // Close mobile sidebar and settings dropdown on route change
+  React.useEffect(() => {
+    if (setMobileOpen) {
+      setMobileOpen(false);
+    }
+    setShowSettingsDropdown(false);
+  }, [location.pathname, setMobileOpen]);
 
   const links = userRole === 'admin' ? adminLinks : recruiterLinks;
+  const profilePath = userRole === 'recruiter' ? '/recruiter/profile' : '/admin/profile';
+  const passwordPath = userRole === 'recruiter' ? '/recruiter/change-password' : '/admin/change-password';
 
   const handleLogout = () => {
     logout();
@@ -46,7 +55,7 @@ export function DashboardSidebar({ collapsed, onToggle }) {
   };
 
   const SidebarContent = ({ isMobile = false }) => (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full relative">
       {/* Logo / Header */}
       <div className={`flex items-center justify-between px-4 py-5 border-b border-gray-200 dark:border-gray-700 ${collapsed && !isMobile ? 'justify-center' : ''}`}>
         {(!collapsed || isMobile) && (
@@ -63,7 +72,7 @@ export function DashboardSidebar({ collapsed, onToggle }) {
           </button>
         )}
         {isMobile && (
-          <button onClick={() => setMobileOpen(false)} className="p-1 rounded text-gray-500">
+          <button onClick={() => setMobileOpen(false)} className="p-1 rounded text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700">
             <X className="h-5 w-5"/>
           </button>
         )}
@@ -91,20 +100,58 @@ export function DashboardSidebar({ collapsed, onToggle }) {
         ))}
       </nav>
 
-      {/* User + Logout */}
-      <div className="border-t border-gray-200 dark:border-gray-700 p-4">
-        {(!collapsed || isMobile) && user && (
-          <div className="mb-3 px-1">
-            <p className="text-sm font-semibold text-gray-800 dark:text-white truncate">{user.name}</p>
-            <p className="text-xs text-gray-500 dark:text-gray-400 capitalize">{userRole}</p>
+      {/* Settings Drop-up Dropdown */}
+      <div className="border-t border-gray-200 dark:border-gray-700 p-4 relative">
+        {showSettingsDropdown && (
+          <div className={`absolute bottom-[72px] z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-2 shadow-2xl animate-in fade-in slide-in-from-bottom-2 duration-200 ${
+            collapsed && !isMobile ? 'left-2 w-48' : 'left-4 right-4'
+          }`}>
+            <NavLink
+              to={profilePath}
+              className={({ isActive }) =>
+                `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  isActive ? 'bg-gray-100 dark:bg-gray-700 text-blue-600 font-bold' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                }`
+              }
+              onClick={() => setShowSettingsDropdown(false)}
+            >
+              <User className="h-4 w-4 text-blue-500" />
+              <span>Profile</span>
+            </NavLink>
+            <NavLink
+              to={passwordPath}
+              className={({ isActive }) =>
+                `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  isActive ? 'bg-gray-100 dark:bg-gray-700 text-blue-600 font-bold' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                }`
+              }
+              onClick={() => setShowSettingsDropdown(false)}
+            >
+              <Lock className="h-4 w-4 text-amber-500" />
+              <span>Password</span>
+            </NavLink>
+            <hr className="border-gray-100 dark:border-gray-700 my-1" />
+            <button
+              onClick={() => {
+                setShowSettingsDropdown(false);
+                handleLogout();
+              }}
+              className="flex w-full items-center gap-3 px-3 py-2 rounded-lg text-sm font-bold text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 transition-colors text-left"
+            >
+              <LogOut className="h-4 w-4" />
+              <span>Sign Out</span>
+            </button>
           </div>
         )}
+
         <button
-          onClick={handleLogout}
-          className={`flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors ${collapsed && !isMobile ? 'justify-center' : ''}`}
+          onClick={() => setShowSettingsDropdown(!showSettingsDropdown)}
+          className={`flex items-center gap-3 w-full px-3 py-3 rounded-lg text-sm font-medium border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${
+            collapsed && !isMobile ? 'justify-center' : ''
+          }`}
         >
-          <LogOut className="h-5 w-5 flex-shrink-0"/>
-          {(!collapsed || isMobile) && <span>Logout</span>}
+          <Settings className="h-5 w-5 flex-shrink-0 text-gray-500 dark:text-gray-400"/>
+          {(!collapsed || isMobile) && <span className="font-semibold text-gray-700 dark:text-gray-300">Settings</span>}
         </button>
       </div>
     </div>
@@ -112,27 +159,26 @@ export function DashboardSidebar({ collapsed, onToggle }) {
 
   return (
     <>
-      {/* Mobile hamburger trigger */}
-      <button
-        className="fixed top-4 left-4 z-50 p-2 bg-white dark:bg-gray-800 shadow rounded-lg md:hidden"
-        onClick={() => setMobileOpen(true)}
-      >
-        <Menu className="h-5 w-5 text-gray-600"/>
-      </button>
-
-      {/* Mobile overlay */}
+      {/* Mobile overlay backdrop */}
       {mobileOpen && (
-        <div className="fixed inset-0 z-40 flex md:hidden">
-          <div className="absolute inset-0 bg-black/50" onClick={() => setMobileOpen(false)}/>
-          <div className="relative z-50 w-64 bg-white dark:bg-gray-900 h-full shadow-2xl">
-            <SidebarContent isMobile/>
-          </div>
-        </div>
+        <div 
+          className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm md:hidden transition-opacity duration-300 animate-in fade-in" 
+          onClick={() => setMobileOpen(false)}
+        />
       )}
+
+      {/* Mobile slide-in sidebar drawer */}
+      <aside 
+        className={`fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-gray-900 h-full shadow-2xl md:hidden transform transition-transform duration-300 ease-in-out ${
+          mobileOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
+        <SidebarContent isMobile/>
+      </aside>
 
       {/* Desktop sidebar */}
       <aside
-        className={`hidden md:flex flex-col h-full bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 transition-all duration-300 ${
+        className={`hidden md:flex flex-col h-full bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 transition-all duration-300 flex-shrink-0 ${
           collapsed ? 'w-16' : 'w-64'
         }`}
       >

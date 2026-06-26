@@ -1,4 +1,4 @@
-﻿import 'dotenv/config'; // CRITICAL: Loads .env BEFORE any other imports
+import 'dotenv/config'; // CRITICAL: Loads .env BEFORE any other imports
 
 import express from 'express';
 import cors from 'cors';
@@ -205,11 +205,22 @@ app.use('/score-match', scoreMatchRoutes);
 // Mount AI mock routes at root so index.html can call /start-session-interview etc. directly
 app.use('/', aiMockRoutes);
 
-// ── Serve AI Mock Static Files ────────────────────────────────────────────────
-// Already served from root above
-
 app.get('/', (_req, res) => {
   res.json({ message: 'API is running with Socket.IO & File Uploads...' });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// GET /api/users/active-list & /users/active-list — fetch list of active users
+// ═══════════════════════════════════════════════════════════════════════════════
+app.get(['/api/users/active-list', '/users/active-list'], protect, async (req, res) => {
+  try {
+    const activeUsers = await User.find({ active: true })
+      .select('_id recruiterId firstName lastName username email role active')
+      .sort({ firstName: 1 });
+    res.json(activeUsers);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -248,7 +259,6 @@ app.get('/api/reports', protect, authorize('admin', 'manager'), async (req, res)
         dateQuery = { createdAt: { $gte: s } };
       }
     }
-    // filter === 'all' → no date restriction
 
     const INTERVIEW_STAGES = [
       'L1 Interview', 'L2 Interview', 'L3 Interview', 'L4 Interview', 'L5 Interview',

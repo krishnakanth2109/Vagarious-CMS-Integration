@@ -100,10 +100,23 @@ body > div > .fixed.inset-0,
 [data-radix-portal] > div,
 [id^="headlessui-dialog-"],
 [id^="headlessui-portal-"],
-.fixed.inset-0.backdrop-blur-sm,
-.fixed.inset-0.backdrop-blur-md,
-.fixed.inset-0.backdrop-blur,
 div[class*="fixed inset-0 z-"] {
   zoom: 1.08 !important;
+  inset: 0 !important;
+}
+
+/* Specifically expand background backdrop overlays to avoid edge gaps on zoom: 0.8 */
+.absolute.inset-0[class*="bg-slate-"],
+.absolute.inset-0[class*="bg-black"],
+.absolute.inset-0[class*="bg-zinc-"],
+.fixed.inset-0[class*="backdrop-blur"],
+.absolute.inset-0[class*="backdrop-blur"],
+.fixed.inset-0.bg-slate-950\/45,
+.fixed.inset-0.bg-black\/50,
+.fixed.inset-0.bg-black\/60,
+.fixed.inset-0.bg-slate-900\/40,
+.fixed.inset-0.bg-slate-950\/60,
+.fixed.inset-0.bg-zinc-950\/70 {
   inset: -50% !important;
 }
+

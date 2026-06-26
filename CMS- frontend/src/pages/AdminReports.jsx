@@ -1,4 +1,4 @@
-﻿import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import {
   Area,
   AreaChart,
@@ -96,7 +96,7 @@ const firstDayOfMonth = () => {
 
 const safeDate = (value) => {
   if (!value) return "";
-  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}/.test(value)) return value.substring(0, 10);
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return "";
   return localDateStr(parsed);
@@ -438,13 +438,13 @@ const ColumnTotalFooter = ({ columns, minWidth = "520px", template }) => (
       style={{ minWidth, gridTemplateColumns: template || `repeat(${columns.length}, minmax(0, 1fr))` }}
     >
       {columns.map(({ label, value, align = "left", onClick }) => (
-          <div key={label} className={`flex min-h-9 items-center px-3 py-1 ${getFooterAlignClass(align)}`} aria-label={`${label}: ${value}`}>
-            {onClick ? (
-              <NumberButton onClick={onClick} className="shrink-0 text-sm">{value}</NumberButton>
-            ) : (
-              <span className="shrink-0 text-sm font-bold text-zinc-900 dark:text-white">{value}</span>
-            )}
-          </div>
+        <div key={label} className={`flex min-h-9 items-center px-3 py-1 ${getFooterAlignClass(align)}`} aria-label={`${label}: ${value}`}>
+          {onClick ? (
+            <NumberButton onClick={onClick} className="shrink-0 text-sm">{value}</NumberButton>
+          ) : (
+            <span className="shrink-0 text-sm font-bold text-zinc-900 dark:text-white">{value}</span>
+          )}
+        </div>
       ))}
     </div>
   </div>
@@ -482,8 +482,9 @@ const DetailsModal = ({ detail, onClose, onCellDrilldown }) => {
     : rows;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3 backdrop-blur-sm sm:p-5">
-      <div className="flex h-[92vh] w-full max-w-[1500px] flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-800 dark:bg-zinc-900">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5">
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative flex h-[92vh] w-full max-w-[1500px] flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-800 dark:bg-zinc-900">
         <div className="flex items-start justify-between gap-4 border-b border-zinc-200 bg-zinc-50 px-5 py-4 dark:border-zinc-800 dark:bg-zinc-950/70 sm:px-6">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
@@ -580,6 +581,7 @@ export function ReportsDashboard({ recruiterOnly = false }) {
   const [candidates, setCandidates] = useState([]);
   const [recruiters, setRecruiters] = useState([]);
   const [detailModal, setDetailModal] = useState(null);
+  const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
 
   const [filters, setFilters] = useState({
     startDate: "",
@@ -629,11 +631,7 @@ export function ReportsDashboard({ recruiterOnly = false }) {
       const candidateJson = await candidateRes.json();
       const recruiterJson = await recruiterRes.json();
       const loadedCandidates = normalizeArray(candidateJson);
-      setCandidates(
-        recruiterOnly
-          ? loadedCandidates.filter((candidate) => candidateBelongsToRecruiter(candidate, currentUser))
-          : loadedCandidates
-      );
+      setCandidates(loadedCandidates);
       setRecruiters(recruiterOnly ? [currentUser].filter(Boolean) : normalizeArray(recruiterJson, "recruiters"));
     } catch (error) {
       setFetchError(true);
@@ -1197,577 +1195,805 @@ export function ReportsDashboard({ recruiterOnly = false }) {
 
   return (
     <>
-    <div className="min-h-screen flex-1 overflow-y-auto bg-slate-50 p-4 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100 sm:p-5">
-      <div className="mx-auto max-w-[1500px] space-y-4">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Overview</p>
-            <h1 className="mt-1 text-2xl font-bold tracking-tight text-zinc-950 dark:text-white">Reports</h1>
-            <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-              Filtered recruitment performance, trends, and export-ready tables.
-            </p>
+      <div className="min-h-screen flex-1 overflow-y-auto bg-slate-50 p-4 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100 sm:p-5">
+        <div className="mx-auto max-w-[1500px] space-y-4">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Overview</p>
+              <h1 className="mt-1 text-2xl font-bold tracking-tight text-zinc-950 dark:text-white">Reports</h1>
+              <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+                Filtered recruitment performance, trends, and export-ready tables.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button onClick={() => handleExport("excel")} disabled={isExporting} className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 shadow-sm hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800">
+                {isExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4 text-emerald-600" />}
+                Excel
+              </button>
+              <button onClick={() => handleExport("pdf")} disabled={isExporting} className="inline-flex items-center gap-2 rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-zinc-800 disabled:opacity-60 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200">
+                {isExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+                PDF
+              </button>
+            </div>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <button onClick={() => handleExport("excel")} disabled={isExporting} className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 shadow-sm hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800">
-              {isExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4 text-emerald-600" />}
-              Excel
-            </button>
-            <button onClick={() => handleExport("pdf")} disabled={isExporting} className="inline-flex items-center gap-2 rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-zinc-800 disabled:opacity-60 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200">
-              {isExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
-              PDF
-            </button>
-          </div>
-        </div>
 
-        <section className="rounded-xl border border-zinc-200 bg-white p-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-          <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-zinc-800 dark:text-zinc-100">
-            <Filter className="h-4 w-4" />
-            Report Filters
-          </div>
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-7">
-            <div>
-              <label className="mb-1 block text-xs font-medium text-zinc-500">Start Date</label>
-              <input type="date" value={filters.startDate} max={filters.endDate || localDateStr()} onChange={(e) => setFilters((prev) => ({ ...prev, startDate: e.target.value }))} className={inputCls} />
+          <section className="rounded-xl border border-zinc-200 bg-white p-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+            <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-zinc-800 dark:text-zinc-100">
+              <Filter className="h-4 w-4" />
+              Report Filters
             </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-zinc-500">End Date</label>
-              <input type="date" value={filters.endDate} min={filters.startDate || undefined} max={localDateStr()} onChange={(e) => setFilters((prev) => ({ ...prev, endDate: e.target.value }))} className={inputCls} />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-zinc-500">Recruiter</label>
-              <select
-                value={recruiterOnly ? (currentRecruiterId || "current") : filters.recruiterId}
-                onChange={(e) => setFilters((prev) => ({ ...prev, recruiterId: e.target.value }))}
-                disabled={recruiterOnly}
-                className={inputCls}
+            {/* Mobile Filter Trigger */}
+            <div className="flex md:hidden items-center justify-between gap-2">
+              <button
+                type="button"
+                onClick={() => setIsMobileFilterOpen(true)}
+                className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-700 shadow-sm hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
               >
-                {recruiterOnly ? (
-                  <option value={currentRecruiterId || "current"}>{currentRecruiterName}</option>
-                ) : (
-                  <>
-                    <option value="all">All Recruiters</option>
-                    {recruiters.map((recruiter) => (
-                      <option key={recruiter._id || recruiter.id} value={recruiter._id || recruiter.id}>{getRecruiterName(recruiter)}</option>
-                    ))}
-                  </>
+                <Filter className="h-4 w-4" />
+                Filter
+                {(filters.startDate || filters.recruiterId !== "all" || filters.status !== "all" || filters.client !== "all" || filters.source !== "all" || filters.search) && (
+                  <span className="ml-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-[10px] font-bold text-white leading-none">
+                    {[
+                      filters.startDate ? 1 : 0,
+                      filters.recruiterId !== "all" ? 1 : 0,
+                      filters.status !== "all" ? 1 : 0,
+                      filters.client !== "all" ? 1 : 0,
+                      filters.source !== "all" ? 1 : 0,
+                      filters.search ? 1 : 0,
+                    ].reduce((a, b) => a + b, 0)}
+                  </span>
                 )}
-              </select>
+              </button>
+              <button
+                type="button"
+                onClick={fetchReports}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
+                title="Refresh"
+              >
+                <RefreshCw className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={resetFilters}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
+                title="Reset"
+              >
+                <RotateCcw className="h-4 w-4" />
+              </button>
             </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-zinc-500">Status</label>
-              <select value={filters.status} onChange={(e) => setFilters((prev) => ({ ...prev, status: e.target.value }))} className={inputCls}>
-                <option value="all">All Status</option>
-                {statusOptions.map((status) => <option key={status} value={status}>{status}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-zinc-500">Client</label>
-              <select value={filters.client} onChange={(e) => setFilters((prev) => ({ ...prev, client: e.target.value }))} className={inputCls}>
-                <option value="all">All Clients</option>
-                {clientOptions.map((client) => <option key={client} value={client}>{client}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-zinc-500">Source</label>
-              <select value={filters.source} onChange={(e) => setFilters((prev) => ({ ...prev, source: e.target.value }))} className={inputCls}>
-                <option value="all">All Sources</option>
-                {sourceOptions.map((source) => <option key={source} value={source}>{source}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-zinc-500">Search</label>
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-zinc-400" />
-                <input value={filters.search} onChange={(e) => setFilters((prev) => ({ ...prev, search: e.target.value }))} placeholder="Name, role, ID..." className={`${inputCls} pl-9`} />
+
+            <div className="hidden md:grid gap-3 md:grid-cols-2 xl:grid-cols-7">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-zinc-500">Start Date</label>
+                <input type="date" value={filters.startDate} max={filters.endDate || localDateStr()} onChange={(e) => setFilters((prev) => ({ ...prev, startDate: e.target.value }))} className={inputCls} />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-zinc-500">End Date</label>
+                <input type="date" value={filters.endDate} min={filters.startDate || undefined} max={localDateStr()} onChange={(e) => setFilters((prev) => ({ ...prev, endDate: e.target.value }))} className={inputCls} />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-zinc-500">Recruiter</label>
+                <select
+                  value={recruiterOnly ? (currentRecruiterId || "current") : filters.recruiterId}
+                  onChange={(e) => setFilters((prev) => ({ ...prev, recruiterId: e.target.value }))}
+                  disabled={recruiterOnly}
+                  className={inputCls}
+                >
+                  {recruiterOnly ? (
+                    <option value={currentRecruiterId || "current"}>{currentRecruiterName}</option>
+                  ) : (
+                    <>
+                      <option value="all">All Recruiters</option>
+                      {recruiters.map((recruiter) => (
+                        <option key={recruiter._id || recruiter.id} value={recruiter._id || recruiter.id}>{getRecruiterName(recruiter)}</option>
+                      ))}
+                    </>
+                  )}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-zinc-500">Status</label>
+                <select value={filters.status} onChange={(e) => setFilters((prev) => ({ ...prev, status: e.target.value }))} className={inputCls}>
+                  <option value="all">All Status</option>
+                  {statusOptions.map((status) => <option key={status} value={status}>{status}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-zinc-500">Client</label>
+                <select value={filters.client} onChange={(e) => setFilters((prev) => ({ ...prev, client: e.target.value }))} className={inputCls}>
+                  <option value="all">All Clients</option>
+                  {clientOptions.map((client) => <option key={client} value={client}>{client}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-zinc-500">Source</label>
+                <select value={filters.source} onChange={(e) => setFilters((prev) => ({ ...prev, source: e.target.value }))} className={inputCls}>
+                  <option value="all">All Sources</option>
+                  {sourceOptions.map((source) => <option key={source} value={source}>{source}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-zinc-500">Search</label>
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-zinc-400" />
+                  <input value={filters.search} onChange={(e) => setFilters((prev) => ({ ...prev, search: e.target.value }))} placeholder="Name, role, ID..." className={`${inputCls} pl-9`} />
+                </div>
               </div>
             </div>
+            <div className="mt-3 hidden md:flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap gap-2">
+                <button onClick={() => setQuickRange(7)} className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-800">Last 7 Days</button>
+                <button onClick={() => setQuickRange(30)} className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-800">Last 30 Days</button>
+                <button onClick={() => setFilters((prev) => ({ ...prev, startDate: firstDayOfMonth(), endDate: localDateStr() }))} className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-800">This Month</button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button onClick={fetchReports} className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800">
+                  <RefreshCw className="h-3.5 w-3.5" />
+                  Refresh
+                </button>
+                <button onClick={resetFilters} className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800">
+                  <RotateCcw className="h-3.5 w-3.5" />
+                  Reset
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
+            <MetricCard label="Candidates" value={summary.total} hint={filterLabel} icon={Users} tone="zinc" onClick={() => openDetails("Candidates", filteredCandidateRows, candidateDetailColumns)} />
+            <MetricCard label="Recruiters" value={summary.uniqueRecruiters} hint="Recruiters with submissions" icon={UserCheck} tone="blue" onClick={() => openDetails("Recruiters With Submissions", recruiterSummary, recruiterDetailColumns)} />
+            <MetricCard label="Turnups" value={summary.turnups} hint="Candidates attended" icon={CalendarDays} tone="amber" onClick={() => openDetails("Turnup Candidates", bucketRows("Turnups"), candidateDetailColumns)} />
+            <MetricCard label="Selected" value={summary.selected} hint={`${summary.selectionRate}% selection rate`} icon={CheckCircle2} tone="green" onClick={() => openDetails("Selected Candidates", bucketRows("Selected"), candidateDetailColumns)} />
+            <MetricCard label="Joined" value={summary.joined} hint="Final joined count" icon={BriefcaseBusiness} tone="green" onClick={() => openDetails("Joined Candidates", bucketRows("Joined"), candidateDetailColumns)} />
+            <MetricCard label="Conversion" value={`${summary.conversion}%`} hint="Selected to joined" icon={TrendingUp} tone="blue" onClick={() => openDetails("Joined Candidates For Conversion", bucketRows("Joined"), candidateDetailColumns)} />
           </div>
-          <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex flex-wrap gap-2">
-              <button onClick={() => setQuickRange(7)} className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-800">Last 7 Days</button>
-              <button onClick={() => setQuickRange(30)} className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-800">Last 30 Days</button>
-              <button onClick={() => setFilters((prev) => ({ ...prev, startDate: firstDayOfMonth(), endDate: localDateStr() }))} className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-800">This Month</button>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <button onClick={fetchReports} className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800">
-                <RefreshCw className="h-3.5 w-3.5" />
-                Refresh
-              </button>
-              <button onClick={resetFilters} className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800">
-                <RotateCcw className="h-3.5 w-3.5" />
-                Reset
-              </button>
-            </div>
-          </div>
-        </section>
 
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
-          <MetricCard label="Candidates" value={summary.total} hint={filterLabel} icon={Users} tone="zinc" onClick={() => openDetails("Candidates", filteredCandidateRows, candidateDetailColumns)} />
-          <MetricCard label="Recruiters" value={summary.uniqueRecruiters} hint="Recruiters with submissions" icon={UserCheck} tone="blue" onClick={() => openDetails("Recruiters With Submissions", recruiterSummary, recruiterDetailColumns)} />
-          <MetricCard label="Turnups" value={summary.turnups} hint="Candidates attended" icon={CalendarDays} tone="amber" onClick={() => openDetails("Turnup Candidates", bucketRows("Turnups"), candidateDetailColumns)} />
-          <MetricCard label="Selected" value={summary.selected} hint={`${summary.selectionRate}% selection rate`} icon={CheckCircle2} tone="green" onClick={() => openDetails("Selected Candidates", bucketRows("Selected"), candidateDetailColumns)} />
-          <MetricCard label="Joined" value={summary.joined} hint="Final joined count" icon={BriefcaseBusiness} tone="green" onClick={() => openDetails("Joined Candidates", bucketRows("Joined"), candidateDetailColumns)} />
-          <MetricCard label="Conversion" value={`${summary.conversion}%`} hint="Selected to joined" icon={TrendingUp} tone="blue" onClick={() => openDetails("Joined Candidates For Conversion", bucketRows("Joined"), candidateDetailColumns)} />
-        </div>
+          <div className="grid gap-4 xl:grid-cols-[1.4fr_0.9fr]">
+            <Section
+              title="Submission Trend"
+              subtitle="Date range aware trend for submissions, selected, and joined candidates."
+              footer={<TotalFooter items={[
+                { label: "Total Submissions", value: summary.total, onClick: () => openDetails("Submitted Candidates", filteredCandidateRows, candidateDetailColumns) },
+                { label: "Selected", value: summary.selected, onClick: () => openDetails("Selected Candidates", bucketRows("Selected"), candidateDetailColumns) },
+                { label: "Joined", value: summary.joined, onClick: () => openDetails("Joined Candidates", bucketRows("Joined"), candidateDetailColumns) },
+              ]} />}
+            >
+              <div className="h-60 sm:h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={trendData}>
+                    <defs>
+                      <linearGradient id="submissionsFill" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#2563eb" stopOpacity={0.22} />
+                        <stop offset="95%" stopColor="#2563eb" stopOpacity={0.02} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e4e4e7" vertical={false} />
+                    <XAxis dataKey="label" tick={{ fill: "#71717a", fontSize: 11 }} axisLine={false} tickLine={false} />
+                    <YAxis allowDecimals={false} tick={{ fill: "#71717a", fontSize: 11 }} axisLine={false} tickLine={false} />
+                    <Tooltip {...chartTooltip} />
+                    <Legend />
+                    <Area type="monotone" dataKey="Submissions" stroke="#2563eb" strokeWidth={2.5} fill="url(#submissionsFill)" />
+                    <Line type="monotone" dataKey="Selected" stroke="#16a34a" strokeWidth={2.2} dot={{ r: 3 }} />
+                    <Line type="monotone" dataKey="Joined" stroke="#7c3aed" strokeWidth={2.2} dot={{ r: 3 }} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </Section>
 
-        <div className="grid gap-4 xl:grid-cols-[1.4fr_0.9fr]">
-          <Section
-            title="Submission Trend"
-            subtitle="Date range aware trend for submissions, selected, and joined candidates."
-            footer={<TotalFooter items={[
-              { label: "Total Submissions", value: summary.total, onClick: () => openDetails("Submitted Candidates", filteredCandidateRows, candidateDetailColumns) },
-              { label: "Selected", value: summary.selected, onClick: () => openDetails("Selected Candidates", bucketRows("Selected"), candidateDetailColumns) },
-              { label: "Joined", value: summary.joined, onClick: () => openDetails("Joined Candidates", bucketRows("Joined"), candidateDetailColumns) },
-            ]} />}
-          >
-            <div className="h-60 sm:h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={trendData}>
-                  <defs>
-                    <linearGradient id="submissionsFill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#2563eb" stopOpacity={0.22} />
-                      <stop offset="95%" stopColor="#2563eb" stopOpacity={0.02} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e4e4e7" vertical={false} />
-                  <XAxis dataKey="label" tick={{ fill: "#71717a", fontSize: 11 }} axisLine={false} tickLine={false} />
-                  <YAxis allowDecimals={false} tick={{ fill: "#71717a", fontSize: 11 }} axisLine={false} tickLine={false} />
-                  <Tooltip {...chartTooltip} />
-                  <Legend />
-                  <Area type="monotone" dataKey="Submissions" stroke="#2563eb" strokeWidth={2.5} fill="url(#submissionsFill)" />
-                  <Line type="monotone" dataKey="Selected" stroke="#16a34a" strokeWidth={2.2} dot={{ r: 3 }} />
-                  <Line type="monotone" dataKey="Joined" stroke="#7c3aed" strokeWidth={2.2} dot={{ r: 3 }} />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          </Section>
-
-          <Section
-            title="Source Split"
-            subtitle="Candidate source distribution for the active filters."
-            footer={<TotalFooter items={[
-              { label: "Total Candidates", value: sourceTotal, onClick: () => openDetails("Candidates By Source", filteredCandidateRows, candidateDetailColumns) },
-              { label: "Unique Sources", value: sourceSummary.length, onClick: () => openDetails("Unique Sources", sourceSummary.map((source) => ({ source: source.name, count: source.value })), compactSummaryColumns) },
-            ]} />}
-          >
-            <div className="h-60 sm:h-64">
-              {sourceSummary.length ? (
-                <div className="grid h-full gap-3 lg:grid-cols-[0.9fr_1.1fr]">
-                  <div className="rounded-lg border border-zinc-100 bg-zinc-50 p-2 dark:border-zinc-800 dark:bg-zinc-950/50">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie data={sourceSummary} dataKey="value" nameKey="name" innerRadius={42} outerRadius={78} paddingAngle={3}>
-                          {sourceSummary.map((entry) => <Cell key={entry.name} fill={entry.fill} />)}
-                        </Pie>
-                        <Tooltip {...chartTooltip} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                  <div className="min-h-0 overflow-y-auto rounded-lg border border-zinc-100 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
-                    <div className="space-y-2.5">
-                      {sourceSummary.map((source) => {
-                        const percent = sourceTotal ? Math.round((source.value / sourceTotal) * 100) : 0;
-                        return (
-                          <div key={source.name}>
-                            <div className="mb-1 flex items-center justify-between gap-2 text-xs">
-                              <span className="flex min-w-0 items-center gap-2 font-medium text-zinc-800 dark:text-zinc-100">
-                                <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: source.fill }} />
-                                <span className="truncate">{source.name}</span>
-                              </span>
-                              <span className="shrink-0">
-                                <NumberButton onClick={() => openDetails(`${source.name} Candidates`, sourceRows(source.name), candidateDetailColumns)}>
-                                  {source.value} ({percent}%)
-                                </NumberButton>
-                              </span>
+            <Section
+              title="Source Split"
+              subtitle="Candidate source distribution for the active filters."
+              footer={<TotalFooter items={[
+                { label: "Total Candidates", value: sourceTotal, onClick: () => openDetails("Candidates By Source", filteredCandidateRows, candidateDetailColumns) },
+                { label: "Unique Sources", value: sourceSummary.length, onClick: () => openDetails("Unique Sources", sourceSummary.map((source) => ({ source: source.name, count: source.value })), compactSummaryColumns) },
+              ]} />}
+            >
+              <div className="h-60 sm:h-64">
+                {sourceSummary.length ? (
+                  <div className="grid h-full gap-3 lg:grid-cols-[0.9fr_1.1fr]">
+                    <div className="rounded-lg border border-zinc-100 bg-zinc-50 p-2 dark:border-zinc-800 dark:bg-zinc-950/50">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie data={sourceSummary} dataKey="value" nameKey="name" innerRadius={42} outerRadius={78} paddingAngle={3}>
+                            {sourceSummary.map((entry) => <Cell key={entry.name} fill={entry.fill} />)}
+                          </Pie>
+                          <Tooltip {...chartTooltip} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <div className="min-h-0 overflow-y-auto rounded-lg border border-zinc-100 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
+                      <div className="space-y-2.5">
+                        {sourceSummary.map((source) => {
+                          const percent = sourceTotal ? Math.round((source.value / sourceTotal) * 100) : 0;
+                          return (
+                            <div key={source.name}>
+                              <div className="mb-1 flex items-center justify-between gap-2 text-xs">
+                                <span className="flex min-w-0 items-center gap-2 font-medium text-zinc-800 dark:text-zinc-100">
+                                  <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: source.fill }} />
+                                  <span className="truncate">{source.name}</span>
+                                </span>
+                                <span className="shrink-0">
+                                  <NumberButton onClick={() => openDetails(`${source.name} Candidates`, sourceRows(source.name), candidateDetailColumns)}>
+                                    {source.value} ({percent}%)
+                                  </NumberButton>
+                                </span>
+                              </div>
+                              <div className="h-1.5 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+                                <div className="h-full rounded-full" style={{ width: `${percent}%`, backgroundColor: source.fill }} />
+                              </div>
                             </div>
-                            <div className="h-1.5 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
-                              <div className="h-full rounded-full" style={{ width: `${percent}%`, backgroundColor: source.fill }} />
-                            </div>
-                          </div>
-                        );
-                      })}
+                          );
+                        })}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ) : (
-                <div className="flex h-full items-center justify-center text-sm text-zinc-400">No source data</div>
-              )}
-            </div>
-          </Section>
-        </div>
+                ) : (
+                  <div className="flex h-full items-center justify-center text-sm text-zinc-400">No source data</div>
+                )}
+              </div>
+            </Section>
+          </div>
 
-        <div className="grid gap-4 xl:grid-cols-2">
-          <Section
-            title="Recruiter Performance"
-            subtitle="Submissions compared with selection and joining outcomes."
-            footer={<TotalFooter items={[
-              { label: "Submissions", value: summary.total, onClick: () => openDetails("Recruiter Submissions", filteredCandidateRows, candidateDetailColumns) },
-              { label: "Selected", value: summary.selected, onClick: () => openDetails("Selected Candidates", bucketRows("Selected"), candidateDetailColumns) },
-              { label: "Rejected", value: summary.rejected, onClick: () => openDetails("Rejected Candidates", bucketRows("Rejected"), candidateDetailColumns) },
-              { label: "Joined", value: summary.joined, onClick: () => openDetails("Joined Candidates", bucketRows("Joined"), candidateDetailColumns) },
-            ]} />}
-          >
-            <div className="h-60 sm:h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={recruiterChartData} barCategoryGap="22%" margin={{ top: 8, right: 10, bottom: 8, left: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e4e4e7" vertical={false} />
-                  <XAxis
-                    dataKey="firstName"
-                    interval={0}
-                    height={34}
-                    tick={{ fill: "#71717a", fontSize: 11 }}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <YAxis allowDecimals={false} tick={{ fill: "#71717a", fontSize: 11 }} axisLine={false} tickLine={false} />
-                  <Tooltip {...chartTooltip} />
-                  <Legend
-                    verticalAlign="bottom"
-                    align="center"
-                    iconType="circle"
-                    wrapperStyle={{ paddingTop: 8, fontSize: 12 }}
-                  />
-                  <Bar dataKey="Submissions" fill="#2563eb" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="Selected" fill="#16a34a" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="Rejected" fill="#ef4444" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="Joined" fill="#7c3aed" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </Section>
+          <div className="grid gap-4 xl:grid-cols-2">
+            <Section
+              title="Recruiter Performance"
+              subtitle="Submissions compared with selection and joining outcomes."
+              footer={<TotalFooter items={[
+                { label: "Submissions", value: summary.total, onClick: () => openDetails("Recruiter Submissions", filteredCandidateRows, candidateDetailColumns) },
+                { label: "Selected", value: summary.selected, onClick: () => openDetails("Selected Candidates", bucketRows("Selected"), candidateDetailColumns) },
+                { label: "Rejected", value: summary.rejected, onClick: () => openDetails("Rejected Candidates", bucketRows("Rejected"), candidateDetailColumns) },
+                { label: "Joined", value: summary.joined, onClick: () => openDetails("Joined Candidates", bucketRows("Joined"), candidateDetailColumns) },
+              ]} />}
+            >
+              <div className="h-60 sm:h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={recruiterChartData} barCategoryGap="22%" margin={{ top: 8, right: 10, bottom: 8, left: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e4e4e7" vertical={false} />
+                    <XAxis
+                      dataKey="firstName"
+                      interval={0}
+                      height={34}
+                      tick={{ fill: "#71717a", fontSize: 11 }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <YAxis allowDecimals={false} tick={{ fill: "#71717a", fontSize: 11 }} axisLine={false} tickLine={false} />
+                    <Tooltip {...chartTooltip} />
+                    <Legend
+                      verticalAlign="bottom"
+                      align="center"
+                      iconType="circle"
+                      wrapperStyle={{ paddingTop: 8, fontSize: 12 }}
+                    />
+                    <Bar dataKey="Submissions" fill="#2563eb" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="Selected" fill="#16a34a" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="Rejected" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="Joined" fill="#7c3aed" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </Section>
 
-          <Section
-            title="Status Funnel"
-            subtitle="Candidate movement across key hiring stages."
-            footer={<TotalFooter items={[
-              { label: "Total Candidates", value: summary.total, onClick: () => openDetails("Candidates", filteredCandidateRows, candidateDetailColumns) },
-              { label: "Turnups", value: summary.turnups, onClick: () => openDetails("Turnup Candidates", bucketRows("Turnups"), candidateDetailColumns) },
-              { label: "Rejected", value: summary.rejected, onClick: () => openDetails("Rejected Candidates", bucketRows("Rejected"), candidateDetailColumns) },
-            ]} />}
-          >
-            <div className="h-60 sm:h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={funnelData} layout="vertical" margin={{ left: 20 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e4e4e7" horizontal={false} />
-                  <XAxis type="number" allowDecimals={false} tick={{ fill: "#71717a", fontSize: 11 }} axisLine={false} tickLine={false} />
-                  <YAxis dataKey="stage" type="category" tick={{ fill: "#71717a", fontSize: 11 }} axisLine={false} tickLine={false} />
-                  <Tooltip {...chartTooltip} />
-                  <Bar dataKey="count" fill="#18181b" radius={[0, 6, 6, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </Section>
-        </div>
+            <Section
+              title="Status Funnel"
+              subtitle="Candidate movement across key hiring stages."
+              footer={<TotalFooter items={[
+                { label: "Total Candidates", value: summary.total, onClick: () => openDetails("Candidates", filteredCandidateRows, candidateDetailColumns) },
+                { label: "Turnups", value: summary.turnups, onClick: () => openDetails("Turnup Candidates", bucketRows("Turnups"), candidateDetailColumns) },
+                { label: "Rejected", value: summary.rejected, onClick: () => openDetails("Rejected Candidates", bucketRows("Rejected"), candidateDetailColumns) },
+              ]} />}
+            >
+              <div className="h-60 sm:h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={funnelData} layout="vertical" margin={{ left: 20 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e4e4e7" horizontal={false} />
+                    <XAxis type="number" allowDecimals={false} tick={{ fill: "#71717a", fontSize: 11 }} axisLine={false} tickLine={false} />
+                    <YAxis dataKey="stage" type="category" tick={{ fill: "#71717a", fontSize: 11 }} axisLine={false} tickLine={false} />
+                    <Tooltip {...chartTooltip} />
+                    <Bar dataKey="count" fill="#18181b" radius={[0, 6, 6, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </Section>
+          </div>
 
-        <div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
-          <Section
-            title="Top Positions"
-            subtitle="Most submitted roles in the selected date range."
-            footer={<TotalFooter items={[
-              { label: "Total Candidates", value: summary.total, onClick: () => openDetails("Candidates", filteredCandidateRows, candidateDetailColumns) },
-              { label: "Positions Shown", value: positionSummary.length, onClick: () => openDetails("Top Positions", positionSummary, compactSummaryColumns) },
-            ]} />}
-          >
-            <div className="h-56">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={positionSummary}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e4e4e7" vertical={false} />
-                  <XAxis dataKey="position" tick={{ fill: "#71717a", fontSize: 11 }} axisLine={false} tickLine={false} />
-                  <YAxis allowDecimals={false} tick={{ fill: "#71717a", fontSize: 11 }} axisLine={false} tickLine={false} />
-                  <Tooltip {...chartTooltip} />
-                  <Bar dataKey="count" fill="#0f766e" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </Section>
+          <div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
+            <Section
+              title="Top Positions"
+              subtitle="Most submitted roles in the selected date range."
+              footer={<TotalFooter items={[
+                { label: "Total Candidates", value: summary.total, onClick: () => openDetails("Candidates", filteredCandidateRows, candidateDetailColumns) },
+                { label: "Positions Shown", value: positionSummary.length, onClick: () => openDetails("Top Positions", positionSummary, compactSummaryColumns) },
+              ]} />}
+            >
+              <div className="h-56">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={positionSummary}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e4e4e7" vertical={false} />
+                    <XAxis dataKey="position" tick={{ fill: "#71717a", fontSize: 11 }} axisLine={false} tickLine={false} />
+                    <YAxis allowDecimals={false} tick={{ fill: "#71717a", fontSize: 11 }} axisLine={false} tickLine={false} />
+                    <Tooltip {...chartTooltip} />
+                    <Bar dataKey="count" fill="#0f766e" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </Section>
 
-          <Section
-            title="Status Summary"
-            subtitle="Counts are based on the active filters."
-            footer={<ColumnTotalFooter
-              minWidth="520px"
-              template="1.4fr 0.8fr 0.8fr"
-              columns={[
-                { label: "Status", value: "Total" },
-                { label: "Count", value: statusTotal, align: "right", onClick: () => openDetails("Status Summary Candidates", filteredCandidateRows, candidateDetailColumns) },
-                { label: "Share", value: summary.total ? "100%" : "0%" },
-              ]}
-            />}
-          >
-            <div className="max-h-64 overflow-auto rounded-lg border border-zinc-100 dark:border-zinc-800">
-              <table className="w-full min-w-[520px] table-fixed text-left text-sm">
-                <colgroup>
-                  <col style={{ width: "46.66%" }} />
-                  <col style={{ width: "26.67%" }} />
-                  <col style={{ width: "26.67%" }} />
-                </colgroup>
-                <thead className="sticky top-0 z-10 border-b border-zinc-200 bg-white text-xs uppercase text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900">
-                  <tr>
-                    <th className="px-3 py-2">Status</th>
-                    <th className="px-3 py-2 text-right">Count</th>
-                    <th className="px-3 py-2">Share</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                  {statusSummary.map((item) => (
-                    <tr key={item.status}>
-                      <td className="px-3 py-3">
-                        <span className="inline-flex items-center gap-2 font-medium text-zinc-800 dark:text-zinc-100">
-                          <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.fill }} />
-                          {item.status}
-                        </span>
-                      </td>
-                      <td className="px-3 py-3 text-right">
-                        <NumberButton onClick={() => openDetails(`${item.status} Candidates`, statusRows(item.status), candidateDetailColumns)}>
-                          {item.count}
-                        </NumberButton>
-                      </td>
-                      <td className="px-3 py-3 text-zinc-500">{summary.total ? Math.round((item.count / summary.total) * 100) : 0}%</td>
+            <Section
+              title="Status Summary"
+              subtitle="Counts are based on the active filters."
+              footer={<ColumnTotalFooter
+                minWidth="520px"
+                template="1.4fr 0.8fr 0.8fr"
+                columns={[
+                  { label: "Status", value: "Total" },
+                  { label: "Count", value: statusTotal, align: "right", onClick: () => openDetails("Status Summary Candidates", filteredCandidateRows, candidateDetailColumns) },
+                  { label: "Share", value: summary.total ? "100%" : "0%" },
+                ]}
+              />}
+            >
+              <div className="max-h-64 overflow-auto rounded-lg border border-zinc-100 dark:border-zinc-800">
+                <table className="w-full min-w-[520px] table-fixed text-left text-sm">
+                  <colgroup>
+                    <col style={{ width: "46.66%" }} />
+                    <col style={{ width: "26.67%" }} />
+                    <col style={{ width: "26.67%" }} />
+                  </colgroup>
+                  <thead className="sticky top-0 z-10 border-b border-zinc-200 bg-white text-xs uppercase text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900">
+                    <tr>
+                      <th className="px-3 py-2">Status</th>
+                      <th className="px-3 py-2 text-right">Count</th>
+                      <th className="px-3 py-2">Share</th>
                     </tr>
-                  ))}
-                  {!statusSummary.length && (
-                    <tr><td colSpan={3} className="px-3 py-10 text-center text-zinc-400">No status data</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </Section>
-        </div>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                    {statusSummary.map((item) => (
+                      <tr key={item.status}>
+                        <td className="px-3 py-3">
+                          <span className="inline-flex items-center gap-2 font-medium text-zinc-800 dark:text-zinc-100">
+                            <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.fill }} />
+                            {item.status}
+                          </span>
+                        </td>
+                        <td className="px-3 py-3 text-right">
+                          <NumberButton onClick={() => openDetails(`${item.status} Candidates`, statusRows(item.status), candidateDetailColumns)}>
+                            {item.count}
+                          </NumberButton>
+                        </td>
+                        <td className="px-3 py-3 text-zinc-500">{summary.total ? Math.round((item.count / summary.total) * 100) : 0}%</td>
+                      </tr>
+                    ))}
+                    {!statusSummary.length && (
+                      <tr><td colSpan={3} className="px-3 py-10 text-center text-zinc-400">No status data</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </Section>
+          </div>
 
-        <div className="grid gap-4 xl:grid-cols-2">
+          <div className="grid gap-4 xl:grid-cols-2">
+            <Section
+              title="Recruiter Table"
+              subtitle="Detailed recruiter level performance."
+              footer={<ColumnTotalFooter
+                minWidth="680px"
+                template="1.4fr repeat(5, 0.85fr)"
+                columns={[
+                  { label: "Recruiter", value: "Total" },
+                  { label: "Submissions", value: recruiterTotals.Submissions, align: "right", onClick: () => openDetails("All Recruiter Submissions", filteredCandidateRows, candidateDetailColumns) },
+                  { label: "Turnups", value: recruiterTotals.Turnups, align: "right", onClick: () => openDetails("All Recruiter Turnups", bucketRows("Turnups"), candidateDetailColumns) },
+                  { label: "Selected", value: recruiterTotals.Selected, align: "right", onClick: () => openDetails("All Recruiter Selected Candidates", bucketRows("Selected"), candidateDetailColumns) },
+                  { label: "Joined", value: recruiterTotals.Joined, align: "right", onClick: () => openDetails("All Recruiter Joined Candidates", bucketRows("Joined"), candidateDetailColumns) },
+                  { label: "Rejected", value: recruiterTotals.Rejected, align: "right", onClick: () => openDetails("All Recruiter Rejected Candidates", bucketRows("Rejected"), candidateDetailColumns) },
+                ]}
+              />}
+            >
+              <div className="max-h-72 overflow-auto rounded-lg border border-zinc-100 dark:border-zinc-800">
+                <table className="w-full min-w-[680px] table-fixed text-left text-sm">
+                  <colgroup>
+                    <col style={{ width: "24.78%" }} />
+                    <col style={{ width: "15.04%" }} />
+                    <col style={{ width: "15.04%" }} />
+                    <col style={{ width: "15.04%" }} />
+                    <col style={{ width: "15.04%" }} />
+                    <col style={{ width: "15.06%" }} />
+                  </colgroup>
+                  <thead className="sticky top-0 z-10 border-b border-zinc-200 bg-white text-xs uppercase text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900">
+                    <tr>
+                      <th className="px-3 py-2">Recruiter</th>
+                      <th className="px-3 py-2 text-right">Submissions</th>
+                      <th className="px-3 py-2 text-right">Turnups</th>
+                      <th className="px-3 py-2 text-right">Selected</th>
+                      <th className="px-3 py-2 text-right">Joined</th>
+                      <th className="px-3 py-2 text-right">Rejected</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                    {recruiterSummary.map((row) => (
+                      <tr key={row.name} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/40">
+                        <td className="px-3 py-3">
+                          <RecruiterDetailsTrigger recruiter={row.recruiter || { name: row.name }} className="font-medium text-zinc-900 dark:text-white">
+                            {row.name}
+                          </RecruiterDetailsTrigger>
+                        </td>
+                        <td className="px-3 py-3 text-right">
+                          <NumberButton onClick={() => openDetails(`${row.name} Submissions`, recruiterRows(row.name), candidateDetailColumns)}>{row.Submissions}</NumberButton>
+                        </td>
+                        <td className="px-3 py-3 text-right">
+                          <NumberButton onClick={() => openDetails(`${row.name} Turnups`, recruiterRows(row.name, "Turnups"), candidateDetailColumns)}>{row.Turnups}</NumberButton>
+                        </td>
+                        <td className="px-3 py-3 text-right">
+                          <NumberButton onClick={() => openDetails(`${row.name} Selected Candidates`, recruiterRows(row.name, "Selected"), candidateDetailColumns)}>{row.Selected}</NumberButton>
+                        </td>
+                        <td className="px-3 py-3 text-right">
+                          <NumberButton onClick={() => openDetails(`${row.name} Joined Candidates`, recruiterRows(row.name, "Joined"), candidateDetailColumns)}>{row.Joined}</NumberButton>
+                        </td>
+                        <td className="px-3 py-3 text-right">
+                          <NumberButton onClick={() => openDetails(`${row.name} Rejected Candidates`, recruiterRows(row.name, "Rejected"), candidateDetailColumns)}>{row.Rejected}</NumberButton>
+                        </td>
+                      </tr>
+                    ))}
+                    {!recruiterSummary.length && (
+                      <tr><td colSpan={6} className="px-3 py-10 text-center text-zinc-400">No recruiter data</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </Section>
+
+            <Section
+              title="Client Table"
+              subtitle="Client-wise submissions and hiring outcomes."
+              footer={<ColumnTotalFooter
+                minWidth="560px"
+                template="1.4fr repeat(3, 0.85fr)"
+                columns={[
+                  { label: "Client", value: "Total" },
+                  { label: "Submissions", value: clientTotals.Submissions, align: "right", onClick: () => openDetails("All Client Submissions", filteredCandidateRows, candidateDetailColumns) },
+                  { label: "Selected", value: clientTotals.Selected, align: "right", onClick: () => openDetails("All Client Selected Candidates", bucketRows("Selected"), candidateDetailColumns) },
+                  { label: "Joined", value: clientTotals.Joined, align: "right", onClick: () => openDetails("All Client Joined Candidates", bucketRows("Joined"), candidateDetailColumns) },
+                ]}
+              />}
+            >
+              <div className="max-h-72 overflow-auto rounded-lg border border-zinc-100 dark:border-zinc-800">
+                <table className="w-full min-w-[560px] table-fixed text-left text-sm">
+                  <colgroup>
+                    <col style={{ width: "35.44%" }} />
+                    <col style={{ width: "21.52%" }} />
+                    <col style={{ width: "21.52%" }} />
+                    <col style={{ width: "21.52%" }} />
+                  </colgroup>
+                  <thead className="sticky top-0 z-10 border-b border-zinc-200 bg-white text-xs uppercase text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900">
+                    <tr>
+                      <th className="px-3 py-2">Client</th>
+                      <th className="px-3 py-2 text-right">Submissions</th>
+                      <th className="px-3 py-2 text-right">Selected</th>
+                      <th className="px-3 py-2 text-right">Joined</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                    {clientSummary.map((row) => (
+                      <tr key={row.client} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/40">
+                        <td className="px-3 py-3 font-medium text-zinc-900 dark:text-white">{row.client}</td>
+                        <td className="px-3 py-3 text-right">
+                          <NumberButton onClick={() => openDetails(`${row.client} Submissions`, clientRows(row.client), candidateDetailColumns)}>{row.Submissions}</NumberButton>
+                        </td>
+                        <td className="px-3 py-3 text-right">
+                          <NumberButton onClick={() => openDetails(`${row.client} Selected Candidates`, clientRows(row.client, "Selected"), candidateDetailColumns)}>{row.Selected}</NumberButton>
+                        </td>
+                        <td className="px-3 py-3 text-right">
+                          <NumberButton onClick={() => openDetails(`${row.client} Joined Candidates`, clientRows(row.client, "Joined"), candidateDetailColumns)}>{row.Joined}</NumberButton>
+                        </td>
+                      </tr>
+                    ))}
+                    {!clientSummary.length && (
+                      <tr><td colSpan={4} className="px-3 py-10 text-center text-zinc-400">No client data</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </Section>
+          </div>
+
           <Section
-            title="Recruiter Table"
-            subtitle="Detailed recruiter level performance."
+            title="Filtered Candidate Information"
+            subtitle={`${filteredCandidates.length} candidates match the selected filters.`}
+            actions={(
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-2 text-xs font-medium text-zinc-500">
+                  <BarChart3 className="h-4 w-4" />
+                  Export uses all filtered data
+                </span>
+                <span className="text-xs font-medium text-zinc-500">
+                  {candidatePageStart}-{candidatePageEnd} of {filteredCandidateRows.length}
+                </span>
+                <div className="inline-flex overflow-hidden rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+                  <button
+                    type="button"
+                    onClick={() => setCandidatePage((prev) => Math.max(1, prev - 1))}
+                    disabled={currentCandidatePage === 1}
+                    className="inline-flex h-8 w-8 items-center justify-center text-zinc-600 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-40 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                    aria-label="Previous candidate page"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </button>
+                  <span className="inline-flex h-8 min-w-16 items-center justify-center border-x border-zinc-200 px-3 text-xs font-semibold text-zinc-800 dark:border-zinc-800 dark:text-zinc-100">
+                    {currentCandidatePage}/{candidatePageCount}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setCandidatePage((prev) => Math.min(candidatePageCount, prev + 1))}
+                    disabled={currentCandidatePage === candidatePageCount}
+                    className="inline-flex h-8 w-8 items-center justify-center text-zinc-600 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-40 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                    aria-label="Next candidate page"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            )}
             footer={<ColumnTotalFooter
-              minWidth="680px"
-              template="1.4fr repeat(5, 0.85fr)"
+              minWidth="1000px"
+              template="1.3fr repeat(6, 1fr)"
               columns={[
-                { label: "Recruiter", value: "Total" },
-                { label: "Submissions", value: recruiterTotals.Submissions, align: "right", onClick: () => openDetails("All Recruiter Submissions", filteredCandidateRows, candidateDetailColumns) },
-                { label: "Turnups", value: recruiterTotals.Turnups, align: "right", onClick: () => openDetails("All Recruiter Turnups", bucketRows("Turnups"), candidateDetailColumns) },
-                { label: "Selected", value: recruiterTotals.Selected, align: "right", onClick: () => openDetails("All Recruiter Selected Candidates", bucketRows("Selected"), candidateDetailColumns) },
-                { label: "Joined", value: recruiterTotals.Joined, align: "right", onClick: () => openDetails("All Recruiter Joined Candidates", bucketRows("Joined"), candidateDetailColumns) },
-                { label: "Rejected", value: recruiterTotals.Rejected, align: "right", onClick: () => openDetails("All Recruiter Rejected Candidates", bucketRows("Rejected"), candidateDetailColumns) },
+                { label: "Candidate", value: filteredCandidateRows.length, onClick: () => openDetails("Filtered Candidates", filteredCandidateRows, candidateDetailColumns) },
+                { label: "Position", value: positionSummary.length, onClick: () => openDetails("Top Positions", positionSummary, compactSummaryColumns) },
+                { label: "Client", value: clientSummary.length, onClick: () => openDetails("Clients", clientSummary, clientDetailColumns) },
+                { label: "Recruiter", value: recruiterSummary.length, onClick: () => openDetails("Recruiters", recruiterSummary, recruiterDetailColumns) },
+                { label: "Source", value: sourceSummary.length, onClick: () => openDetails("Sources", sourceSummary.map((source) => ({ source: source.name, count: source.value })), compactSummaryColumns) },
+                { label: "Status", value: statusSummary.length, onClick: () => openDetails("Statuses", statusSummary.map((status) => ({ status: status.status, count: status.count })), compactSummaryColumns) },
+                { label: "Date", value: filterLabel },
               ]}
             />}
           >
-            <div className="max-h-72 overflow-auto rounded-lg border border-zinc-100 dark:border-zinc-800">
-              <table className="w-full min-w-[680px] table-fixed text-left text-sm">
+            <div className="max-h-[420px] overflow-auto rounded-lg border border-zinc-100 dark:border-zinc-800">
+              <table className="w-full min-w-[1000px] table-fixed text-left text-sm">
                 <colgroup>
-                  <col style={{ width: "24.78%" }} />
-                  <col style={{ width: "15.04%" }} />
-                  <col style={{ width: "15.04%" }} />
-                  <col style={{ width: "15.04%" }} />
-                  <col style={{ width: "15.04%" }} />
-                  <col style={{ width: "15.06%" }} />
+                  <col style={{ width: "17.81%" }} />
+                  <col style={{ width: "13.69%" }} />
+                  <col style={{ width: "13.69%" }} />
+                  <col style={{ width: "13.69%" }} />
+                  <col style={{ width: "13.69%" }} />
+                  <col style={{ width: "13.69%" }} />
+                  <col style={{ width: "13.74%" }} />
                 </colgroup>
                 <thead className="sticky top-0 z-10 border-b border-zinc-200 bg-white text-xs uppercase text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900">
                   <tr>
+                    <th className="px-3 py-2">Candidate</th>
+                    <th className="px-3 py-2">Position</th>
+                    <th className="px-3 py-2">Client</th>
                     <th className="px-3 py-2">Recruiter</th>
-                    <th className="px-3 py-2 text-right">Submissions</th>
-                    <th className="px-3 py-2 text-right">Turnups</th>
-                    <th className="px-3 py-2 text-right">Selected</th>
-                    <th className="px-3 py-2 text-right">Joined</th>
-                    <th className="px-3 py-2 text-right">Rejected</th>
+                    <th className="px-3 py-2">Source</th>
+                    <th className="px-3 py-2">Status</th>
+                    <th className="px-3 py-2">Date</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                  {recruiterSummary.map((row) => (
-                    <tr key={row.name} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/40">
+                  {paginatedCandidateRows.map((candidate) => (
+                    <tr key={candidate._id || candidate.id || getCandidateId(candidate)} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/40">
                       <td className="px-3 py-3">
-                        <RecruiterDetailsTrigger recruiter={row.recruiter || { name: row.name }} className="font-medium text-zinc-900 dark:text-white">
-                          {row.name}
+                        <CandidateProfileLink candidate={candidate} className="font-semibold text-zinc-900 dark:text-white">
+                          {getCandidateName(candidate)}
+                        </CandidateProfileLink>
+                        <p className="text-xs font-mono text-zinc-500">{getCandidateId(candidate)}</p>
+                      </td>
+                      <td className="px-3 py-3 text-zinc-700 dark:text-zinc-300">{candidate.position || "-"}</td>
+                      <td className="px-3 py-3 text-zinc-700 dark:text-zinc-300">{candidate.client || "-"}</td>
+                      <td className="px-3 py-3 text-zinc-700 dark:text-zinc-300">
+                        <RecruiterDetailsTrigger recruiter={getCandidateRecruiterDetails(candidate)} className="font-medium text-zinc-700 dark:text-zinc-200">
+                          {getCandidateRecruiterName(candidate)}
                         </RecruiterDetailsTrigger>
                       </td>
-                      <td className="px-3 py-3 text-right">
-                        <NumberButton onClick={() => openDetails(`${row.name} Submissions`, recruiterRows(row.name), candidateDetailColumns)}>{row.Submissions}</NumberButton>
+                      <td className="px-3 py-3 text-zinc-700 dark:text-zinc-300">{candidate.source || "Portal"}</td>
+                      <td className="px-3 py-3">
+                        <div className="flex flex-wrap gap-1">
+                          {getStatuses(candidate).slice(0, 3).map((status) => (
+                            <span key={status} className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">{status}</span>
+                          ))}
+                        </div>
                       </td>
-                      <td className="px-3 py-3 text-right">
-                        <NumberButton onClick={() => openDetails(`${row.name} Turnups`, recruiterRows(row.name, "Turnups"), candidateDetailColumns)}>{row.Turnups}</NumberButton>
-                      </td>
-                      <td className="px-3 py-3 text-right">
-                        <NumberButton onClick={() => openDetails(`${row.name} Selected Candidates`, recruiterRows(row.name, "Selected"), candidateDetailColumns)}>{row.Selected}</NumberButton>
-                      </td>
-                      <td className="px-3 py-3 text-right">
-                        <NumberButton onClick={() => openDetails(`${row.name} Joined Candidates`, recruiterRows(row.name, "Joined"), candidateDetailColumns)}>{row.Joined}</NumberButton>
-                      </td>
-                      <td className="px-3 py-3 text-right">
-                        <NumberButton onClick={() => openDetails(`${row.name} Rejected Candidates`, recruiterRows(row.name, "Rejected"), candidateDetailColumns)}>{row.Rejected}</NumberButton>
-                      </td>
+                      <td className="px-3 py-3 text-zinc-500">{prettyDate(candidateDate(candidate))}</td>
                     </tr>
                   ))}
-                  {!recruiterSummary.length && (
-                    <tr><td colSpan={6} className="px-3 py-10 text-center text-zinc-400">No recruiter data</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </Section>
-
-          <Section
-            title="Client Table"
-            subtitle="Client-wise submissions and hiring outcomes."
-            footer={<ColumnTotalFooter
-              minWidth="560px"
-              template="1.4fr repeat(3, 0.85fr)"
-              columns={[
-                { label: "Client", value: "Total" },
-                { label: "Submissions", value: clientTotals.Submissions, align: "right", onClick: () => openDetails("All Client Submissions", filteredCandidateRows, candidateDetailColumns) },
-                { label: "Selected", value: clientTotals.Selected, align: "right", onClick: () => openDetails("All Client Selected Candidates", bucketRows("Selected"), candidateDetailColumns) },
-                { label: "Joined", value: clientTotals.Joined, align: "right", onClick: () => openDetails("All Client Joined Candidates", bucketRows("Joined"), candidateDetailColumns) },
-              ]}
-            />}
-          >
-            <div className="max-h-72 overflow-auto rounded-lg border border-zinc-100 dark:border-zinc-800">
-              <table className="w-full min-w-[560px] table-fixed text-left text-sm">
-                <colgroup>
-                  <col style={{ width: "35.44%" }} />
-                  <col style={{ width: "21.52%" }} />
-                  <col style={{ width: "21.52%" }} />
-                  <col style={{ width: "21.52%" }} />
-                </colgroup>
-                <thead className="sticky top-0 z-10 border-b border-zinc-200 bg-white text-xs uppercase text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900">
-                  <tr>
-                    <th className="px-3 py-2">Client</th>
-                    <th className="px-3 py-2 text-right">Submissions</th>
-                    <th className="px-3 py-2 text-right">Selected</th>
-                    <th className="px-3 py-2 text-right">Joined</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                  {clientSummary.map((row) => (
-                    <tr key={row.client} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/40">
-                      <td className="px-3 py-3 font-medium text-zinc-900 dark:text-white">{row.client}</td>
-                      <td className="px-3 py-3 text-right">
-                        <NumberButton onClick={() => openDetails(`${row.client} Submissions`, clientRows(row.client), candidateDetailColumns)}>{row.Submissions}</NumberButton>
-                      </td>
-                      <td className="px-3 py-3 text-right">
-                        <NumberButton onClick={() => openDetails(`${row.client} Selected Candidates`, clientRows(row.client, "Selected"), candidateDetailColumns)}>{row.Selected}</NumberButton>
-                      </td>
-                      <td className="px-3 py-3 text-right">
-                        <NumberButton onClick={() => openDetails(`${row.client} Joined Candidates`, clientRows(row.client, "Joined"), candidateDetailColumns)}>{row.Joined}</NumberButton>
-                      </td>
-                    </tr>
-                  ))}
-                  {!clientSummary.length && (
-                    <tr><td colSpan={4} className="px-3 py-10 text-center text-zinc-400">No client data</td></tr>
+                  {!filteredCandidateRows.length && (
+                    <tr><td colSpan={7} className="px-3 py-10 text-center text-zinc-400">No candidate information for the selected filters</td></tr>
                   )}
                 </tbody>
               </table>
             </div>
           </Section>
         </div>
+      </div>
+      <DetailsModal detail={detailModal} onClose={() => setDetailModal(null)} onCellDrilldown={getDetailCellDrilldown} />
 
-        <Section
-          title="Filtered Candidate Information"
-          subtitle={`${filteredCandidates.length} candidates match the selected filters.`}
-          actions={(
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center gap-2 text-xs font-medium text-zinc-500">
-                <BarChart3 className="h-4 w-4" />
-                Export uses all filtered data
-              </span>
-              <span className="text-xs font-medium text-zinc-500">
-                {candidatePageStart}-{candidatePageEnd} of {filteredCandidateRows.length}
-              </span>
-              <div className="inline-flex overflow-hidden rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-                <button
-                  type="button"
-                  onClick={() => setCandidatePage((prev) => Math.max(1, prev - 1))}
-                  disabled={currentCandidatePage === 1}
-                  className="inline-flex h-8 w-8 items-center justify-center text-zinc-600 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-40 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                  aria-label="Previous candidate page"
+      {/* Mobile Filter Modal */}
+      {isMobileFilterOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 md:hidden">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsMobileFilterOpen(false)} />
+          <div className="relative flex max-h-[85vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-800 dark:bg-zinc-900">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-zinc-200 bg-zinc-50 px-4 py-3.5 dark:border-zinc-800 dark:bg-zinc-950/70">
+              <div className="flex items-center gap-2">
+                <Filter className="h-4 w-4 text-zinc-500" />
+                <h3 className="font-semibold text-zinc-900 dark:text-white">Filters</h3>
+                {(filters.startDate || filters.recruiterId !== "all" || filters.status !== "all" || filters.client !== "all" || filters.source !== "all" || filters.search) && (
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-[10px] font-bold text-white leading-none">
+                    {[
+                      filters.startDate ? 1 : 0,
+                      filters.recruiterId !== "all" ? 1 : 0,
+                      filters.status !== "all" ? 1 : 0,
+                      filters.client !== "all" ? 1 : 0,
+                      filters.source !== "all" ? 1 : 0,
+                      filters.search ? 1 : 0,
+                    ].reduce((a, b) => a + b, 0)}
+                  </span>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsMobileFilterOpen(false)}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-white"
+                aria-label="Close filters"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Scrollable Body */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {/* Search */}
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-zinc-500 uppercase tracking-wider">Search</label>
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-zinc-400" />
+                  <input
+                    value={filters.search}
+                    onChange={(e) => setFilters((prev) => ({ ...prev, search: e.target.value }))}
+                    placeholder="Name, role, ID..."
+                    className={`${inputCls} pl-9`}
+                  />
+                </div>
+              </div>
+
+              {/* Start Date & End Date */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-zinc-500 uppercase tracking-wider">Start Date</label>
+                  <input
+                    type="date"
+                    value={filters.startDate}
+                    max={filters.endDate || localDateStr()}
+                    onChange={(e) => setFilters((prev) => ({ ...prev, startDate: e.target.value }))}
+                    className={inputCls}
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-zinc-500 uppercase tracking-wider">End Date</label>
+                  <input
+                    type="date"
+                    value={filters.endDate}
+                    min={filters.startDate || undefined}
+                    max={localDateStr()}
+                    onChange={(e) => setFilters((prev) => ({ ...prev, endDate: e.target.value }))}
+                    className={inputCls}
+                  />
+                </div>
+              </div>
+
+              {/* Quick ranges */}
+              <div>
+                <label className="mb-1.5 block text-xs font-semibold text-zinc-500 uppercase tracking-wider">Quick Date Ranges</label>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setQuickRange(7)}
+                    className="flex-1 rounded-lg border border-zinc-200 bg-zinc-50 py-1.5 text-center text-xs font-medium text-zinc-600 hover:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                  >
+                    7 Days
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setQuickRange(30)}
+                    className="flex-1 rounded-lg border border-zinc-200 bg-zinc-50 py-1.5 text-center text-xs font-medium text-zinc-600 hover:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                  >
+                    30 Days
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFilters((prev) => ({ ...prev, startDate: firstDayOfMonth(), endDate: localDateStr() }))}
+                    className="flex-1 rounded-lg border border-zinc-200 bg-zinc-50 py-1.5 text-center text-xs font-medium text-zinc-600 hover:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                  >
+                    This Month
+                  </button>
+                </div>
+              </div>
+
+              {/* Recruiter */}
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-zinc-500 uppercase tracking-wider">Recruiter</label>
+                <select
+                  value={recruiterOnly ? (currentRecruiterId || "current") : filters.recruiterId}
+                  onChange={(e) => setFilters((prev) => ({ ...prev, recruiterId: e.target.value }))}
+                  disabled={recruiterOnly}
+                  className={inputCls}
                 >
-                  <ChevronLeft className="h-4 w-4" />
-                </button>
-                <span className="inline-flex h-8 min-w-16 items-center justify-center border-x border-zinc-200 px-3 text-xs font-semibold text-zinc-800 dark:border-zinc-800 dark:text-zinc-100">
-                  {currentCandidatePage}/{candidatePageCount}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setCandidatePage((prev) => Math.min(candidatePageCount, prev + 1))}
-                  disabled={currentCandidatePage === candidatePageCount}
-                  className="inline-flex h-8 w-8 items-center justify-center text-zinc-600 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-40 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                  aria-label="Next candidate page"
+                  {recruiterOnly ? (
+                    <option value={currentRecruiterId || "current"}>{currentRecruiterName}</option>
+                  ) : (
+                    <>
+                      <option value="all">All Recruiters</option>
+                      {recruiters.map((recruiter) => (
+                        <option key={recruiter._id || recruiter.id} value={recruiter._id || recruiter.id}>{getRecruiterName(recruiter)}</option>
+                      ))}
+                    </>
+                  )}
+                </select>
+              </div>
+
+              {/* Status */}
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-zinc-500 uppercase tracking-wider">Status</label>
+                <select
+                  value={filters.status}
+                  onChange={(e) => setFilters((prev) => ({ ...prev, status: e.target.value }))}
+                  className={inputCls}
                 >
-                  <ChevronRight className="h-4 w-4" />
-                </button>
+                  <option value="all">All Status</option>
+                  {statusOptions.map((status) => <option key={status} value={status}>{status}</option>)}
+                </select>
+              </div>
+
+              {/* Client */}
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-zinc-500 uppercase tracking-wider">Client</label>
+                <select
+                  value={filters.client}
+                  onChange={(e) => setFilters((prev) => ({ ...prev, client: e.target.value }))}
+                  className={inputCls}
+                >
+                  <option value="all">All Clients</option>
+                  {clientOptions.map((client) => <option key={client} value={client}>{client}</option>)}
+                </select>
+              </div>
+
+              {/* Source */}
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-zinc-500 uppercase tracking-wider">Source</label>
+                <select
+                  value={filters.source}
+                  onChange={(e) => setFilters((prev) => ({ ...prev, source: e.target.value }))}
+                  className={inputCls}
+                >
+                  <option value="all">All Sources</option>
+                  {sourceOptions.map((source) => <option key={source} value={source}>{source}</option>)}
+                </select>
               </div>
             </div>
-          )}
-          footer={<ColumnTotalFooter
-            minWidth="1000px"
-            template="1.3fr repeat(6, 1fr)"
-            columns={[
-              { label: "Candidate", value: filteredCandidateRows.length, onClick: () => openDetails("Filtered Candidates", filteredCandidateRows, candidateDetailColumns) },
-              { label: "Position", value: positionSummary.length, onClick: () => openDetails("Top Positions", positionSummary, compactSummaryColumns) },
-              { label: "Client", value: clientSummary.length, onClick: () => openDetails("Clients", clientSummary, clientDetailColumns) },
-              { label: "Recruiter", value: recruiterSummary.length, onClick: () => openDetails("Recruiters", recruiterSummary, recruiterDetailColumns) },
-              { label: "Source", value: sourceSummary.length, onClick: () => openDetails("Sources", sourceSummary.map((source) => ({ source: source.name, count: source.value })), compactSummaryColumns) },
-              { label: "Status", value: statusSummary.length, onClick: () => openDetails("Statuses", statusSummary.map((status) => ({ status: status.status, count: status.count })), compactSummaryColumns) },
-              { label: "Date", value: filterLabel },
-            ]}
-          />}
-        >
-          <div className="max-h-[420px] overflow-auto rounded-lg border border-zinc-100 dark:border-zinc-800">
-            <table className="w-full min-w-[1000px] table-fixed text-left text-sm">
-              <colgroup>
-                <col style={{ width: "17.81%" }} />
-                <col style={{ width: "13.69%" }} />
-                <col style={{ width: "13.69%" }} />
-                <col style={{ width: "13.69%" }} />
-                <col style={{ width: "13.69%" }} />
-                <col style={{ width: "13.69%" }} />
-                <col style={{ width: "13.74%" }} />
-              </colgroup>
-              <thead className="sticky top-0 z-10 border-b border-zinc-200 bg-white text-xs uppercase text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900">
-                <tr>
-                  <th className="px-3 py-2">Candidate</th>
-                  <th className="px-3 py-2">Position</th>
-                  <th className="px-3 py-2">Client</th>
-                  <th className="px-3 py-2">Recruiter</th>
-                  <th className="px-3 py-2">Source</th>
-                  <th className="px-3 py-2">Status</th>
-                  <th className="px-3 py-2">Date</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                  {paginatedCandidateRows.map((candidate) => (
-                  <tr key={candidate._id || candidate.id || getCandidateId(candidate)} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/40">
-                    <td className="px-3 py-3">
-                      <CandidateProfileLink candidate={candidate} className="font-semibold text-zinc-900 dark:text-white">
-                        {getCandidateName(candidate)}
-                      </CandidateProfileLink>
-                      <p className="text-xs font-mono text-zinc-500">{getCandidateId(candidate)}</p>
-                    </td>
-                    <td className="px-3 py-3 text-zinc-700 dark:text-zinc-300">{candidate.position || "-"}</td>
-                    <td className="px-3 py-3 text-zinc-700 dark:text-zinc-300">{candidate.client || "-"}</td>
-                    <td className="px-3 py-3 text-zinc-700 dark:text-zinc-300">
-                      <RecruiterDetailsTrigger recruiter={getCandidateRecruiterDetails(candidate)} className="font-medium text-zinc-700 dark:text-zinc-200">
-                        {getCandidateRecruiterName(candidate)}
-                      </RecruiterDetailsTrigger>
-                    </td>
-                    <td className="px-3 py-3 text-zinc-700 dark:text-zinc-300">{candidate.source || "Portal"}</td>
-                    <td className="px-3 py-3">
-                      <div className="flex flex-wrap gap-1">
-                        {getStatuses(candidate).slice(0, 3).map((status) => (
-                          <span key={status} className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">{status}</span>
-                        ))}
-                      </div>
-                    </td>
-                    <td className="px-3 py-3 text-zinc-500">{prettyDate(candidateDate(candidate))}</td>
-                  </tr>
-                ))}
-                {!filteredCandidateRows.length && (
-                  <tr><td colSpan={7} className="px-3 py-10 text-center text-zinc-400">No candidate information for the selected filters</td></tr>
-                )}
-              </tbody>
-            </table>
+
+            {/* Footer */}
+            <div className="flex items-center gap-3 border-t border-zinc-200 bg-zinc-50 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-950/70">
+              <button
+                type="button"
+                onClick={() => {
+                  resetFilters();
+                  setIsMobileFilterOpen(false);
+                }}
+                className="flex-1 rounded-lg border border-zinc-300 bg-white py-2 text-center text-xs font-semibold text-zinc-700 shadow-sm hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
+              >
+                Reset All
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsMobileFilterOpen(false)}
+                className="flex-1 rounded-lg bg-zinc-900 py-2 text-center text-xs font-semibold text-white shadow-sm hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
+              >
+                Show {filteredCandidates.length} Results
+              </button>
+            </div>
           </div>
-        </Section>
-      </div>
-    </div>
-    <DetailsModal detail={detailModal} onClose={() => setDetailModal(null)} onCellDrilldown={getDetailCellDrilldown} />
+        </div>
+      )}
     </>
   );
 }

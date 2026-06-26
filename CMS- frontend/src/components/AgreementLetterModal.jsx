@@ -440,23 +440,23 @@ const AgreementLetterModal = ({ employee, onClose, onSuccess }) => {
                 </div>
 
                 {/* SPLIT SCREEN area */}
-                <div className="split-screen" style={{ flex: 1, display: 'flex', gap: '1rem', overflow: 'hidden', minHeight: 0 }}>
+                <div className="flex-1 flex flex-col lg:flex-row gap-4 overflow-y-auto lg:overflow-hidden min-h-0">
 
                     {!generatedContent && !loading && (
-                        <div style={{ flex: 1, background: 'var(--bg-tertiary)', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', border: '2px dashed var(--border-color)' }}>
-                            <p style={{ fontSize: '1.1rem' }}>Choose a template and click <b>Generate</b> to begin mapping the future.</p>
+                        <div style={{ flex: 1, minHeight: '300px', background: 'var(--bg-tertiary)', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', border: '2px dashed var(--border-color)' }}>
+                            <p style={{ fontSize: '1.1rem', textAlign: 'center', padding: '1rem' }}>Choose a template and click <b>Generate</b> to begin mapping the future.</p>
                         </div>
                     )}
 
                     {loading && (
-                        <div style={{ flex: 1, background: 'var(--bg-tertiary)', borderRadius: '16px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--accent-color)' }}>
+                        <div style={{ flex: 1, minHeight: '300px', background: 'var(--bg-tertiary)', borderRadius: '16px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--accent-color)' }}>
                             <div className="spinner" style={{ width: '50px', height: '50px', border: '5px solid var(--border-color)', borderTop: '5px solid var(--accent-color)', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
                             <p style={{ marginTop: '1.5rem', fontWeight: 600 }}>Synthesizing professional document...</p>
                         </div>
                     )}
 
                     {generatedContent && !loading && (
-                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0 }}>
+                        <div className="flex-1 flex flex-col min-w-0 min-h-[450px] lg:min-h-0">
                             <div style={{ marginBottom: '0.4rem', color: 'var(--text-secondary)', fontSize: '0.85rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                                 <Pencil size={14} /> Rich Text Editor <span style={{ fontSize: '0.8em', color: 'var(--text-muted)' }}>(Auto-Syncing)</span>
                             </div>
@@ -467,9 +467,9 @@ const AgreementLetterModal = ({ employee, onClose, onSuccess }) => {
                     )}
 
                     {generatedContent && !loading && (
-                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0 }}>
+                        <div className="flex-1 flex flex-col min-w-0 min-h-[450px] lg:min-h-0">
                             <div style={{ marginBottom: '0.4rem', color: 'var(--text-secondary)', fontSize: '0.85rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'flex', justifyContent: 'space-between' }}>
-                                <span>📄 PDF Synchronizer (75%)</span>
+                                <span>📄 PDF Preview (75%)</span>
                                 {isGeneratingPdf && <span style={{ color: 'var(--accent-color)', animation: 'pulse 1s infinite' }}>● Syncing</span>}
                             </div>
                             <div style={{ flex: 1, background: '#525659', borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--border-color)', position: 'relative' }}>

@@ -8,6 +8,7 @@ import {
   deleteRecruiter,
   toggleRecruiterStatus,
   getUsersByRole,          // ✅ NEW
+  getProfileStats,
 } from '../controllers/recruiterController.js';
 import { protect } from '../middleware/authMiddleware.js';
 
@@ -18,6 +19,7 @@ router.use(protect);
 // ── Must be defined BEFORE /:id routes to avoid route conflicts ──────────────
 router.get('/profile',  getUserProfile);
 router.put('/profile',  updateUserProfile);
+router.get('/profile/stats', getProfileStats);
 
 // ✅ NEW: Get users by role for messaging recipient dropdowns
 // GET /api/recruiters/by-role?role=manager   → returns Navya, Sanjay

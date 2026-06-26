@@ -109,9 +109,10 @@ const CandidateDetailsModal = ({ candidate, onClose }) => {
 
   return (
     <ModalPortal>
-    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-[90] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
       <div
-        className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-800 dark:bg-zinc-900"
+        className="relative flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-800 dark:bg-zinc-900"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-4 border-b border-zinc-100 px-6 py-5 dark:border-zinc-800">
@@ -661,10 +662,10 @@ export default function RecruiterAssignments() {
           };
         })
       );
-    } catch (err) {
+    } catch (error) {
       toast({
         title: 'Error',
-        description: err.message || 'Could not load candidates for this requirement',
+        description: error.message || 'Could not load candidates for this requirement',
         variant: 'destructive',
       });
     } finally {
@@ -689,8 +690,8 @@ export default function RecruiterAssignments() {
           </div>
 
           {/* Search / View Toggle */}
-          <div className="flex flex-col md:flex-row gap-4 justify-between items-center bg-white dark:bg-zinc-900 p-3 rounded-xl shadow-sm border border-zinc-200 dark:border-zinc-800">
-            <div className="relative w-full md:w-96">
+          <div className="flex flex-col sm:flex-row gap-4 justify-between items-stretch sm:items-center bg-white dark:bg-zinc-900 p-3 rounded-xl shadow-sm border border-zinc-200 dark:border-zinc-800">
+            <div className="relative w-full sm:w-96">
               <MagnifyingGlassIcon className="absolute left-3 top-2.5 h-4 w-4 text-zinc-400"/>
               <input 
                 type="text" 
@@ -700,7 +701,7 @@ export default function RecruiterAssignments() {
                 onChange={e => setSearchQuery(e.target.value)}
               />
             </div>
-            <div className="flex bg-zinc-100 dark:bg-zinc-800 p-1 rounded-lg border border-zinc-200 dark:border-zinc-700">
+            <div className="flex justify-center bg-zinc-100 dark:bg-zinc-800 p-1 rounded-lg border border-zinc-200 dark:border-zinc-700 self-center sm:self-auto">
               <button onClick={() => setViewMode('grid')} className={`p-2 rounded-md transition-all ${viewMode === 'grid' ? 'bg-white dark:bg-zinc-900 shadow-sm text-zinc-900 dark:text-white' : 'text-zinc-500 dark:text-zinc-400'}`}>
                 <Squares2X2Icon className="w-5 h-5"/>
               </button>
@@ -765,7 +766,6 @@ export default function RecruiterAssignments() {
                       <button className="h-8 w-8 flex items-center justify-center text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800 rounded-lg transition-colors" onClick={() => openViewModal(job)}>
                         <EyeIcon className="w-4 h-4"/>
                       </button>
-                      
                     </div>
                   </div>
                 );
@@ -773,61 +773,60 @@ export default function RecruiterAssignments() {
             </div>
           ) : (
             <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden shadow-sm">
-              <table className="w-full text-sm text-left">
-                <thead className="bg-zinc-50 dark:bg-zinc-950 text-zinc-500 border-b border-zinc-200 dark:border-zinc-800 uppercase text-xs">
-                  <tr>
-                    <th className="p-4 font-semibold">Job Code</th>
-                    <th className="p-4 font-semibold">Candidates</th>
-                    <th className="p-4 font-semibold">Position</th>
-                    <th className="p-4 font-semibold">Client</th>
-                    <th className="p-4 font-semibold">Location</th>
-                    {/* ✅ Added Assigned Date to Table Header */}
-                    <th className="p-4 font-semibold">Assigned Date</th>
-                    <th className="p-4 font-semibold">Expiry (TAT)</th>
-                    <th className="p-4 font-semibold text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                  {filteredJobs.map(job => {
-                    const isExpired = job.tatTime && (new Date(job.tatTime).setHours(0,0,0,0) < new Date().setHours(0,0,0,0));
-                    return (
-                      <tr key={job.id} className={`transition-colors ${isExpired ? 'bg-red-50/20 dark:bg-red-900/10' : 'hover:bg-zinc-50/50 dark:hover:bg-zinc-800/20'}`}>
-                        <td className="p-4 font-mono text-xs text-zinc-600 dark:text-zinc-400">{job.jobCode}</td>
-                        <td className="p-4">
-                          <div className="flex flex-wrap gap-2">
-                            <button
-                              type="button"
-                              onClick={() => openCandidatesModalForJob(job, 'submitted')}
-                              className="inline-flex items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-100 dark:border-blue-900/50 dark:bg-blue-900/20 dark:text-blue-300"
-                            >
-                              <UserGroupIcon className="h-3.5 w-3.5" />
-                              {candidateCounts[job._id || job.id] || 0}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => openCandidatesModalForJob(job, 'matching')}
-                              className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 dark:border-emerald-900/50 dark:bg-emerald-900/20 dark:text-emerald-300"
-                            >
-                              <CheckCircleIcon className="h-3.5 w-3.5" />
-                              {matchingCounts[job._id || job.id] || 0}
-                            </button>
-                          </div>
-                        </td>
-                        <td className={`p-4 font-medium ${isExpired ? 'text-red-900 dark:text-red-400' : 'text-zinc-900 dark:text-white'}`}>{job.position}</td>
-                        <td className="p-4 text-zinc-600 dark:text-zinc-400">{job.clientName}</td>
-                        <td className="p-4 text-zinc-600 dark:text-zinc-400">{job.location}</td>
-                        {/* ✅ Added Assigned Date to Table Row */}
-                        <td className="p-4 text-zinc-600 dark:text-zinc-400">{formatDate(job.createdAt)}</td>
-                        <td className="p-4">{getTatBadge(job.tatTime)}</td>
-                        <td className="p-4 flex gap-2 justify-end">
-                          <button className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg text-zinc-500 transition-colors" onClick={() => openViewModal(job)}><EyeIcon className="w-4 h-4"/></button>
-                   
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left min-w-[1000px]">
+                  <thead className="bg-zinc-50 dark:bg-zinc-950 text-zinc-500 border-b border-zinc-200 dark:border-zinc-800 uppercase text-xs">
+                    <tr>
+                      <th className="p-4 font-semibold">Job Code</th>
+                      <th className="p-4 font-semibold">Candidates</th>
+                      <th className="p-4 font-semibold">Position</th>
+                      <th className="p-4 font-semibold">Client</th>
+                      <th className="p-4 font-semibold">Location</th>
+                      <th className="p-4 font-semibold">Assigned Date</th>
+                      <th className="p-4 font-semibold">Expiry (TAT)</th>
+                      <th className="p-4 font-semibold text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                    {filteredJobs.map(job => {
+                      const isExpired = job.tatTime && (new Date(job.tatTime).setHours(0,0,0,0) < new Date().setHours(0,0,0,0));
+                      return (
+                        <tr key={job.id} className={`transition-colors ${isExpired ? 'bg-red-50/20 dark:bg-red-900/10' : 'hover:bg-zinc-50/50 dark:hover:bg-zinc-800/20'}`}>
+                          <td className="p-4 font-mono text-xs text-zinc-600 dark:text-zinc-400">{job.jobCode}</td>
+                          <td className="p-4">
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                onClick={() => openCandidatesModalForJob(job, 'submitted')}
+                                className="inline-flex items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-100 dark:border-blue-900/50 dark:bg-blue-900/20 dark:text-blue-300"
+                              >
+                                <UserGroupIcon className="h-3.5 w-3.5" />
+                                {candidateCounts[job._id || job.id] || 0}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => openCandidatesModalForJob(job, 'matching')}
+                                className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 dark:border-emerald-900/50 dark:bg-emerald-900/20 dark:text-emerald-300"
+                              >
+                                <CheckCircleIcon className="h-3.5 w-3.5" />
+                                {matchingCounts[job._id || job.id] || 0}
+                              </button>
+                            </div>
+                          </td>
+                          <td className={`p-4 font-medium ${isExpired ? 'text-red-900 dark:text-red-400' : 'text-zinc-900 dark:text-white'}`}>{job.position}</td>
+                          <td className="p-4 text-zinc-600 dark:text-zinc-400">{job.clientName}</td>
+                          <td className="p-4 text-zinc-600 dark:text-zinc-400">{job.location}</td>
+                          <td className="p-4 text-zinc-600 dark:text-zinc-400">{formatDate(job.createdAt)}</td>
+                          <td className="p-4">{getTatBadge(job.tatTime)}</td>
+                          <td className="p-4 flex gap-2 justify-end">
+                            <button className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg text-zinc-500 transition-colors" onClick={() => openViewModal(job)}><EyeIcon className="w-4 h-4"/></button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </div>

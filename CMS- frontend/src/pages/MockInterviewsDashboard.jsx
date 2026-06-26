@@ -548,7 +548,7 @@ export default function MockInterviewsDashboard() {
         </div>
       </div>
 
-      <div className="bg-white/50 p-1.5 rounded-2xl inline-flex items-center gap-2 border border-gray-100/50">
+      <div className="bg-white/50 p-1.5 rounded-2xl flex overflow-x-auto max-w-full items-center gap-2 border border-gray-100/50 scrollbar-none">
         {[
           { id: 'overview', label: 'Overview' },
           { id: 'qualified', label: 'Qualified' },
@@ -558,7 +558,7 @@ export default function MockInterviewsDashboard() {
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`px-8 py-2.5 rounded-xl font-bold text-sm transition-all ${activeTab === tab.id
+            className={`px-4 md:px-8 py-2.5 rounded-xl font-bold text-sm transition-all whitespace-nowrap ${activeTab === tab.id
                 ? 'bg-indigo-100/60 text-indigo-600'
                 : 'text-slate-400 hover:text-slate-600'
               }`}
@@ -702,7 +702,7 @@ export default function MockInterviewsDashboard() {
                     Response Breakdown
                   </h3>
                   {sessionResults.answers.map((ans, idx) => (
-                    <div key={idx} className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm space-y-4 hover:border-indigo-100 transition-all">
+                    <div key={idx} className="bg-white p-4 sm:p-8 rounded-3xl md:rounded-[2.5rem] border border-gray-100 shadow-sm space-y-4 hover:border-indigo-100 transition-all">
                       <div className="flex justify-between items-start">
                         <div className="flex-1">
                           <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest block mb-1">Question {idx + 1}</span>
@@ -754,7 +754,7 @@ export default function MockInterviewsDashboard() {
         ) : activeTab !== 'create' ? (
           <div className="p-8 relative z-10 animate-in fade-in duration-300">
             {/* Header with Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
               <div className="bg-white p-6 rounded-[2rem] border border-gray-50 shadow-sm flex items-center justify-between group hover:border-indigo-100 transition-all">
                 <div>
                   <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1.5">Total Sessions</p>
@@ -808,11 +808,11 @@ export default function MockInterviewsDashboard() {
             </div>
 
 
-            <div className="flex justify-between items-center mb-6 px-2">
-              <div className="flex items-center gap-4">
+            <div className="flex flex-col lg:flex-row gap-4 justify-between lg:items-center mb-6 px-2">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-4">
                 <h2 className="text-xl font-bold text-slate-800 tracking-tight">Interview Pipeline</h2>
                 
-                <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-xl border border-gray-200 shadow-sm">
+                <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-xl border border-gray-200 shadow-sm max-w-full overflow-x-auto scrollbar-none">
                   <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">From</span>
                   <input
                     type="date"
@@ -839,27 +839,29 @@ export default function MockInterviewsDashboard() {
                 </div>
               </div>
 
-              <div className="relative">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Filter candidates..."
-                  className="pl-11 pr-5 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm w-64 transition-all"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-              </div>
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full lg:w-auto">
+                <div className="relative flex-1 sm:flex-none">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Filter candidates..."
+                    className="pl-11 pr-5 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm w-full sm:w-64 transition-all"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
+                </div>
 
-              {selectedSessions.length > 0 && (
-                <button
-                  onClick={handleBulkDelete}
-                  disabled={bulkDeleting}
-                  className="flex items-center gap-2 bg-rose-50 text-rose-600 hover:bg-rose-100 px-4 py-2.5 rounded-xl text-sm font-black transition-all border border-rose-200 shadow-sm disabled:opacity-50"
-                >
-                  <Trash2 className="w-4 h-4" />
-                  {bulkDeleting ? 'Deleting...' : `Delete ${selectedSessions.length} Selected`}
-                </button>
-              )}
+                {selectedSessions.length > 0 && (
+                  <button
+                    onClick={handleBulkDelete}
+                    disabled={bulkDeleting}
+                    className="flex items-center justify-center gap-2 bg-rose-50 text-rose-600 hover:bg-rose-100 px-4 py-2.5 rounded-xl text-sm font-black transition-all border border-rose-200 shadow-sm disabled:opacity-50 w-full sm:w-auto"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    {bulkDeleting ? 'Deleting...' : `Delete ${selectedSessions.length}`}
+                  </button>
+                )}
+              </div>
             </div>
 
             {loading ? (
@@ -883,7 +885,7 @@ export default function MockInterviewsDashboard() {
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="w-full text-sm min-w-[900px]">
                   <thead className="bg-slate-50 border-b border-gray-100 text-slate-500 uppercase font-bold text-[10px] tracking-wider">
                     <tr>
                       <th className="px-6 py-8 text-left bg-white">
@@ -1052,7 +1054,7 @@ export default function MockInterviewsDashboard() {
             )}
           </div>
         ) : (
-          <div className="p-12 relative z-10 max-w-3xl mx-auto bg-white rounded-[2.5rem] my-8 shadow-sm border border-gray-50">
+          <div className="p-4 sm:p-8 md:p-12 relative z-10 max-w-3xl mx-auto bg-white rounded-3xl md:rounded-[2.5rem] my-8 shadow-sm border border-gray-50">
             <div className="text-center mb-12">
               <h2 className="text-3xl font-black text-slate-800 mb-2">Configure Session</h2>
               <p className="text-gray-500 font-medium text-sm max-w-md mx-auto">Provide candidate details and context for the AI engine to generate dynamic questions.</p>
@@ -1142,7 +1144,7 @@ export default function MockInterviewsDashboard() {
                     </select>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2">Candidate Name <span className="text-red-500">*</span></label>
                       <div className="relative">
@@ -1161,7 +1163,7 @@ export default function MockInterviewsDashboard() {
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2">Duration (Minutes)</label>
                   <div className="relative">
@@ -1170,12 +1172,12 @@ export default function MockInterviewsDashboard() {
                   </div>
                 </div>
                 <div>
-                  <div className="flex gap-2">
-                    <div className="flex-1">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
                       <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2">Scheduled Date</label>
                       <input type="date" value={scheduledDate} onChange={e => setScheduledDate(e.target.value)} className="w-full px-4 py-3 bg-gray-50 focus:bg-white border border-gray-200 focus:border-indigo-500 rounded-xl text-sm font-medium transition-all" />
                     </div>
-                    <div className="flex-1">
+                    <div>
                       <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2">Time</label>
                       <input type="time" value={scheduledTime} onChange={e => setScheduledTime(e.target.value)} className="w-full px-4 py-3 bg-gray-50 focus:bg-white border border-gray-200 focus:border-indigo-500 rounded-xl text-sm font-medium transition-all" />
                     </div>

@@ -1,4 +1,4 @@
-﻿import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { Toaster } from '@/components/ui/toaster';
 import React, { Suspense, lazy } from 'react';
@@ -22,7 +22,8 @@ const AdminSchedules = lazy(() => import('@/pages/AdminSchedules'));
 const TeamsChat = lazy(() => import('@/pages/TeamsChat'));
 const AdminMessages = lazy(() => import('@/pages/AdminMessages'));
 const AdminReports = lazy(() => import('@/pages/AdminReports'));
-const AdminSettings = lazy(() => import('@/pages/AdminSettings'));
+const AdminProfile = lazy(() => import('@/pages/AdminProfile'));
+const ChangePassword = lazy(() => import('@/pages/ChangePassword'));
 const AgreementGenerator = lazy(() => import('@/pages/AgreementGenerator'));
 const MockInterviewsDashboard = lazy(() => import('@/pages/MockInterviewsDashboard'));
 const InterviewSession        = lazy(() => import('@/pages/InterviewSession'));
@@ -42,7 +43,6 @@ const RecruiterSchedules = lazy(() => import('@/pages/RecruiterSchedules'));
 const MessagesRecruiters = lazy(() => import('@/pages/MessagesRecruiters'));
 const RecruiterReports = lazy(() => import('@/pages/RecruiterReports'));
 const RecruiterProfile = lazy(() => import('@/pages/RecruiterProfile'));
-const RecruiterSettings = lazy(() => import('@/pages/RecruiterSettings'));
 
 const LoadingFallback = () => (
   <div className="min-h-screen flex flex-col items-center justify-center bg-white">
@@ -108,13 +108,12 @@ function AppRoutes() {
           <Route path="messages" element={userRole === 'manager' ? <ManagerMessages /> : <AdminMessages />} />
           <Route path="reports" element={<AdminReports />} />
           <Route path="mock" element={<MockInterviewsDashboard />} />
-          <Route path="settings" element={<AdminSettings />} />
+          <Route path="profile" element={<AdminProfile />} />
+          <Route path="change-password" element={<ChangePassword />} />
           <Route path="agreements" element={<AgreementGenerator />} />
           <Route path="job-applications" element={<JobApplications />} />
           <Route path="user-guide" element={<UserGuide />} />
         </Route>
-
-        {/* ===================== RECRUITER ROUTES ===================== */}
         <Route path="/recruiter" element={
           <ProtectedRoute allowedRoles={['recruiter', 'manager', 'admin']}>
             <DashboardLayout />
@@ -129,7 +128,7 @@ function AppRoutes() {
           <Route path="reports" element={<RecruiterReports />} />
           <Route path="mock" element={<MockInterviewsDashboard />} />
           <Route path="profile" element={<RecruiterProfile />} />
-          <Route path="settings" element={<RecruiterSettings />} />
+          <Route path="change-password" element={<ChangePassword />} />
           <Route path="user-guide" element={<UserGuide />} />
         </Route>
 

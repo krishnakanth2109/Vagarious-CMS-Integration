@@ -75,6 +75,7 @@ candidateSchema.index({ createdAt: -1 });                  // admin all-candidat
 candidateSchema.index({ status: 1 });                      // status filter
 candidateSchema.index({ email: 1 });                       // duplicate email check
 candidateSchema.index({ contact: 1 });                     // duplicate phone check
+candidateSchema.index({ dateAdded: -1 });                  // date added filter
 candidateSchema.index({ candidateId: 1 });                 // ID lookup
 
 // Minimal counter schema (stored in 'counters' collection)

@@ -552,8 +552,9 @@ export default function AdminDashboard() {
 
       {/* ── MODAL: Day Submissions ── */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[85vh] flex flex-col overflow-hidden">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={closeModal} />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[85vh] flex flex-col overflow-hidden">
 
             {/* Modal Header */}
             <div className="px-6 py-4 border-b border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4 bg-[#f8faff]">
@@ -613,52 +614,54 @@ export default function AdminDashboard() {
                   </p>
                 </div>
               ) : (
-                <table className="w-full text-sm">
-                  <thead className="bg-[#f8faff] text-gray-500 font-bold uppercase text-[10px] tracking-widest border-b border-gray-100 sticky top-0 z-10 shadow-sm">
-                    <tr>
-                      <th className="px-6 py-4 text-left">Candidate ID</th>
-                      <th className="px-6 py-4 text-left">Candidate Name</th>
-                      <th className="px-6 py-4 text-left">Recruiter</th>
-                      <th className="px-6 py-4 text-left">Position</th>
-                      <th className="px-6 py-4 text-left">Client</th>
-                      <th className="px-6 py-4 text-center">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-50">
-                    {filteredModalData.map((c) => {
-                      const rec = c.recruiterId;
-                      const recruiterName = rec
-                        ? (typeof rec === 'object'
-                          ? `${rec.firstName || rec.name || ''} ${rec.lastName || ''}`.trim() || rec.username || 'Unknown'
-                          : 'Unknown')
-                        : (c.recruiterName || 'Unknown');
-                      const recruiterDetails = typeof rec === 'object' ? rec : { name: recruiterName };
-                      const cStatus = Array.isArray(c.status) ? c.status[0] : c.status;
-                      return (
-                        <tr key={c._id} className="hover:bg-purple-50/30">
-                          <td className="px-6 py-4 font-bold text-[#283086]">{c.candidateId || 'N/A'}</td>
-                          <td className="px-6 py-4">
-                            <CandidateProfileLink candidate={c} className="text-slate-800">
-                              {c.name || `${c.firstName || ''} ${c.lastName || ''}`.trim() || 'Unknown Candidate'}
-                            </CandidateProfileLink>
-                          </td>
-                          <td className="px-6 py-4 font-medium text-gray-600">
-                            <RecruiterDetailsTrigger recruiter={recruiterDetails} className="text-gray-600 font-medium">
-                              {recruiterName}
-                            </RecruiterDetailsTrigger>
-                          </td>
-                          <td className="px-6 py-4 text-gray-500">{c.position || '-'}</td>
-                          <td className="px-6 py-4 text-gray-500">{c.client || '-'}</td>
-                          <td className="px-6 py-4 text-center">
-                            <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider">
-                              {cStatus || 'SUBMITTED'}
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                <div className="overflow-x-auto w-full">
+                  <table className="w-full text-sm min-w-[800px]">
+                    <thead className="bg-[#f8faff] text-gray-500 font-bold uppercase text-[10px] tracking-widest border-b border-gray-100 sticky top-0 z-10 shadow-sm">
+                      <tr>
+                        <th className="px-6 py-4 text-left">Candidate ID</th>
+                        <th className="px-6 py-4 text-left">Candidate Name</th>
+                        <th className="px-6 py-4 text-left">Recruiter</th>
+                        <th className="px-6 py-4 text-left">Position</th>
+                        <th className="px-6 py-4 text-left">Client</th>
+                        <th className="px-6 py-4 text-center">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {filteredModalData.map((c) => {
+                        const rec = c.recruiterId;
+                        const recruiterName = rec
+                          ? (typeof rec === 'object'
+                            ? `${rec.firstName || rec.name || ''} ${rec.lastName || ''}`.trim() || rec.username || 'Unknown'
+                            : 'Unknown')
+                          : (c.recruiterName || 'Unknown');
+                        const recruiterDetails = typeof rec === 'object' ? rec : { name: recruiterName };
+                        const cStatus = Array.isArray(c.status) ? c.status[0] : c.status;
+                        return (
+                          <tr key={c._id} className="hover:bg-purple-50/30">
+                            <td className="px-6 py-4 font-bold text-[#283086]">{c.candidateId || 'N/A'}</td>
+                            <td className="px-6 py-4">
+                              <CandidateProfileLink candidate={c} className="text-slate-800">
+                                {c.name || `${c.firstName || ''} ${c.lastName || ''}`.trim() || 'Unknown Candidate'}
+                              </CandidateProfileLink>
+                            </td>
+                            <td className="px-6 py-4 font-medium text-gray-600">
+                              <RecruiterDetailsTrigger recruiter={recruiterDetails} className="text-gray-600 font-medium">
+                                {recruiterName}
+                              </RecruiterDetailsTrigger>
+                            </td>
+                            <td className="px-6 py-4 text-gray-500">{c.position || '-'}</td>
+                            <td className="px-6 py-4 text-gray-500">{c.client || '-'}</td>
+                            <td className="px-6 py-4 text-center">
+                              <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider">
+                                {cStatus || 'SUBMITTED'}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </div>
 

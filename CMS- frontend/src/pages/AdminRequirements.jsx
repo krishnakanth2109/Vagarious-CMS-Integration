@@ -135,6 +135,9 @@ const CustomFieldInput = ({ field, value, onChange, className = inputCls, placeh
   );
 };
 
+
+
+
 const FormControlModal = ({ isOpen, onClose, config, onConfigChange }) => {
   const [editingIndex, setEditingIndex] = useState(null);
   const [editingType, setEditingType] = useState(null);
@@ -198,9 +201,10 @@ const FormControlModal = ({ isOpen, onClose, config, onConfigChange }) => {
 
   return (
     <ModalPortal>
-    <div className="fixed inset-0 bg-zinc-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-zinc-950/70 backdrop-blur-sm" onClick={onClose} />
       <div
-        className="bg-slate-50 dark:bg-zinc-950 rounded-2xl shadow-2xl max-w-5xl w-full max-h-[92vh] overflow-hidden border border-zinc-200 dark:border-zinc-800"
+        className="relative bg-slate-50 dark:bg-zinc-950 rounded-2xl shadow-2xl max-w-5xl w-full max-h-[92vh] overflow-y-auto lg:overflow-hidden border border-zinc-200 dark:border-zinc-800"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="bg-white dark:bg-zinc-900 px-6 py-5 border-b border-zinc-200 dark:border-zinc-800">
@@ -230,8 +234,8 @@ const FormControlModal = ({ isOpen, onClose, config, onConfigChange }) => {
           </div>
         </div>
 
-        <div className="grid lg:grid-cols-[320px_1fr] h-[calc(92vh-82px)] min-h-0 overflow-hidden">
-          <aside className="bg-white dark:bg-zinc-900 border-r border-zinc-200 dark:border-zinc-800 p-5 min-h-0 overflow-y-auto">
+        <div className="grid lg:grid-cols-[320px_1fr] lg:h-[calc(92vh-82px)] h-auto min-h-0 lg:overflow-hidden">
+          <aside className="bg-white dark:bg-zinc-900 border-r border-zinc-200 dark:border-zinc-800 p-5 min-h-0 lg:overflow-y-auto">
             <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-3">Add Custom Field</p>
             <div className="space-y-3">
               <div>
@@ -284,7 +288,7 @@ const FormControlModal = ({ isOpen, onClose, config, onConfigChange }) => {
             </div>
           </aside>
 
-          <div className="p-5 min-h-0 overflow-y-auto lg:overflow-hidden">
+          <div className="p-5 min-h-0 lg:overflow-y-auto overflow-visible">
             <div className="grid md:grid-cols-2 gap-5 md:h-full md:min-h-0">
               <section className="space-y-3 md:min-h-0 md:flex md:flex-col">
                 <div className="flex items-center justify-between">
@@ -452,12 +456,10 @@ const parseSkillItems = (value) => {
 const JobDetailCard = ({ job, onClose, recruiters = [] }) => {
   return (
     <ModalPortal>
-    <div
-      className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"
-      onClick={onClose}
-    >
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/60" onClick={onClose} />
       <div
-        className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl max-w-6xl w-full max-h-[92vh] overflow-y-auto border border-zinc-200 dark:border-zinc-800"
+        className="relative bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl max-w-6xl w-full max-h-[92vh] overflow-y-auto border border-zinc-200 dark:border-zinc-800"
         onClick={e => e.stopPropagation()}
       >
           <div className="bg-gradient-to-r from-zinc-800 to-zinc-950 text-white p-6 rounded-t-2xl border-b border-zinc-700">
@@ -600,9 +602,10 @@ const CandidateDetailsModal = ({ candidate, onClose }) => {
 
   return (
     <ModalPortal>
-    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-[90] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
       <div
-        className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-800 dark:bg-zinc-900"
+        className="relative flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-800 dark:bg-zinc-900"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-4 border-b border-zinc-100 px-6 py-5 dark:border-zinc-800">
@@ -714,9 +717,10 @@ const CandidateMatchesModal = ({
 
   return (
     <ModalPortal>
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
       <div
-        className="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-800 dark:bg-zinc-900"
+        className="relative flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-800 dark:bg-zinc-900"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-4 border-b border-zinc-100 px-6 py-5 dark:border-zinc-800">
@@ -1974,9 +1978,10 @@ export default function AdminRequirements() {
 
       {showForm && (
         <ModalPortal>
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={closeRequirementForm}>
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={closeRequirementForm} />
           <div
-            className="w-full max-w-[1400px] max-h-[94vh] flex flex-col rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-2xl overflow-hidden"
+            className="relative w-full max-w-[1400px] max-h-[94vh] flex flex-col rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-2xl overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="px-6 py-5 bg-gradient-to-r from-zinc-900 via-zinc-800 to-zinc-950 text-white">
@@ -2100,24 +2105,24 @@ export default function AdminRequirements() {
 
           {jobDescriptionModalOpen && (
             <ModalPortal>
-            <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setJobDescriptionModalOpen(false)}>
-              <div
-                className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-3xl max-h-[88vh] flex flex-col border border-zinc-200 dark:border-zinc-800 overflow-hidden"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div className="px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between gap-4">
-                  <div>
-                    <h4 className="text-lg font-semibold text-zinc-900 dark:text-white">Job Description</h4>
-                    <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">Import a JD file or type the description manually.</p>
+              <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
+                <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setJobDescriptionModalOpen(false)} />
+                <div
+                  className="relative bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden border border-zinc-200 dark:border-zinc-800"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="px-6 py-5 bg-gradient-to-r from-zinc-900 via-zinc-800 to-zinc-950 text-white flex justify-between items-center border-b border-zinc-200 dark:border-zinc-800">
+                    <div>
+                      <h3 className="font-bold text-lg tracking-tight">Job Description</h3>
+                    </div>
+                    <button onClick={() => setJobDescriptionModalOpen(false)} className="p-2 rounded-lg text-zinc-400 hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-white">
+                      <X className="w-5 h-5" />
+                    </button>
                   </div>
-                  <button onClick={() => setJobDescriptionModalOpen(false)} className="p-2 rounded-lg text-zinc-400 hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-white">
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-                <div className="p-6 space-y-4 overflow-y-auto">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <button
-                      type="button"
+                  <div className="p-6 space-y-4 overflow-y-auto">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
                       disabled={isImportingJD}
                       onClick={() => pdfInputRef.current?.click()}
                       className="inline-flex items-center justify-center px-4 py-2 border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 rounded-lg text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-50"

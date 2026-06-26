@@ -168,18 +168,18 @@ const ModalPortal = ({ children }) => {
 const CountButton = ({ value, onClick, disabled = false }) => {
   const count = Number(value) || 0;
   if (count <= 0) {
-    return <span className="font-semibold text-slate-400">0</span>;
+    return <span className="font-semibold text-slate-400 dark:text-slate-600">0</span>;
   }
 
   if (disabled) {
-    return <span className="font-semibold text-slate-500">{count}</span>;
+    return <span className="font-semibold text-slate-500 dark:text-slate-400">{count}</span>;
   }
 
   return (
     <button
       type="button"
       onClick={onClick}
-      className="font-semibold text-blue-600 underline-offset-4 hover:underline cursor-pointer"
+      className="font-semibold text-blue-600 dark:text-blue-400 underline-offset-4 hover:underline cursor-pointer"
     >
       {count}
     </button>
@@ -207,32 +207,33 @@ const CandidateRecordsModal = ({ detail, onClose }) => {
 
   return (
     <ModalPortal>
-      <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
-        <div className="flex max-h-[88vh] w-full max-w-7xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
-          <div className="flex flex-col gap-4 border-b border-slate-100 bg-[#f8faff] px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
+      <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+        <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" onClick={onClose} />
+        <div className="relative flex max-h-[88vh] w-full max-w-7xl flex-col overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xl text-slate-900 dark:text-slate-100">
+          <div className="flex flex-col gap-4 border-b border-slate-100 dark:border-slate-800 bg-[#f8faff] dark:bg-slate-950/60 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h3 className="flex items-center gap-2 text-xl font-black text-slate-900">
-                <ClipboardList className="h-5 w-5 text-blue-600" />
+              <h3 className="flex items-center gap-2 text-xl font-black text-slate-900 dark:text-white">
+                <ClipboardList className="h-5 w-5 text-blue-600 dark:text-blue-450" />
                 {detail.title}
               </h3>
-              <p className="mt-1 text-sm font-medium text-slate-500">
+              <p className="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">
                 Showing {filteredRows.length} of {rows.length} matching record(s)
               </p>
             </div>
             <div className="flex items-center gap-3">
               <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
                 <input
                   value={searchTerm}
                   onChange={(event) => setSearchTerm(event.target.value)}
                   placeholder="Search records"
-                  className="w-64 rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                  className="w-64 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 py-2 pl-9 pr-3 text-sm outline-none focus:border-blue-400 dark:focus:border-blue-600 focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900 text-slate-900 dark:text-white"
                 />
               </div>
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded-full bg-white p-2 text-slate-500 shadow-sm transition hover:bg-red-50 hover:text-red-500"
+                className="rounded-full bg-white dark:bg-slate-800 p-2 text-slate-500 dark:text-slate-400 shadow-sm transition hover:bg-red-50 dark:hover:bg-red-950/30 hover:text-red-500"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -240,8 +241,8 @@ const CandidateRecordsModal = ({ detail, onClose }) => {
           </div>
 
           <div className="flex-1 overflow-auto">
-            <table className="w-full min-w-[1050px] text-sm">
-              <thead className="sticky top-0 z-10 border-b border-slate-100 bg-white text-[10px] font-black uppercase tracking-widest text-slate-500 shadow-sm">
+            <table className="w-full min-w-[1050px] text-sm text-slate-900 dark:text-slate-100">
+              <thead className="sticky top-0 z-10 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 shadow-sm">
                 <tr>
                   <th className="px-5 py-4 text-left">Candidate Name</th>
                   <th className="px-5 py-4 text-left">Email</th>
@@ -254,31 +255,31 @@ const CandidateRecordsModal = ({ detail, onClose }) => {
                   <th className="px-5 py-4 text-left">Date</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-850">
                 {filteredRows.map((candidate) => {
                   const submission = getMatchingSubmission(candidate, detail.column?.label);
                   const statusText = detail.column?.key === 'total'
                     ? getStatusList(candidate).join(', ')
                     : detail.column?.label;
                   return (
-                    <tr key={`${candidate._id || candidate.id || candidate.candidateId}-${statusText}`} className="hover:bg-blue-50/30">
-                      <td className="px-5 py-4 font-semibold text-slate-900">
-                        <CandidateProfileLink candidate={candidate} className="text-slate-900">
+                    <tr key={`${candidate._id || candidate.id || candidate.candidateId}-${statusText}`} className="hover:bg-blue-50/30 dark:hover:bg-blue-950/10 transition-colors">
+                      <td className="px-5 py-4 font-semibold text-slate-900 dark:text-white">
+                        <CandidateProfileLink candidate={candidate} className="text-slate-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400">
                           {getCandidateName(candidate)}
                         </CandidateProfileLink>
                       </td>
-                      <td className="px-5 py-4 text-slate-600">{candidate.email || '-'}</td>
-                      <td className="px-5 py-4 text-slate-600">{candidate.contact || candidate.phone || '-'}</td>
-                      <td className="px-5 py-4 text-slate-600">{submission?.clientName || candidate.client || '-'}</td>
-                      <td className="px-5 py-4 font-mono text-xs font-bold text-blue-700">{submission?.jobCode || candidate.jobCode || '-'}</td>
-                      <td className="px-5 py-4 text-slate-600">{submission?.position || candidate.position || '-'}</td>
+                      <td className="px-5 py-4 text-slate-600 dark:text-slate-350">{candidate.email || '-'}</td>
+                      <td className="px-5 py-4 text-slate-600 dark:text-slate-350">{candidate.contact || candidate.phone || '-'}</td>
+                      <td className="px-5 py-4 text-slate-600 dark:text-slate-350">{submission?.clientName || candidate.client || '-'}</td>
+                      <td className="px-5 py-4 font-mono text-xs font-bold text-blue-700 dark:text-blue-400">{submission?.jobCode || candidate.jobCode || '-'}</td>
+                      <td className="px-5 py-4 text-slate-600 dark:text-slate-350">{submission?.position || candidate.position || '-'}</td>
                       <td className="px-5 py-4">
-                        <span className="inline-flex rounded-full border border-blue-100 bg-blue-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-blue-700">
+                        <span className="inline-flex rounded-full border border-blue-100 dark:border-blue-900/30 bg-blue-50 dark:bg-blue-950/20 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-blue-700 dark:text-blue-400">
                           {statusText || '-'}
                         </span>
                       </td>
-                      <td className="px-5 py-4 text-slate-600">{candidate.source || '-'}</td>
-                      <td className="px-5 py-4 text-slate-600">
+                      <td className="px-5 py-4 text-slate-600 dark:text-slate-350">{candidate.source || '-'}</td>
+                      <td className="px-5 py-4 text-slate-600 dark:text-slate-350">
                         {formatDate(submission?.submittedAt || candidate.dateAdded || candidate.createdAt || candidate.updatedAt)}
                       </td>
                     </tr>
@@ -289,16 +290,16 @@ const CandidateRecordsModal = ({ detail, onClose }) => {
 
             {filteredRows.length === 0 && (
               <div className="flex h-56 flex-col items-center justify-center text-center">
-                <ClipboardList className="mb-3 h-9 w-9 text-slate-300" />
-                <p className="font-bold text-slate-800">No records found</p>
-                <p className="mt-1 text-sm text-slate-500">Try a different search term.</p>
+                <ClipboardList className="mb-3 h-9 w-9 text-slate-300 dark:text-slate-700" />
+                <p className="font-bold text-slate-800 dark:text-slate-200">No records found</p>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Try a different search term.</p>
               </div>
             )}
           </div>
 
-          <div className="flex items-center justify-between border-t border-slate-100 bg-slate-50 px-6 py-3 text-xs font-medium text-slate-500">
+          <div className="flex items-center justify-between border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/80 px-6 py-3 text-xs font-medium text-slate-500 dark:text-slate-400">
             <span>{rows.length} record(s)</span>
-            <button type="button" onClick={onClose} className="font-bold uppercase tracking-wider text-slate-700 hover:text-blue-700">
+            <button type="button" onClick={onClose} className="font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 hover:text-blue-700 dark:hover:text-blue-400">
               Close Window
             </button>
           </div>
@@ -308,10 +309,10 @@ const CandidateRecordsModal = ({ detail, onClose }) => {
   );
 };
 
-export function RecruiterDetailsModal({ recruiter, stats, onClose }) {
-  const [candidates, setCandidates] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [recordsLoaded, setRecordsLoaded] = useState(false);
+export function RecruiterDetailsModal({ recruiter, stats, onClose, candidates: propCandidates }) {
+  const [candidates, setCandidates] = useState(propCandidates || []);
+  const [loading, setLoading] = useState(!propCandidates);
+  const [recordsLoaded, setRecordsLoaded] = useState(!!propCandidates);
   const [loadError, setLoadError] = useState('');
   const [detail, setDetail] = useState(null);
 
@@ -320,6 +321,12 @@ export function RecruiterDetailsModal({ recruiter, stats, onClose }) {
 
   useEffect(() => {
     if (!recruiter) return;
+    if (propCandidates) {
+      setCandidates(propCandidates);
+      setRecordsLoaded(true);
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
 
     const fetchCandidates = async () => {
@@ -350,7 +357,7 @@ export function RecruiterDetailsModal({ recruiter, stats, onClose }) {
     return () => {
       cancelled = true;
     };
-  }, [recruiter]);
+  }, [recruiter, propCandidates]);
 
   const hasLoadedRecords = recordsLoaded;
   const tableCounts = useMemo(() => (
@@ -378,34 +385,35 @@ export function RecruiterDetailsModal({ recruiter, stats, onClose }) {
   return (
     <>
       <ModalPortal>
-      <div className="fixed inset-0 z-[9000] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
-        <div className="flex max-h-[90vh] w-full max-w-7xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
-          <div className="flex items-start justify-between gap-4 border-b border-slate-100 bg-[#f8faff] px-6 py-5">
+      <div className="fixed inset-0 z-[9000] flex items-center justify-center p-4">
+        <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" onClick={onClose} />
+        <div className="relative flex max-h-[90vh] w-full max-w-7xl flex-col overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xl text-slate-900 dark:text-slate-100">
+          <div className="flex items-start justify-between gap-4 border-b border-slate-100 dark:border-slate-800 bg-[#f8faff] dark:bg-slate-950/60 px-6 py-5">
             <div>
-              <p className="text-xs font-black uppercase tracking-widest text-blue-600">Recruiter Performance</p>
-              <h2 className="mt-1 text-2xl font-black text-slate-900">{name}</h2>
-              <p className="mt-1 text-sm text-slate-500">
+              <p className="text-xs font-black uppercase tracking-widest text-blue-600 dark:text-blue-400">Recruiter Performance</p>
+              <h2 className="mt-1 text-2xl font-black text-slate-900 dark:text-white">{name}</h2>
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
                 ID: {getRecruiterId(data)}{data.email ? ` • ${data.email}` : ''}
               </p>
             </div>
             <button
               type="button"
               onClick={onClose}
-              className="rounded-full bg-white p-2 text-slate-500 shadow-sm transition hover:bg-red-50 hover:text-red-500"
+              className="rounded-full bg-white dark:bg-slate-800 p-2 text-slate-500 dark:text-slate-400 shadow-sm transition hover:bg-red-50 dark:hover:bg-red-950/30 hover:text-red-500"
             >
               <X className="h-5 w-5" />
             </button>
           </div>
 
-          <div className="flex-1 overflow-auto bg-white p-6">
+          <div className="flex-1 overflow-auto bg-white dark:bg-slate-900 p-6">
             {loadError && (
-              <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
+              <div className="mb-4 rounded-lg border border-amber-200 dark:border-amber-900/30 bg-amber-50 dark:bg-amber-950/20 px-4 py-3 text-sm font-medium text-amber-800 dark:text-amber-400">
                 {loadError} Showing available summary counts only.
               </div>
             )}
 
-            <table className="w-full min-w-[1150px] text-sm">
-              <thead className="sticky top-0 z-10 border-b border-slate-100 bg-white text-[10px] font-black uppercase tracking-widest text-slate-500 shadow-sm">
+            <table className="w-full min-w-[1150px] text-sm text-slate-900 dark:text-slate-100">
+              <thead className="sticky top-0 z-10 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 shadow-sm">
                 <tr>
                   <th className="px-5 py-4 text-left">Recruiter Name</th>
                   {STATUS_COLUMNS.map((column) => (
@@ -413,9 +421,9 @@ export function RecruiterDetailsModal({ recruiter, stats, onClose }) {
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
-                <tr className="hover:bg-blue-50/30">
-                  <td className="px-5 py-5 font-bold text-slate-900">{name}</td>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-850">
+                <tr className="hover:bg-blue-50/30 dark:hover:bg-blue-950/10">
+                  <td className="px-5 py-5 font-bold text-slate-900 dark:text-white">{name}</td>
                   {STATUS_COLUMNS.map((column) => (
                     <td key={column.key} className="px-4 py-5 text-center">
                       <CountButton
@@ -430,16 +438,16 @@ export function RecruiterDetailsModal({ recruiter, stats, onClose }) {
             </table>
 
             {loading && (
-              <div className="mt-5 flex items-center gap-2 text-sm font-medium text-slate-500">
-                <Loader2 className="h-4 w-4 animate-spin" />
+              <div className="mt-5 flex items-center gap-2 text-sm font-medium text-slate-500 dark:text-slate-400">
+                <Loader2 className="h-4 w-4 animate-spin text-blue-650" />
                 Loading exact candidate records...
               </div>
             )}
           </div>
 
-          <div className="flex items-center justify-between border-t border-slate-100 bg-slate-50 px-6 py-3 text-xs font-medium text-slate-500">
+          <div className="flex items-center justify-between border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/80 px-6 py-3 text-xs font-medium text-slate-500 dark:text-slate-400">
             <span>Click any non-zero count to view matching candidates.</span>
-            <button type="button" onClick={onClose} className="font-bold uppercase tracking-wider text-slate-700 hover:text-blue-700">
+            <button type="button" onClick={onClose} className="font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 hover:text-blue-700 dark:hover:text-blue-400">
               Close Window
             </button>
           </div>
@@ -451,7 +459,7 @@ export function RecruiterDetailsModal({ recruiter, stats, onClose }) {
   );
 }
 
-export function RecruiterDetailsTrigger({ recruiter, stats, children, className = '', disabled = false }) {
+export function RecruiterDetailsTrigger({ recruiter, stats, children, className = '', disabled = false, candidates }) {
   const [open, setOpen] = useState(false);
   const canOpen = !disabled && recruiter;
 
@@ -466,7 +474,7 @@ export function RecruiterDetailsTrigger({ recruiter, stats, children, className 
         <UserRound className="mr-1.5 h-3.5 w-3.5 opacity-70" />
         {children || getRecruiterName(recruiter)}
       </button>
-      {open && <RecruiterDetailsModal recruiter={recruiter} stats={stats} onClose={() => setOpen(false)} />}
+      {open && <RecruiterDetailsModal recruiter={recruiter} stats={stats} candidates={candidates} onClose={() => setOpen(false)} />}
     </>
   );
 }

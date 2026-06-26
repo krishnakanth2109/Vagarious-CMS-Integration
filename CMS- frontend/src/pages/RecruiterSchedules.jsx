@@ -319,15 +319,15 @@ export default function RecruiterSchedules() {
       <div className="max-w-7xl mx-auto space-y-8">
 
         {/* Header */}
-        <div className="flex justify-between items-center">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Interview Schedules</h1>
             <p className="text-gray-500 dark:text-gray-400">Manage your hiring timeline</p>
           </div>
-          <div className="flex gap-3">
+          <div className="flex gap-3 w-full sm:w-auto">
             <button
               onClick={() => { setFormErrors({}); setShowNewInterviewForm(true); }}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-md text-sm font-medium transition"
+              className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-md text-sm font-medium transition w-full sm:w-auto"
             >
               <Plus className="h-4 w-4" /> New Interview
             </button>
@@ -354,8 +354,7 @@ export default function RecruiterSchedules() {
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
-            <div className="flex gap-3 items-center w-full md:w-auto">
-             
+            <div className="flex gap-3 items-center justify-between w-full md:w-auto md:justify-end">
               <div className="flex bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
                 <button onClick={() => setViewMode("grid")} className={`p-2 rounded transition-all ${viewMode === 'grid' ? 'bg-white dark:bg-gray-700 shadow' : ''}`}><Grid className="h-4 w-4" /></button>
                 <button onClick={() => setViewMode("list")} className={`p-2 rounded transition-all ${viewMode === 'list' ? 'bg-white dark:bg-gray-700 shadow' : ''}`}><List className="h-4 w-4" /></button>
@@ -531,46 +530,107 @@ function InterviewGridCard({ interview, onView, onEdit, onDelete }) {
 
 function InterviewListView({ interviews, onView, onEdit, onDelete }) {
   return (
-    <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-x-auto shadow-sm">
-      <table className="w-full text-sm text-left">
-        <thead className="bg-gray-100 dark:bg-gray-800">
-          <tr>
-            {["Candidate", "Position", "Date", "Recruiter", "Status", "Actions"].map(h => (
-              <th key={h} className="p-4 font-medium text-gray-600 dark:text-gray-300">{h}</th>
+    <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm overflow-hidden">
+      {/* Desktop Table View */}
+      <div className="hidden md:block overflow-x-auto">
+        <table className="w-full text-sm text-left">
+          <thead className="bg-gray-100 dark:bg-gray-800">
+            <tr>
+              {["Candidate", "Position", "Date", "Recruiter", "Status", "Actions"].map(h => (
+                <th key={h} className="p-4 font-medium text-gray-600 dark:text-gray-300">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {interviews.map(i => (
+              <tr key={i.id} className="border-b border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition">
+                <td className="p-4">
+                  <CandidateProfileLink candidateId={i.candidateIdRaw} className="font-medium text-gray-900 dark:text-white">
+                    {i.candidateName}
+                  </CandidateProfileLink>
+                </td>
+                <td className="p-4 text-gray-600 dark:text-gray-300">{i.position}</td>
+                <td className="p-4 text-gray-600 dark:text-gray-300">{new Date(i.interviewDate).toLocaleDateString()}</td>
+                <td className="p-4 text-gray-600 dark:text-gray-300">
+                  <RecruiterDetailsTrigger recruiter={i.recruiterDetails} className="font-medium text-gray-600 dark:text-gray-300">
+                    {i.recruiterName}
+                  </RecruiterDetailsTrigger>
+                </td>
+                <td className="p-4">{getStatusBadge(i.status)}</td>
+                <td className="p-4 flex items-center gap-2">
+                  <button onClick={() => onView(i)} title="View Details" className="p-2 rounded-lg hover:bg-blue-50 text-gray-600 hover:text-blue-600 dark:hover:bg-gray-700 transition">
+                    <Eye className="h-4 w-4" />
+                  </button>
+                  <button onClick={() => onEdit(i)} title="Edit Interview" className="p-2 rounded-lg hover:bg-orange-50 text-gray-600 hover:text-orange-600 dark:hover:bg-gray-700 transition">
+                    <Pencil className="h-4 w-4" />
+                  </button>
+                  <button onClick={() => onDelete(i.id)} title="Delete Interview" className="p-2 rounded-lg hover:bg-red-50 text-gray-600 hover:text-red-600 dark:hover:bg-gray-700 transition">
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </td>
+              </tr>
             ))}
-          </tr>
-        </thead>
-        <tbody>
-          {interviews.map(i => (
-            <tr key={i.id} className="border-b border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition">
-              <td className="p-4">
-                <CandidateProfileLink candidateId={i.candidateIdRaw} className="font-medium text-gray-900 dark:text-white">
-                  {i.candidateName}
-                </CandidateProfileLink>
-              </td>
-              <td className="p-4 text-gray-600 dark:text-gray-300">{i.position}</td>
-              <td className="p-4 text-gray-600 dark:text-gray-300">{new Date(i.interviewDate).toLocaleDateString()}</td>
-              <td className="p-4 text-gray-600 dark:text-gray-300">
-                <RecruiterDetailsTrigger recruiter={i.recruiterDetails} className="font-medium text-gray-600 dark:text-gray-300">
+          </tbody>
+        </table>
+      </div>
+
+      {/* Mobile Card List View */}
+      <div className="md:hidden divide-y divide-gray-150 dark:divide-gray-800 bg-gray-50/30 dark:bg-transparent">
+        {interviews.map(i => (
+          <div key={i.id} className="p-4 space-y-3.5 bg-white dark:bg-gray-900 transition hover:bg-gray-50/50 dark:hover:bg-slate-800/10">
+            <div className="flex justify-between items-start">
+              <div className="space-y-0.5">
+                <div className="text-[10px] text-blue-600 dark:text-blue-400 font-bold uppercase tracking-wide">
+                  {new Date(i.interviewDate).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+                </div>
+                <h4 className="font-bold text-gray-900 dark:text-white text-base">
+                  <CandidateProfileLink candidateId={i.candidateIdRaw} className="text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400">
+                    {i.candidateName}
+                  </CandidateProfileLink>
+                </h4>
+              </div>
+              {getStatusBadge(i.status)}
+            </div>
+
+            <div className="grid grid-cols-2 gap-x-2 gap-y-1.5 text-xs border-t border-gray-100 dark:border-gray-800 pt-3">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500 block">Position</span>
+                <span className="font-semibold text-gray-755 dark:text-gray-300">{i.position}</span>
+              </div>
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500 block">Scheduled By</span>
+                <RecruiterDetailsTrigger recruiter={i.recruiterDetails} className="font-semibold text-gray-755 dark:text-gray-300">
                   {i.recruiterName}
                 </RecruiterDetailsTrigger>
-              </td>
-              <td className="p-4">{getStatusBadge(i.status)}</td>
-              <td className="p-4 flex items-center gap-2">
-                <button onClick={() => onView(i)} title="View Details" className="p-2 rounded-lg hover:bg-blue-50 text-gray-600 hover:text-blue-600 dark:hover:bg-gray-700 transition">
-                  <Eye className="h-4 w-4" />
-                </button>
-                <button onClick={() => onEdit(i)} title="Edit Interview" className="p-2 rounded-lg hover:bg-orange-50 text-gray-600 hover:text-orange-600 dark:hover:bg-gray-700 transition">
-                  <Pencil className="h-4 w-4" />
-                </button>
-                <button onClick={() => onDelete(i.id)} title="Delete Interview" className="p-2 rounded-lg hover:bg-red-50 text-gray-600 hover:text-red-600 dark:hover:bg-gray-700 transition">
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 border-t border-gray-100 dark:border-gray-800 pt-3">
+              <button 
+                onClick={() => onView(i)} 
+                className="px-3 py-1.5 text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 dark:text-blue-400 rounded-lg transition-colors flex items-center gap-1.5"
+                title="View Details"
+              >
+                <Eye className="w-3.5 h-3.5" /> View
+              </button>
+              <button 
+                onClick={() => onEdit(i)} 
+                className="p-1.5 text-gray-505 hover:text-orange-600 bg-gray-50 hover:bg-orange-50 dark:bg-gray-800 dark:hover:bg-orange-900/30 rounded-lg transition-colors border border-gray-150 dark:border-gray-800" 
+                title="Edit Interview"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
+              <button 
+                onClick={() => onDelete(i.id)} 
+                className="p-1.5 text-gray-505 hover:text-red-655 bg-gray-50 hover:bg-red-50 dark:bg-gray-800 dark:hover:bg-red-900/30 rounded-lg transition-colors border border-gray-150 dark:border-gray-800" 
+                title="Delete Interview"
+              >
+                <Trash2 className="h-3.5 w-3.5 text-red-500" />
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -596,8 +656,9 @@ function EditInterviewModal({ interview, onClose, onSave }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4 pb-24 backdrop-blur-sm">
-      <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-lg w-full flex flex-col max-h-[85vh]">
+    <div className="fixed inset-0 flex items-center justify-center z-[60] p-4">
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} className="relative bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-lg w-[95vw] md:w-full flex flex-col max-h-[85vh]">
         {/* Sticky Header */}
         <div className="p-5 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-900 rounded-t-xl shrink-0">
           <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2"><Edit className="h-5 w-5 text-blue-600"/> Edit Interview</h3>
@@ -608,7 +669,7 @@ function EditInterviewModal({ interview, onClose, onSave }) {
         <div className="p-6 space-y-4 overflow-y-auto flex-1">
           <p className="text-sm text-gray-600 dark:text-gray-400">Editing details for <span className="font-semibold text-gray-900 dark:text-white">{interview.candidateName}</span></p>
           
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">Date</label>
               <input type="date" name="interviewDate" value={form.interviewDate} onChange={handleChange} className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 dark:text-white" />
@@ -619,7 +680,7 @@ function EditInterviewModal({ interview, onClose, onSave }) {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">Current Round</label>
               <select name="round" value={form.round} onChange={handleChange} className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 dark:text-white">
@@ -690,23 +751,24 @@ function InterviewDetailModal({ interview, candidateFull, loading, onClose, onUp
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 pb-24 backdrop-blur-sm">
-      <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[85vh] flex flex-col">
+    <div className="fixed inset-0 flex items-center justify-center z-50 p-4">
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="relative bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-4xl w-[95vw] md:w-full max-h-[90vh] flex flex-col">
 
         {/* Header */}
         <div className="p-6 border-b border-white/10 flex justify-between items-start bg-gradient-to-r from-blue-600 to-indigo-700 text-white rounded-t-2xl shrink-0">
-          <div className="flex gap-4 items-center">
+          <div className="flex flex-col sm:flex-row gap-4 items-center sm:items-start text-center sm:text-left">
             <Avatar className="h-16 w-16 border-2 border-white/50">
               <AvatarFallback className="text-blue-700 font-bold text-xl bg-white">{interview.candidateName.substring(0, 2).toUpperCase()}</AvatarFallback>
             </Avatar>
             <div>
-              <h2 className="text-2xl font-bold flex items-center gap-3">
+              <h2 className="text-2xl font-bold flex flex-wrap justify-center sm:justify-start items-center gap-3">
                 <CandidateProfileLink candidateId={interview.candidateIdRaw} className="text-white hover:text-blue-100 dark:text-white">
                   {interview.candidateName}
                 </CandidateProfileLink>
                 {getStatusBadge(interview.status)}
               </h2>
-              <div className="flex gap-2 text-blue-100 items-center mt-1 text-sm font-medium">
+              <div className="flex flex-wrap justify-center sm:justify-start gap-2 text-blue-100 items-center mt-1 text-sm font-medium">
                 <Briefcase className="h-4 w-4" />
                 <span>{interview.position} at {interview.clientName}</span>
                 <span className="mx-2 opacity-50">•</span>
@@ -716,7 +778,7 @@ function InterviewDetailModal({ interview, candidateFull, loading, onClose, onUp
               </div>
             </div>
           </div>
-          <button onClick={onClose} className="bg-white/10 hover:bg-white/20 p-2 rounded-full transition-colors">
+          <button onClick={onClose} className="bg-white/10 hover:bg-white/20 p-2 rounded-full transition-colors ml-auto">
             <X className="h-6 w-6" />
           </button>
         </div>
@@ -860,14 +922,19 @@ function NewInterviewModal({ form, errors, onChange, onCandidateSelect, onGenera
   const inputCls = (err) => `w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white ${err ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'}`;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 pb-24 backdrop-blur-sm">
-      <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-2xl w-full flex flex-col max-h-[85vh]">
+    <div className="fixed inset-0 flex items-center justify-center z-[60] p-4">
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} className="relative bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-lg w-[95vw] md:w-full flex flex-col max-h-[85vh]">
         {/* Sticky Header */}
-        <div className="p-5 border-b border-blue-700 flex justify-between items-center bg-blue-600 text-white rounded-t-xl shrink-0">
-          <h2 className="text-xl font-bold">Schedule Interview</h2>
-          <button onClick={onClose} className="hover:bg-blue-700 p-1 rounded-full transition"><X className="h-6 w-6" /></button>
+        <div className="p-5 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-900 rounded-t-xl shrink-0">
+          <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+            <Plus className="h-5 w-5 text-blue-600"/> Schedule New Interview
+          </h3>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-800 dark:hover:text-gray-200">
+            <X className="h-5 w-5" />
+          </button>
         </div>
-        
+
         {/* Scrollable Body */}
         <div className="p-6 space-y-4 overflow-y-auto flex-1">
           <div>
@@ -881,7 +948,7 @@ function NewInterviewModal({ form, errors, onChange, onCandidateSelect, onGenera
             />
             {errors.candidateId && <p className="text-xs text-red-500 mt-1">{errors.candidateId}</p>}
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="text-sm font-medium block mb-1 text-gray-700 dark:text-gray-200">Candidate Name</label>
               <input name="candidateName" value={form.candidateName} onChange={onChange} disabled={!!form.candidateId} className={inputCls(false) + (form.candidateId ? " opacity-70 cursor-not-allowed" : "")} />
@@ -891,7 +958,7 @@ function NewInterviewModal({ form, errors, onChange, onCandidateSelect, onGenera
               <input name="candidateEmail" value={form.candidateEmail} onChange={onChange} disabled={!!form.candidateId} className={inputCls(false) + (form.candidateId ? " opacity-70 cursor-not-allowed" : "")} />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="text-sm font-medium block mb-1 text-gray-700 dark:text-gray-200">Date</label>
               <input type="date" name="interviewDate" value={form.interviewDate} onChange={onChange} className={inputCls(errors.interviewDate)} />
@@ -902,8 +969,7 @@ function NewInterviewModal({ form, errors, onChange, onCandidateSelect, onGenera
               <input type="time" name="interviewTime" value={form.interviewTime} onChange={onChange} className={inputCls(false)} />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="text-sm font-medium block mb-1 text-gray-700 dark:text-gray-200">Round</label>
               <select name="round" value={form.round} onChange={onChange} className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500">

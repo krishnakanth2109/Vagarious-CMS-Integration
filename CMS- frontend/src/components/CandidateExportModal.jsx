@@ -158,7 +158,7 @@ export default function CandidateExportModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <button type="button" className="absolute inset-0 bg-black/50" aria-label="Close export dialog" onClick={onClose} />
+      <button type="button" className="absolute inset-0 bg-black/50 backdrop-blur-sm" aria-label="Close export dialog" onClick={onClose} />
       <section className="relative w-full max-w-4xl max-h-[90vh] overflow-hidden rounded-xl bg-white shadow-2xl">
         <div className="flex items-start justify-between border-b border-slate-200 px-6 py-4">
           <div>

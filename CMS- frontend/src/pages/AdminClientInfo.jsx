@@ -1,4 +1,4 @@
-﻿import React, { useState, useMemo, useEffect, useCallback } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/AuthContext";
 import {
@@ -131,7 +131,7 @@ const ClientFormControlModal = ({ isOpen, onClose, config, onConfigChange }) => 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-5xl max-h-[92vh] overflow-hidden rounded-2xl bg-white dark:bg-zinc-900 shadow-2xl border border-zinc-200 dark:border-zinc-800 flex flex-col">
+      <div className="relative w-full max-w-5xl max-h-[92vh] overflow-y-auto lg:overflow-hidden rounded-2xl bg-white dark:bg-zinc-900 shadow-2xl border border-zinc-200 dark:border-zinc-800 flex flex-col">
         <div className="px-6 py-5 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 flex items-center justify-between gap-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Client Form Control</p>
@@ -139,8 +139,8 @@ const ClientFormControlModal = ({ isOpen, onClose, config, onConfigChange }) => 
           </div>
           <button onClick={onClose} className="h-9 w-9 rounded-lg text-zinc-500 hover:bg-white dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-white text-xl leading-none">x</button>
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-[0.9fr_1.1fr] min-h-0 flex-1">
-          <div className="border-r border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 overflow-y-auto">
+        <div className="grid grid-cols-1 lg:grid-cols-[0.9fr_1.1fr] lg:h-[calc(92vh-82px)] h-auto min-h-0 flex-1 lg:overflow-hidden">
+          <div className="border-r border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 lg:overflow-y-auto overflow-visible">
             <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 p-4 space-y-3">
               <p className="text-sm font-semibold text-zinc-900 dark:text-white">Create additional field</p>
               <input value={draftField.label} onChange={e => setDraftField(prev => ({ ...prev, label: e.target.value }))} placeholder="Field label" className={inputCls} />
@@ -159,7 +159,7 @@ const ClientFormControlModal = ({ isOpen, onClose, config, onConfigChange }) => 
               </button>
             </div>
           </div>
-          <div className="p-5 overflow-y-auto bg-zinc-50 dark:bg-zinc-950 space-y-5">
+          <div className="p-5 lg:overflow-y-auto overflow-visible bg-zinc-50 dark:bg-zinc-950 space-y-5">
             <section>
               <div className="flex items-center justify-between mb-3">
                 <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Standard Fields</p>
@@ -214,12 +214,10 @@ const ClientFormControlModal = ({ isOpen, onClose, config, onConfigChange }) => 
 /* ---------------- DETAIL MODAL ---------------- */
 const ClientDetailCard = ({ client, onClose }) => {
   return (
-    <div
-      className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"
-      onClick={onClose}
-    >
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
       <div
-        className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto border border-zinc-200 dark:border-zinc-800"
+        className="relative bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto border border-zinc-200 dark:border-zinc-800"
         onClick={(e) => e.stopPropagation()}
       >
           {/* Grey Gradient Header */}
@@ -624,8 +622,9 @@ export default function AdminClientInfo() {
 
       {/* Client Form Modal */}
       {showForm && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl max-w-6xl w-full max-h-[92vh] border border-zinc-200 dark:border-zinc-800 flex flex-col overflow-hidden">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div className="relative bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl max-w-6xl w-full max-h-[92vh] border border-zinc-200 dark:border-zinc-800 flex flex-col overflow-hidden">
             <div className="px-6 py-5 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
                 <h3 className="font-semibold text-xl text-zinc-900 dark:text-white">

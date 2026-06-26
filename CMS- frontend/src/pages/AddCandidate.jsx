@@ -197,8 +197,9 @@ const CandidateFormControlModal = ({ isOpen, onClose, config, onConfigChange }) 
 
   return (
     <ModalPortal>
-    <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-[60] flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-slate-50 rounded-2xl shadow-2xl max-w-5xl w-full max-h-[92vh] overflow-hidden border border-slate-200" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-slate-50 rounded-2xl shadow-2xl max-w-5xl w-full max-h-[92vh] overflow-y-auto lg:overflow-hidden border border-slate-200" onClick={(e) => e.stopPropagation()}>
         <div className="bg-white px-6 py-5 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <span className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center"><SlidersHorizontal className="w-5 h-5" /></span>
@@ -210,8 +211,8 @@ const CandidateFormControlModal = ({ isOpen, onClose, config, onConfigChange }) 
             <button onClick={onClose} className="p-2 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-900"><X className="w-5 h-5" /></button>
           </div>
         </div>
-        <div className="grid lg:grid-cols-[320px_1fr] h-[calc(92vh-82px)] min-h-0 overflow-hidden">
-          <aside className="bg-white border-r border-slate-200 p-5 min-h-0 overflow-y-auto">
+        <div className="grid lg:grid-cols-[320px_1fr] lg:h-[calc(92vh-82px)] h-auto min-h-0 lg:overflow-hidden">
+          <aside className="bg-white border-r border-slate-200 p-5 min-h-0 lg:overflow-y-auto">
             <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3">Add Custom Field</p>
             <div className="space-y-3">
               <div><label className="block text-xs font-medium text-slate-500 mb-1">Field Label</label><input placeholder="Example: Portfolio Link" value={newField.label} onChange={(e) => setNewField(prev => ({ ...prev, label: e.target.value }))} className={inputCls(false)} /></div>
@@ -221,7 +222,7 @@ const CandidateFormControlModal = ({ isOpen, onClose, config, onConfigChange }) 
             </div>
             <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="text-sm font-semibold text-slate-900">Additional fields</p><p className="text-xs text-slate-500 mt-1">New fields appear in a separate section in the add candidate modal.</p></div>
           </aside>
-          <div className="p-5 min-h-0 overflow-y-auto lg:overflow-hidden">
+          <div className="p-5 min-h-0 lg:overflow-y-auto overflow-visible">
             <div className="grid md:grid-cols-2 gap-5 md:h-full md:min-h-0">
               <section className="space-y-3 md:min-h-0 md:flex md:flex-col">
                 <div className="flex items-center justify-between"><p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Standard Fields</p><span className="text-xs text-slate-400">{config.fields.length} fields</span></div>
@@ -509,8 +510,9 @@ const ClientSubmissionsModal = ({ candidate, jobs = [], onClose }) => {
 
   return (
     <ModalPortal>
-    <div className="fixed inset-0 bg-slate-900/40 flex items-center justify-center z-[60] p-4 backdrop-blur-sm">
-      <div className="w-full max-w-3xl overflow-hidden rounded-xl bg-white shadow-2xl border border-slate-200">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full max-w-3xl overflow-hidden rounded-xl bg-white shadow-2xl border border-slate-200">
         <div className="flex items-start justify-between gap-4 border-b border-slate-200 bg-slate-50 p-5">
           <div>
             <h3 className="text-lg font-bold text-slate-900">Submitted Clients & Jobs</h3>
@@ -521,8 +523,8 @@ const ClientSubmissionsModal = ({ candidate, jobs = [], onClose }) => {
           </button>
         </div>
         <div className="max-h-[60vh] overflow-auto p-5">
-          <div className="overflow-hidden rounded-lg border border-slate-200">
-            <table className="w-full text-left text-sm">
+          <div className="overflow-auto rounded-lg border border-slate-200">
+            <table className="w-full text-left text-sm min-w-[650px]">
               <thead className="bg-slate-50 text-xs font-semibold uppercase text-slate-500">
                 <tr>
                   <th className="px-4 py-3">Client Name</th>
@@ -1589,7 +1591,7 @@ export default function AdminCandidates() {
               </div>
 
               {/* TABLE CONTAINER */}
-              <div ref={bottomScrollRef} onScroll={handleBottomScroll} className="tbl-scroll w-full" style={{ overflowX: 'auto' }}>
+              <div ref={bottomScrollRef} onScroll={handleBottomScroll} className="tbl-scroll w-full hidden md:block" style={{ overflowX: 'auto' }}>
                 <table className="w-full text-sm text-left border-collapse min-w-[1800px]">
                   <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200">
                     <tr>
@@ -1674,6 +1676,85 @@ export default function AdminCandidates() {
                 )}
               </div>
 
+              {/* Mobile Card List (replacing the table on small screens) */}
+              <div className="block md:hidden space-y-4 p-4 bg-transparent">
+                {paginatedCandidates.map((c) => {
+                  const statusArr = getCandidateStatuses(c);
+                  const isSelected = selectedIds.includes(c._id);
+                  return (
+                    <div key={c._id} className={`bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-3 hover:shadow-md transition-shadow ${isSelected ? 'bg-blue-50/20 border-blue-200' : ''}`}>
+                      {/* Header: Checkbox + ID + Actions */}
+                      <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-2">
+                        <div className="flex items-center gap-2">
+                          <input 
+                            type="checkbox" 
+                            checked={isSelected} 
+                            onChange={(e) => handleSelectOne(e, c._id)} 
+                            className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer" 
+                          />
+                          <span 
+                            onClick={() => { navigator.clipboard.writeText(getCandidateId(c)); toast({ title: "Copied ID" }); }}
+                            className="font-mono text-xs text-blue-600 font-bold cursor-pointer"
+                          >
+                            {getCandidateId(c)}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <button className="p-1 hover:bg-slate-100 rounded text-blue-600" onClick={() => { setViewCandidate(c); setIsViewDialogOpen(true); }}><Eye className="h-4 w-4" /></button>
+                          <button className="p-1 hover:bg-slate-100 rounded text-slate-600" onClick={() => openEditDialog(c)}><Edit className="h-4 w-4" /></button>
+                          <button className="p-1 hover:bg-slate-100 rounded text-red-600" onClick={() => handleDelete(c._id)}><Trash2 className="h-4 w-4" /></button>
+                        </div>
+                      </div>
+
+                      {/* Candidate Name & Position */}
+                      <div>
+                        <CandidateProfileLink candidate={c} className="font-bold text-slate-900 text-base">{c.name}</CandidateProfileLink>
+                        <div className="text-xs font-medium text-slate-500 mt-0.5">{c.position || 'No Position'}</div>
+                      </div>
+
+                      {/* Recruiter & Statuses */}
+                      <div className="flex flex-wrap gap-2 items-center justify-between">
+                        <div className="text-xs text-slate-500 font-medium">
+                          Recruiter: <RecruiterDetailsTrigger recruiter={getCandidateRecruiterDetails(c, recruiters)} className="text-[#283086] font-bold italic underline">
+                            {typeof c.recruiterId === 'object' ? getRecruiterName(c.recruiterId) : c.recruiterName || '-'}
+                          </RecruiterDetailsTrigger>
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {statusArr.map((s) => (
+                            <StatusBadge key={s} status={s} />
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Details grid (Simplified: Client, Contact, Exp/CTC) */}
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 text-xs text-slate-600 border-t border-slate-100 pt-2.5">
+                        <div>
+                          <span className="font-semibold text-slate-400 block uppercase tracking-wider text-[9px] mb-0.5">Contact</span>
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className="truncate">{c.contact}</span>
+                            <button className="text-green-600 hover:text-green-700" onClick={() => handleWhatsApp(c)}>
+                              <MessageCircle className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                        <div>
+                          <span className="font-semibold text-slate-400 block uppercase tracking-wider text-[9px] mb-0.5">Experience</span>
+                          <span>{c.totalExperience ? `${c.totalExperience} Yrs` : 'N/A'}</span>
+                        </div>
+                        <div>
+                          <span className="font-semibold text-slate-400 block uppercase tracking-wider text-[9px] mb-0.5">Client</span>
+                          <CandidateClientCell candidate={c} onShowMore={setClientPopoverCandidate} />
+                        </div>
+                        <div>
+                          <span className="font-semibold text-slate-400 block uppercase tracking-wider text-[9px] mb-0.5">CTC / ECTC</span>
+                          <span>{c.ctc || '-'} / <span className="text-green-600 font-medium">{c.ectc || '-'}</span></span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
               {/* --- PAGINATION CONTROLS --- */}
               {totalPages > 1 && (
                 <div className="flex flex-col sm:flex-row justify-between items-center p-4 border-t border-slate-200 bg-white gap-4">
@@ -1717,8 +1798,9 @@ export default function AdminCandidates() {
 
       {isDialogOpen && (
         <ModalPortal>
-        <div className="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-2xl max-w-7xl w-full max-h-[90vh] flex flex-col overflow-hidden border border-slate-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" />
+          <div className="relative bg-white rounded-xl shadow-2xl max-w-7xl w-full max-h-[90vh] flex flex-col overflow-hidden border border-slate-200">
             <div className="p-6 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
               <div>
                 <h2 className="text-xl font-bold text-slate-900">{isEditMode ? 'Edit Candidate' : 'Add New Candidate'}</h2>
@@ -2181,8 +2263,9 @@ export default function AdminCandidates() {
 
       {isViewDialogOpen && viewCandidate && (
         <ModalPortal>
-        <div className="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-2xl max-w-7xl w-full max-h-[90vh] flex flex-col overflow-hidden border border-slate-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setIsViewDialogOpen(false)} />
+          <div className="relative bg-white rounded-xl shadow-2xl max-w-7xl w-full max-h-[90vh] flex flex-col overflow-hidden border border-slate-200">
             {/* Header */}
             <div className="p-6 border-b border-slate-200 bg-slate-50 flex justify-between items-start">
               <div>
@@ -2344,7 +2427,7 @@ function AdminTodaySubmissionsModal({ candidates, recruiters, onClose, getCandid
   return (
     <ModalPortal>
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
       <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[85vh] overflow-hidden flex flex-col">
 
         {/* Header */}
@@ -2403,7 +2486,8 @@ function AdminTodaySubmissionsModal({ candidates, recruiters, onClose, getCandid
               )}
             </div>
           ) : (
-            <table className="w-full text-sm text-left border-collapse">
+            <div className="overflow-x-auto w-full">
+              <table className="w-full text-sm text-left border-collapse min-w-[800px]">
               <thead className="bg-slate-50 text-slate-500 text-xs font-semibold border-b sticky top-0 z-10">
                 <tr>
                   <th className="px-4 py-3 whitespace-nowrap">CANDIDATE ID</th>
@@ -2454,6 +2538,7 @@ function AdminTodaySubmissionsModal({ candidates, recruiters, onClose, getCandid
                 })}
               </tbody>
             </table>
+            </div>
           )}
         </div>
 

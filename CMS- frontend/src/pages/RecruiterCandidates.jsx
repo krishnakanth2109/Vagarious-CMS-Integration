@@ -158,59 +158,60 @@ const ClientSubmissionsModal = ({ candidate, jobs = [], onClose }) => {
 
   return (
     <ModalPortal>
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-3xl overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl">
-        <div className="flex items-start justify-between gap-4 border-b border-slate-200 bg-slate-50 p-5">
-          <div>
-            <h3 className="text-lg font-bold text-slate-900">Submitted Clients & Jobs</h3>
-            <p className="mt-1 text-sm text-slate-500">{candidate?.name || 'Candidate'}</p>
+      <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+        <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={onClose} />
+        <div className="relative w-full max-w-3xl overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl">
+          <div className="flex items-start justify-between gap-4 border-b border-slate-200 bg-slate-50 p-5">
+            <div>
+              <h3 className="text-lg font-bold text-slate-900">Submitted Clients & Jobs</h3>
+              <p className="mt-1 text-sm text-slate-500">{candidate?.name || 'Candidate'}</p>
+            </div>
+            <button onClick={onClose} className="rounded-lg p-1 text-slate-400 hover:bg-white hover:text-slate-700">
+              <X className="h-5 w-5" />
+            </button>
           </div>
-          <button onClick={onClose} className="rounded-lg p-1 text-slate-400 hover:bg-white hover:text-slate-700">
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-        <div className="max-h-[60vh] overflow-auto p-5">
-          <div className="overflow-hidden rounded-lg border border-slate-200">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-slate-50 text-xs font-semibold uppercase text-slate-500">
-                <tr>
-                  <th className="px-4 py-3">Client Name</th>
-                  <th className="px-4 py-3">Job Code</th>
-                  <th className="px-4 py-3">Job Position</th>
-                  <th className="px-4 py-3">Pipeline/Status</th>
-                  <th className="px-4 py-3">Submitted Date</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {submissions.map((submission) => (
-                  <tr key={submission._id || `${submission.jobId}-${submission.jobCode}`} className="align-top">
-                    <td className="px-4 py-3 font-semibold text-slate-800">{submission.clientName || 'N/A'}</td>
-                    <td className="px-4 py-3">
-                      {submission.jobCode ? (
-                        <button
-                          type="button"
-                          onClick={() => setSelectedJob(getSubmissionJobDetails(submission, jobs))}
-                          className="font-mono text-xs font-bold text-blue-700 underline decoration-blue-300 underline-offset-4 hover:text-blue-900"
-                          title="Open job details"
-                        >
-                          {submission.jobCode}
-                        </button>
-                      ) : (
-                        <span className="font-mono text-xs text-slate-500">N/A</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-slate-700">{submission.position || 'N/A'}</td>
-                    <td className="px-4 py-3"><StatusBadge status={getSubmissionStatus(submission)} /></td>
-                    <td className="px-4 py-3 text-slate-600">{formatSubmissionDate(submission)}</td>
+          <div className="max-h-[60vh] overflow-auto p-5">
+            <div className="overflow-x-auto rounded-lg border border-slate-200">
+              <table className="w-full text-left text-sm min-w-[600px]">
+                <thead className="bg-slate-50 text-xs font-semibold uppercase text-slate-500">
+                  <tr>
+                    <th className="px-4 py-3">Client Name</th>
+                    <th className="px-4 py-3">Job Code</th>
+                    <th className="px-4 py-3">Job Position</th>
+                    <th className="px-4 py-3">Pipeline/Status</th>
+                    <th className="px-4 py-3">Submitted Date</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {submissions.map((submission) => (
+                    <tr key={submission._id || `${submission.jobId}-${submission.jobCode}`} className="align-top">
+                      <td className="px-4 py-3 font-semibold text-slate-800">{submission.clientName || 'N/A'}</td>
+                      <td className="px-4 py-3">
+                        {submission.jobCode ? (
+                          <button
+                            type="button"
+                            onClick={() => setSelectedJob(getSubmissionJobDetails(submission, jobs))}
+                            className="font-mono text-xs font-bold text-blue-700 underline decoration-blue-300 underline-offset-4 hover:text-blue-900"
+                            title="Open job details"
+                          >
+                            {submission.jobCode}
+                          </button>
+                        ) : (
+                          <span className="font-mono text-xs text-slate-500">N/A</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-slate-700">{submission.position || 'N/A'}</td>
+                      <td className="px-4 py-3"><StatusBadge status={getSubmissionStatus(submission)} /></td>
+                      <td className="px-4 py-3 text-slate-600">{formatSubmissionDate(submission)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
+        <JobDetailsModal job={selectedJob} onClose={() => setSelectedJob(null)} />
       </div>
-      <JobDetailsModal job={selectedJob} onClose={() => setSelectedJob(null)} />
-    </div>
     </ModalPortal>
   );
 };
@@ -259,12 +260,12 @@ const Modal = ({ open, onClose, children, maxWidth = 'max-w-2xl' }) => {
   if (!open) return null;
   return (
     <ModalPortal>
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className={`relative flex max-h-[90vh] w-full ${maxWidth} flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl dark:bg-slate-900`}>
-        {children}
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+        <div className={`relative flex max-h-[90vh] w-full ${maxWidth} flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl dark:bg-slate-900`}>
+          {children}
+        </div>
       </div>
-    </div>
     </ModalPortal>
   );
 };
@@ -402,7 +403,7 @@ const saveCandidateFieldConfig = (config) => {
   try {
     const user = JSON.parse(sessionStorage.getItem('currentUser') || '{}');
     sessionStorage.setItem('currentUser', JSON.stringify({ ...user, candidateSettings: config }));
-  } catch (_) {}
+  } catch (_) { }
 };
 
 const CandidateCustomFieldInput = ({ field, value, onChange }) => {
@@ -452,84 +453,84 @@ const CandidateFormControlModal = ({ isOpen, onClose, config, onConfigChange }) 
 
   return (
     <ModalPortal>
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-5xl max-h-[92vh] overflow-hidden rounded-2xl bg-white shadow-2xl border border-slate-200 flex flex-col">
-        <div className="px-6 py-5 border-b border-slate-200 bg-slate-50 flex items-center justify-between gap-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-blue-600">Candidate Form Control</p>
-            <h2 className="text-xl font-bold text-slate-900">Manage form fields</h2>
-          </div>
-          <button onClick={onClose} className="h-9 w-9 rounded-lg text-slate-500 hover:bg-white hover:text-slate-900 text-xl leading-none">x</button>
-        </div>
-        <div className="grid grid-cols-1 lg:grid-cols-[0.9fr_1.1fr] min-h-0 flex-1">
-          <div className="border-r border-slate-200 bg-white p-5 overflow-y-auto">
-            <div className="rounded-xl border border-blue-100 bg-blue-50 p-4 space-y-3">
-              <p className="text-sm font-semibold text-slate-900">Create additional field</p>
-              <Input value={draftField.label} onChange={e => setDraftField(prev => ({ ...prev, label: e.target.value }))} placeholder="Field label" />
-              <NativeSelect value={draftField.fieldType} onChange={value => setDraftField(prev => ({ ...prev, fieldType: value }))}>
-                <option value="text">Text</option>
-                <option value="number">Number</option>
-                <option value="date">Date</option>
-                <option value="email">Email</option>
-                <option value="textarea">Long Text</option>
-                <option value="select">Select</option>
-                <option value="checkbox">Checkbox</option>
-              </NativeSelect>
-              <Button onClick={addCustom} className="w-full"><Plus className="h-4 w-4 mr-2" /> Add Field</Button>
+      <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+        <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" onClick={onClose} />
+        <div className="relative w-full max-w-5xl max-h-[92vh] overflow-hidden rounded-2xl bg-white shadow-2xl border border-slate-200 flex flex-col">
+          <div className="px-6 py-5 border-b border-slate-200 bg-slate-50 flex items-center justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-blue-600">Candidate Form Control</p>
+              <h2 className="text-xl font-bold text-slate-900">Manage form fields</h2>
             </div>
+            <button onClick={onClose} className="h-9 w-9 rounded-lg text-slate-500 hover:bg-white hover:text-slate-900 text-xl leading-none">x</button>
           </div>
-          <div className="p-5 overflow-y-auto bg-slate-50 space-y-5">
-            <section>
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Standard Fields</p>
-                <span className="text-xs text-slate-400">{config.fields.filter(field => field.visible).length}/{config.fields.length} visible</span>
+          <div className="grid grid-cols-1 lg:grid-cols-[0.9fr_1.1fr] min-h-0 flex-1 overflow-y-auto lg:overflow-hidden">
+            <div className="border-r border-slate-200 bg-white p-5 lg:overflow-y-auto">
+              <div className="rounded-xl border border-blue-100 bg-blue-50 p-4 space-y-3">
+                <p className="text-sm font-semibold text-slate-900">Create additional field</p>
+                <Input value={draftField.label} onChange={e => setDraftField(prev => ({ ...prev, label: e.target.value }))} placeholder="Field label" />
+                <NativeSelect value={draftField.fieldType} onChange={value => setDraftField(prev => ({ ...prev, fieldType: value }))}>
+                  <option value="text">Text</option>
+                  <option value="number">Number</option>
+                  <option value="date">Date</option>
+                  <option value="email">Email</option>
+                  <option value="textarea">Long Text</option>
+                  <option value="select">Select</option>
+                  <option value="checkbox">Checkbox</option>
+                </NativeSelect>
+                <Button onClick={addCustom} className="w-full"><Plus className="h-4 w-4 mr-2" /> Add Field</Button>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {config.fields.map(field => (
-                  <button key={field.fieldName} onClick={() => toggleDefault(field.fieldName)} disabled={field.isMandatory} className={`text-left rounded-xl border p-3 transition ${field.visible ? 'border-blue-200 bg-white shadow-sm' : 'border-slate-200 bg-slate-100 opacity-70'} ${field.isMandatory ? 'cursor-not-allowed' : 'hover:border-blue-300'}`}>
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="text-sm font-semibold text-slate-800">{field.label}</span>
-                      <span className={`h-5 w-9 rounded-full p-0.5 transition ${field.visible ? 'bg-blue-600' : 'bg-slate-300'}`}><span className={`block h-4 w-4 rounded-full bg-white transition ${field.visible ? 'translate-x-4' : ''}`} /></span>
-                    </div>
-                    <p className="text-xs text-slate-500 mt-1">{field.isMandatory ? 'Required' : field.fieldType}</p>
-                  </button>
-                ))}
-              </div>
-            </section>
-            <section>
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Additional Fields</p>
-                <span className="text-xs text-slate-400">{config.customFields.length} fields</span>
-              </div>
-              {config.customFields.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center"><p className="text-sm font-medium text-slate-800">No additional fields yet</p></div>
-              ) : (
-                <div className="space-y-3">
-                  {config.customFields.map((field, index) => (
-                    <div key={field.fieldName} className="rounded-xl border border-slate-200 bg-white p-3 flex flex-col sm:flex-row gap-3 sm:items-center">
-                      <Input value={field.label} onChange={e => updateCustomLabel(index, e.target.value)} className="sm:flex-1" />
-                      <Badge variant="outline">{field.fieldType}</Badge>
-                      <button onClick={() => toggleCustom(index)} className={`px-3 py-2 rounded-lg text-xs font-semibold ${field.visible ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-500'}`}>{field.visible ? 'Visible' : 'Hidden'}</button>
-                      <button onClick={() => deleteCustom(index)} className="px-3 py-2 rounded-lg text-xs font-semibold bg-red-50 text-red-600">Delete</button>
-                    </div>
+            </div>
+            <div className="p-5 lg:overflow-y-auto bg-slate-50 space-y-5">
+              <section>
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Standard Fields</p>
+                  <span className="text-xs text-slate-400">{config.fields.filter(field => field.visible).length}/{config.fields.length} visible</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {config.fields.map(field => (
+                    <button key={field.fieldName} onClick={() => toggleDefault(field.fieldName)} disabled={field.isMandatory} className={`text-left rounded-xl border p-3 transition ${field.visible ? 'border-blue-200 bg-white shadow-sm' : 'border-slate-200 bg-slate-100 opacity-70'} ${field.isMandatory ? 'cursor-not-allowed' : 'hover:border-blue-300'}`}>
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-sm font-semibold text-slate-800">{field.label}</span>
+                        <span className={`h-5 w-9 rounded-full p-0.5 transition ${field.visible ? 'bg-blue-600' : 'bg-slate-300'}`}><span className={`block h-4 w-4 rounded-full bg-white transition ${field.visible ? 'translate-x-4' : ''}`} /></span>
+                      </div>
+                      <p className="text-xs text-slate-500 mt-1">{field.isMandatory ? 'Required' : field.fieldType}</p>
+                    </button>
                   ))}
                 </div>
-              )}
-            </section>
+              </section>
+              <section>
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Additional Fields</p>
+                  <span className="text-xs text-slate-400">{config.customFields.length} fields</span>
+                </div>
+                {config.customFields.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center"><p className="text-sm font-medium text-slate-800">No additional fields yet</p></div>
+                ) : (
+                  <div className="space-y-3">
+                    {config.customFields.map((field, index) => (
+                      <div key={field.fieldName} className="rounded-xl border border-slate-200 bg-white p-3 flex flex-col sm:flex-row gap-3 sm:items-center">
+                        <Input value={field.label} onChange={e => updateCustomLabel(index, e.target.value)} className="sm:flex-1" />
+                        <Badge variant="outline">{field.fieldType}</Badge>
+                        <button onClick={() => toggleCustom(index)} className={`px-3 py-2 rounded-lg text-xs font-semibold ${field.visible ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-500'}`}>{field.visible ? 'Visible' : 'Hidden'}</button>
+                        <button onClick={() => deleteCustom(index)} className="px-3 py-2 rounded-lg text-xs font-semibold bg-red-50 text-red-600">Delete</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+            </div>
+          </div>
+          <div className="px-6 py-4 border-t border-slate-200 bg-white flex justify-end">
+            <Button onClick={onClose}>Done</Button>
           </div>
         </div>
-        <div className="px-6 py-4 border-t border-slate-200 bg-white flex justify-end">
-          <Button onClick={onClose}>Done</Button>
-        </div>
       </div>
-    </div>
     </ModalPortal>
   );
 };
 
 export default function RecruiterCandidates() {
-  const { currentUser, userRole, authHeaders } = useAuth(); 
+  const { currentUser, userRole, authHeaders } = useAuth();
   const { toast } = useToast();
   const [searchParams] = useSearchParams();
 
@@ -616,7 +617,7 @@ export default function RecruiterCandidates() {
     noticePeriod: '',
     servingNoticePeriod: 'false',
     noticePeriodDays: '',
-    lwd: '', 
+    lwd: '',
     reasonForChange: '',
     offersInHand: 'false',
     offerPackage: '',
@@ -796,7 +797,7 @@ export default function RecruiterCandidates() {
 
   const handleInputChange = (key, value) => {
     let newValue = value;
-    
+
     if (key === 'contact') newValue = value.replace(/\D/g, '').slice(0, 10);
     else if (key === 'firstName' || key === 'lastName') newValue = value.replace(/[^a-zA-Z\s'\-]/g, '');
     else if (key === 'totalExperience' || key === 'relevantExperience') {
@@ -806,7 +807,7 @@ export default function RecruiterCandidates() {
     }
 
     setFormData(prev => ({ ...prev, [key]: newValue }));
-    
+
     if (errors[key]) setErrors(prev => { const n = { ...prev }; delete n[key]; return n; });
   };
 
@@ -873,7 +874,7 @@ export default function RecruiterCandidates() {
 
     const totExp = trimStr(data.totalExperience);
     if (totExp && isNaN(Number(totExp))) newErrors.totalExperience = "Must be a valid number";
-    
+
     const relExp = trimStr(data.relevantExperience);
     if (relExp && isNaN(Number(relExp))) newErrors.relevantExperience = "Must be a valid number";
 
@@ -898,7 +899,7 @@ export default function RecruiterCandidates() {
     if (!data.status || data.status.length === 0) newErrors.status = "At least one status is required";
     if (!data.dateAdded) newErrors.dateAdded = "Date Added is required";
     else {
-      const todayDateStr = new Date().toLocaleDateString('en-CA'); 
+      const todayDateStr = new Date().toLocaleDateString('en-CA');
       if (data.dateAdded > todayDateStr) newErrors.dateAdded = "Date Added cannot be a future date — only today or earlier";
     }
     if (data.remarks && trimStr(data.remarks).length > 1000) newErrors.remarks = "Max 1000 characters allowed";
@@ -927,7 +928,7 @@ export default function RecruiterCandidates() {
     return candidates.filter(c => {
       const searchMatch = candidateMatchesKeywordBadges(c, searchKeywords);
       const currentStatusArr = getCandidateStatuses(c);
-      
+
       let statCardMatch = true;
       if (activeStatFilter === 'Today') {
         const d = c.dateAdded || c.createdAt;
@@ -935,7 +936,7 @@ export default function RecruiterCandidates() {
       } else if (activeStatFilter) {
         statCardMatch = currentStatusArr.includes(activeStatFilter);
       }
-      
+
       const statusDropdownMatch = statusFilter === 'all' || currentStatusArr.includes(statusFilter);
       return searchMatch && statusDropdownMatch && statCardMatch;
     });
@@ -1043,7 +1044,7 @@ export default function RecruiterCandidates() {
           })) : [];
           setFormData((prev) => ({ ...prev, submissions: rows }));
         })
-        .catch(() => {})
+        .catch(() => { })
         .finally(() => setIsLoadingSubmissions(false))
     ).catch(() => setIsLoadingSubmissions(false));
   };
@@ -1059,7 +1060,7 @@ export default function RecruiterCandidates() {
           if (dupData.exists) {
             setErrors(prev => ({ ...prev, email: `A candidate with this email already exists` }));
             toast({ title: "Duplicate Email", description: "Email already registered", variant: "destructive" });
-            return; 
+            return;
           }
         }
       } catch (_) { }
@@ -1077,7 +1078,7 @@ export default function RecruiterCandidates() {
             if (phData.exists) {
               setErrors(prev => ({ ...prev, contact: `A candidate with this phone already exists` }));
               toast({ title: "Duplicate Phone", description: "Phone already registered", variant: "destructive" });
-              return; 
+              return;
             }
           }
         } catch (_) { }
@@ -1282,7 +1283,7 @@ export default function RecruiterCandidates() {
       await Promise.all(deletePromises);
       toast({ title: "Deleted", description: `${selectedCandidates.length} candidate(s) deleted successfully` });
       setSelectedCandidates([]); fetchData(); setIsDeleteConfirmOpen(false);
-    } catch (error) { toast({ variant: "destructive", title: "Error" }); } 
+    } catch (error) { toast({ variant: "destructive", title: "Error" }); }
     finally { setIsDeleting(false); }
   };
 
@@ -1307,9 +1308,9 @@ export default function RecruiterCandidates() {
       if (!response.ok) throw new Error(result.message || 'Import failed');
       const successCount = result.imported ?? 0;
       setImportResult({ success: successCount, failed: Math.max(0, (result.total ?? 0) - successCount), errors: (result.errors || []).map((e) => typeof e === 'string' ? e : `Row ${e.row}: ${e.error}`) });
-      if (successCount > 0) { toast({ title: 'Import Successful' }); fetchData(); } 
+      if (successCount > 0) { toast({ title: 'Import Successful' }); fetchData(); }
       else toast({ title: 'Nothing Imported', variant: 'destructive' });
-    } catch (error) { toast({ title: 'Import Failed', variant: 'destructive' }); } 
+    } catch (error) { toast({ title: 'Import Failed', variant: 'destructive' }); }
     finally { setIsImporting(false); }
   };
 
@@ -1496,7 +1497,7 @@ export default function RecruiterCandidates() {
         </NativeSelect>
         {errors.offersInHand && <span className="text-xs text-red-500">{errors.offersInHand}</span>}
       </div>
-      
+
       {isCandidateFieldVisible('offersInHand') && formData.offersInHand === 'true' &&
         <div className="space-y-1">
           <Label className={errors.offerPackage ? "text-red-500" : ""}>Package Amount *</Label>
@@ -1577,7 +1578,7 @@ export default function RecruiterCandidates() {
       `}</style>
 
       <main className="flex-1 grid grid-cols-1 min-w-0 w-full p-6 overflow-y-auto overflow-x-hidden pb-48">
-        
+
         <div className="w-full max-w-full mx-auto space-y-6">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
@@ -1653,9 +1654,9 @@ export default function RecruiterCandidates() {
 
           {viewMode === 'table' ? (
             <div className="w-full overflow-hidden border border-slate-200 rounded-xl shadow-sm bg-white flex flex-col">
-              <div 
-                ref={topScrollRef} 
-                onScroll={handleTopScroll} 
+              <div
+                ref={topScrollRef}
+                onScroll={handleTopScroll}
                 className="w-full overflow-x-auto overflow-y-hidden sleek-scrollbar rounded-t-xl bg-slate-50 border-b border-slate-100"
                 style={{ height: '10px' }}
               >
@@ -1684,43 +1685,43 @@ export default function RecruiterCandidates() {
                   <tbody className="divide-y divide-slate-100">
                     {paginatedCandidates.map((c, index) => {
                       return (
-                      <tr key={c._id} className="hover:bg-slate-50">
-                        <td className="p-3 pl-4 whitespace-nowrap"><input type="checkbox" checked={selectedCandidates.includes(c._id)} onChange={() => toggleSelectCandidate(c._id)} className="h-4 w-4 rounded" /></td>
-                        <td className="p-3 font-mono text-xs text-blue-600 font-bold cursor-pointer whitespace-nowrap" onClick={() => { navigator.clipboard.writeText(getCandidateId(c)); toast({ title: "Copied ID" }); }}>{getCandidateId(c)}</td>
-                        <td className="p-3 whitespace-nowrap">
-                          <CandidateProfileLink candidate={c}>{c.name}</CandidateProfileLink>
-                          <div className="mt-0.5 text-xs font-medium text-slate-400">{c.position || '-'}</div>
-                        </td>
-                        <td className="p-3 text-sm text-slate-600 whitespace-nowrap">
-                          <div className="flex items-center gap-2">{c.contact}
-                            <button className="text-green-600 hover:text-green-700" onClick={() => handleWhatsApp(c)}><MessageCircle className="h-3.5 w-3.5" /></button>
-                          </div>
-                        </td>
-                        <td className="p-3 text-sm text-slate-600 whitespace-nowrap"><span className="truncate max-w-[150px] block" title={c.email}>{c.email}</span></td>
-                        <td className="p-3 whitespace-nowrap">
-                          <CandidateClientCell candidate={c} onShowMore={setClientPopoverCandidate} />
-                        </td>
-                        <td className="p-3 text-xs text-slate-600 max-w-[150px] truncate whitespace-nowrap" title={Array.isArray(c.skills) ? c.skills.join(', ') : c.skills}>{formatSkills(c.skills)}</td>
-                        <td className="p-3 text-sm text-slate-600 whitespace-nowrap">{formatDate(c.dateAdded || c.createdAt)}</td>
-                        <td className="p-3 text-sm whitespace-nowrap">{c.totalExperience ? `${c.totalExperience} Yrs` : '-'}</td>
-                        <td className="p-3 text-xs whitespace-nowrap"><div>{c.ctc || '-'}</div><div className="text-green-600">{c.ectc || '-'}</div></td>
-                        <td className="p-3 whitespace-nowrap">
-                          <div className="flex flex-wrap gap-1.5 min-w-[140px] max-w-[240px]">
-                            {getCandidateStatuses(c).map((status) => (
-                              <StatusBadge key={status} status={status} />
-                            ))}
-                          </div>
-                        </td>
-                        <td className="p-3 text-xs text-slate-500 truncate max-w-[150px] whitespace-nowrap">{c.remarks || '-'}</td>
-                        <td className="p-3 text-right whitespace-nowrap">
-                          <div className="flex justify-end gap-1">
-                            <button className="p-1 hover:bg-slate-100 rounded" onClick={() => openViewDialog(c)}><Eye className="h-3.5 w-3.5 text-blue-600" /></button>
-                            <button className="p-1 hover:bg-slate-100 rounded" onClick={() => openEditDialog(c)}><Edit className="h-3.5 w-3.5 text-slate-600" /></button>
-                            <button className="p-1 hover:bg-slate-100 rounded" onClick={() => toggleActiveStatus(c._id, c.active !== false)}><Ban className="h-3.5 w-3.5 text-red-600" /></button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
+                        <tr key={c._id} className="hover:bg-slate-50">
+                          <td className="p-3 pl-4 whitespace-nowrap"><input type="checkbox" checked={selectedCandidates.includes(c._id)} onChange={() => toggleSelectCandidate(c._id)} className="h-4 w-4 rounded" /></td>
+                          <td className="p-3 font-mono text-xs text-blue-600 font-bold cursor-pointer whitespace-nowrap" onClick={() => { navigator.clipboard.writeText(getCandidateId(c)); toast({ title: "Copied ID" }); }}>{getCandidateId(c)}</td>
+                          <td className="p-3 whitespace-nowrap">
+                            <CandidateProfileLink candidate={c}>{c.name}</CandidateProfileLink>
+                            <div className="mt-0.5 text-xs font-medium text-slate-400">{c.position || '-'}</div>
+                          </td>
+                          <td className="p-3 text-sm text-slate-600 whitespace-nowrap">
+                            <div className="flex items-center gap-2">{c.contact}
+                              <button className="text-green-600 hover:text-green-700" onClick={() => handleWhatsApp(c)}><MessageCircle className="h-3.5 w-3.5" /></button>
+                            </div>
+                          </td>
+                          <td className="p-3 text-sm text-slate-600 whitespace-nowrap"><span className="truncate max-w-[150px] block" title={c.email}>{c.email}</span></td>
+                          <td className="p-3 whitespace-nowrap">
+                            <CandidateClientCell candidate={c} onShowMore={setClientPopoverCandidate} />
+                          </td>
+                          <td className="p-3 text-xs text-slate-600 max-w-[150px] truncate whitespace-nowrap" title={Array.isArray(c.skills) ? c.skills.join(', ') : c.skills}>{formatSkills(c.skills)}</td>
+                          <td className="p-3 text-sm text-slate-600 whitespace-nowrap">{formatDate(c.dateAdded || c.createdAt)}</td>
+                          <td className="p-3 text-sm whitespace-nowrap">{c.totalExperience ? `${c.totalExperience} Yrs` : '-'}</td>
+                          <td className="p-3 text-xs whitespace-nowrap"><div>{c.ctc || '-'}</div><div className="text-green-600">{c.ectc || '-'}</div></td>
+                          <td className="p-3 whitespace-nowrap">
+                            <div className="flex flex-wrap gap-1.5 min-w-[140px] max-w-[240px]">
+                              {getCandidateStatuses(c).map((status) => (
+                                <StatusBadge key={status} status={status} />
+                              ))}
+                            </div>
+                          </td>
+                          <td className="p-3 text-xs text-slate-500 truncate max-w-[150px] whitespace-nowrap">{c.remarks || '-'}</td>
+                          <td className="p-3 text-right whitespace-nowrap">
+                            <div className="flex justify-end gap-1">
+                              <button className="p-1 hover:bg-slate-100 rounded" onClick={() => openViewDialog(c)}><Eye className="h-3.5 w-3.5 text-blue-600" /></button>
+                              <button className="p-1 hover:bg-slate-100 rounded" onClick={() => openEditDialog(c)}><Edit className="h-3.5 w-3.5 text-slate-600" /></button>
+                              <button className="p-1 hover:bg-slate-100 rounded" onClick={() => toggleActiveStatus(c._id, c.active !== false)}><Ban className="h-3.5 w-3.5 text-red-600" /></button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
                     })}
                   </tbody>
                 </table>

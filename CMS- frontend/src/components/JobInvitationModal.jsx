@@ -229,8 +229,8 @@ export default function JobInvitationModal({
           </button>
         </div>
 
-        <div className="grid min-h-0 flex-1 grid-cols-1 gap-0 overflow-hidden lg:grid-cols-[0.9fr_1.35fr]">
-          <div className="min-h-0 overflow-y-auto border-r border-slate-200 bg-white p-5">
+        <div className="grid min-h-0 flex-1 grid-cols-1 gap-0 overflow-y-auto lg:overflow-hidden lg:grid-cols-[0.9fr_1.35fr]">
+          <div className="min-h-0 lg:overflow-y-auto border-r border-slate-200 bg-white p-5">
             <section className="space-y-3">
               <div className="flex items-center justify-between gap-3">
                 <div>
@@ -345,7 +345,7 @@ export default function JobInvitationModal({
             )}
           </div>
 
-          <div className="min-h-0 overflow-y-auto bg-slate-100/60 p-5">
+          <div className="min-h-0 lg:overflow-y-auto bg-slate-100/60 p-5">
             <div className="space-y-4">
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-700">Email Subject</label>

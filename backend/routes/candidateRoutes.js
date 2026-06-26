@@ -207,17 +207,17 @@ router.get('/', async (req, res) => {
 
     if (req.query.date) {
       // FIX: Parse YYYY-MM-DD manually to treat as LOCAL date, not UTC.
-      // new Date("2026-03-21") parses as UTC midnight, which in IST (UTC+5:30)
-      // = 5:30 AM — missing all candidates added before 5:30 AM local time.
+      // Pad by +/- 1 day to make it safe for timezone offsets.
       const [yyyy, mm, dd] = req.query.date.split('-').map(Number);
-      const start = new Date(yyyy, mm - 1, dd, 0, 0, 0, 0);
-      const end   = new Date(yyyy, mm - 1, dd, 23, 59, 59, 999);
+      const start = new Date(yyyy, mm - 1, dd - 1, 0, 0, 0, 0);
+      const end   = new Date(yyyy, mm - 1, dd + 1, 23, 59, 59, 999);
       query.createdAt = { $gte: start, $lte: end };
     } else if (req.query.startDate && req.query.endDate) {
+      // Pad by +/- 1 day to make it safe for timezone offsets.
       const [sy, sm, sd] = req.query.startDate.split('-').map(Number);
       const [ey, em, ed] = req.query.endDate.split('-').map(Number);
-      const start = new Date(sy, sm - 1, sd, 0, 0, 0, 0);
-      const end   = new Date(ey, em - 1, ed, 23, 59, 59, 999);
+      const start = new Date(sy, sm - 1, sd - 1, 0, 0, 0, 0);
+      const end   = new Date(ey, em - 1, ed + 1, 23, 59, 59, 999);
       query.createdAt = { $gte: start, $lte: end };
     }
 

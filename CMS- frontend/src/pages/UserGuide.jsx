@@ -293,7 +293,7 @@ export default function UserGuide() {
               Dashboard
             </Link>
             <div className="rounded-xl bg-[#071f45] px-8 py-4 text-center text-2xl font-black tracking-tight text-white shadow-md sm:px-16 sm:text-3xl">
-              CMS Recruitment Flow
+              VTS Tracker Flow
             </div>
             <p className="max-w-3xl text-center text-sm font-medium leading-6 text-slate-600">
               A new user can follow this flow from candidate add, to client submission, interviews, final selection, joining, rejection, hold, or backout.

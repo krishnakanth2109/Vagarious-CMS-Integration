@@ -40,6 +40,64 @@ const getCandidateInitials = (fullName = '') => {
   return fullName.slice(0, 2).toUpperCase();
 };
 
+const normalizeText = (value) => String(value || '').trim().toLowerCase();
+
+const getRecruiterName = (recruiter = {}) => {
+  if (typeof recruiter === 'string') return recruiter;
+  return (
+    recruiter.name ||
+    recruiter.fullName ||
+    `${recruiter.firstName || ''} ${recruiter.lastName || ''}`.trim() ||
+    recruiter.username ||
+    recruiter.email ||
+    'Unknown Recruiter'
+  );
+};
+
+const getRecruiterKeys = (recruiter = {}) => {
+  const data = typeof recruiter === 'string' ? { name: recruiter } : recruiter;
+  return {
+    ids: [
+      data._id,
+      data.id,
+      data.userId,
+      data.recruiterId,
+      data.employeeId,
+    ].filter(Boolean).map(String),
+    names: [
+      getRecruiterName(data),
+      data.username,
+      data.email,
+    ].filter(Boolean).map(normalizeText),
+  };
+};
+
+const getCandidateRecruiterValues = (candidate = {}) => {
+  const recruiter = candidate.recruiterId || candidate.recruiter || candidate.assignedRecruiter;
+  const values = [];
+
+  if (recruiter && typeof recruiter === 'object') {
+    values.push(recruiter._id, recruiter.id, recruiter.userId, recruiter.recruiterId, recruiter.employeeId);
+    values.push(getRecruiterName(recruiter), recruiter.username, recruiter.email);
+  } else {
+    values.push(recruiter);
+  }
+
+  values.push(candidate.recruiterName, candidate.submittedByName, candidate.assignedRecruiterName);
+  return values.filter(Boolean);
+};
+
+const candidateBelongsToRecruiter = (candidate, recruiter) => {
+  if (!recruiter) return true;
+  const recruiterKeys = getRecruiterKeys(recruiter);
+  const candidateValues = getCandidateRecruiterValues(candidate);
+
+  return candidateValues.some((value) => {
+    const asString = String(value);
+    return recruiterKeys.ids.includes(asString) || recruiterKeys.names.includes(normalizeText(value));
+  });
+};
+
 const getStatusTagBadge = (statusStr) => {
   const s = statusStr || '';
   if (s === 'Joined') {
@@ -369,20 +427,27 @@ export default function AdminRecruiters() {
   // ── Pre-computed stats map ──
   const statsMap = useMemo(() => {
     const map = {};
+    recruiters.forEach(r => {
+      map[r.id] = { total: 0, joined: 0, selected: 0, rejected: 0, turnups: 0, noShow: 0 };
+    });
+
     candidates.forEach(c => {
-      const rid = typeof c.recruiterId === 'object' ? c.recruiterId?._id : c.recruiterId;
-      if (!rid) return;
-      if (!map[rid]) map[rid] = { total: 0, joined: 0, selected: 0, rejected: 0, turnups: 0, noShow: 0 };
-      const sa = Array.isArray(c.status) ? c.status : [c.status || ''];
-      map[rid].total++;
-      if (sa.includes('Joined')) map[rid].joined++;
-      if (sa.includes('Selected')) map[rid].selected++;
-      if (sa.includes('Rejected')) map[rid].rejected++;
-      if (sa.includes('Turnups')) map[rid].turnups++;
-      if (sa.includes('No Show')) map[rid].noShow++;
+      recruiters.forEach(r => {
+        if (candidateBelongsToRecruiter(c, r)) {
+          const rid = r.id;
+          if (!map[rid]) map[rid] = { total: 0, joined: 0, selected: 0, rejected: 0, turnups: 0, noShow: 0 };
+          const sa = Array.isArray(c.status) ? c.status : [c.status || ''];
+          map[rid].total++;
+          if (sa.includes('Joined')) map[rid].joined++;
+          if (sa.includes('Selected')) map[rid].selected++;
+          if (sa.includes('Rejected')) map[rid].rejected++;
+          if (sa.includes('Turnups')) map[rid].turnups++;
+          if (sa.includes('No Show')) map[rid].noShow++;
+        }
+      });
     });
     return map;
-  }, [candidates]);
+  }, [candidates, recruiters]);
 
   const calcStats = useCallback((recruiterId) => {
     return statsMap[recruiterId] || { total: 0, joined: 0, selected: 0, rejected: 0, turnups: 0, noShow: 0 };
@@ -442,10 +507,7 @@ export default function AdminRecruiters() {
 
   const filteredCandidatesForModal = useMemo(() => {
     if (!selectedRecruiter) return [];
-    let list = candidates.filter((c) => {
-      const rid = typeof c.recruiterId === 'object' ? c.recruiterId?._id : c.recruiterId;
-      return rid === selectedRecruiter.id;
-    });
+    let list = candidates.filter((c) => candidateBelongsToRecruiter(c, selectedRecruiter));
     if (candidateFilterType === 'joined') list = list.filter((c) => candidateHasStatus(c, 'Joined'));
     if (candidateFilterType === 'selected') list = list.filter((c) => candidateHasStatus(c, 'Selected'));
     if (candidateFilterType === 'rejected') list = list.filter((c) => candidateHasStatus(c, 'Rejected'));
@@ -728,7 +790,7 @@ export default function AdminRecruiters() {
 
                           <div className="min-w-0 space-y-1">
                             <h3 className="font-bold text-slate-900 dark:text-white truncate text-base leading-tight">
-                              <RecruiterDetailsTrigger recruiter={r} stats={st}>
+                              <RecruiterDetailsTrigger recruiter={r} stats={st} candidates={candidates}>
                                 <span className="flex items-center gap-1 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
                                   {r.firstName} {r.lastName}
                                   {isAdmin && <ShieldAlert className="h-4 w-4 text-purple-500 flex-shrink-0" />}
@@ -870,7 +932,7 @@ export default function AdminRecruiters() {
                                   )}
                                 </div>
                                 <div className="min-w-0">
-                                  <RecruiterDetailsTrigger recruiter={r} stats={st}>
+                                  <RecruiterDetailsTrigger recruiter={r} stats={st} candidates={candidates}>
                                     <span className="font-semibold text-slate-900 hover:text-indigo-600 dark:text-slate-200 dark:hover:text-indigo-400 flex items-center gap-1 cursor-pointer transition-colors">
                                       {r.firstName} {r.lastName}
                                       {isAdmin && <ShieldAlert className="h-3.5 w-3.5 text-purple-500 shrink-0 animate-pulse" />}
@@ -1376,7 +1438,7 @@ export default function AdminRecruiters() {
                         )}
                       </div>
                       <div className="min-w-0">
-                        <RecruiterDetailsTrigger recruiter={r} stats={calcStats(r.id)}>
+                        <RecruiterDetailsTrigger recruiter={r} stats={calcStats(r.id)} candidates={candidates}>
                           <span className="font-semibold text-slate-900 hover:text-indigo-600 dark:text-slate-200 dark:hover:text-indigo-400 flex items-center gap-1 cursor-pointer transition-colors">
                             {r.firstName} {r.lastName}
                             {r.role === 'admin' && <ShieldAlert className="h-3.5 w-3.5 text-purple-600 shrink-0" />}
@@ -1422,7 +1484,7 @@ export default function AdminRecruiters() {
               </div>
 
               {/* Search & Actions Bar */}
-              <div className="flex items-center gap-4 mb-4 shrink-0">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mb-4 shrink-0">
                 <div className="relative flex-1">
                   <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                   <Input
@@ -1432,7 +1494,7 @@ export default function AdminRecruiters() {
                     className="pl-9 h-9 border-slate-200 focus-visible:ring-indigo-500 dark:border-slate-800 dark:bg-slate-950 rounded-xl text-sm"
                   />
                 </div>
-                <div className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-900/60 border border-slate-200/60 dark:border-slate-800 text-slate-500 dark:text-slate-400 shrink-0">
+                <div className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-900/60 border border-slate-200/60 dark:border-slate-800 text-slate-500 dark:text-slate-400 shrink-0 text-center sm:text-left">
                   {filteredCandidatesForModal.length} Candidate{filteredCandidatesForModal.length !== 1 ? 's' : ''} Mapped
                 </div>
               </div>
@@ -1440,7 +1502,8 @@ export default function AdminRecruiters() {
               {/* Scrollable Content Container */}
               <div className="flex-1 overflow-y-auto pr-1">
                 <div className="border border-slate-200/80 rounded-2xl overflow-hidden dark:border-slate-800/80">
-                  <table className="w-full text-sm text-left border-collapse">
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[800px] text-sm text-left border-collapse">
                     <thead className="bg-slate-50/80 text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 dark:bg-slate-950 border-b border-slate-200/80 dark:border-slate-800/80 sticky top-0 backdrop-blur-md">
                       <tr>
                         <th className="p-4">Candidate Name</th>
@@ -1509,6 +1572,7 @@ export default function AdminRecruiters() {
                       )}
                     </tbody>
                   </table>
+                  </div>
                 </div>
               </div>
 

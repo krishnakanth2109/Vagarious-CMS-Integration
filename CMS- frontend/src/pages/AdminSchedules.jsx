@@ -192,7 +192,7 @@ export default function AdminSchedules() {
           
           {/* Left Column: Scheduling Form */}
           <div className="lg:col-span-4 space-y-6">
-            <div className="border border-slate-200 dark:border-slate-800 rounded-xl shadow-lg bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm sticky top-6 overflow-visible">
+            <div className="border border-slate-200 dark:border-slate-800 rounded-xl shadow-lg bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm lg:sticky lg:top-6 overflow-visible">
               <div className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white p-5">
                 <h3 className="flex items-center gap-2 text-xl font-semibold">
                   <Plus className="w-5 h-5" /> Schedule New
@@ -230,7 +230,7 @@ export default function AdminSchedules() {
                 </div>
 
                 {/* Round & Type */}
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                      <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Round</label>
                      <select 
@@ -331,97 +331,168 @@ export default function AdminSchedules() {
                      <p className="text-slate-500 text-sm mt-1 text-center">There are no upcoming interviews matching your criteria.</p>
                   </div>
                 ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm text-left border-collapse">
-                      <thead className="bg-slate-100 dark:bg-slate-800/50 text-slate-600 dark:text-slate-400">
-                        <tr>
-                          <th className="px-5 py-3 font-medium whitespace-nowrap">Date & Time</th>
-                          <th className="px-5 py-3 font-medium">Candidate</th>
-                          <th className="px-5 py-3 font-medium">Position</th>
-                          <th className="px-5 py-3 font-medium">Round & Mode</th>
-                          <th className="px-5 py-3 font-medium">Status</th>
-                          <th className="px-5 py-3 font-medium">Scheduled By</th>
-                          <th className="px-5 py-3 font-medium text-right">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                        {visibleSchedules.map(schedule => (
-                          <tr key={schedule._id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
-                            
-                            <td className="px-5 py-4 whitespace-nowrap">
-                              <div className="font-semibold text-slate-900 dark:text-white">
-                                {new Date(schedule.interviewDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                              </div>
-                              <div className="text-xs text-indigo-600 dark:text-indigo-400 font-bold mt-0.5">
-                                {new Date(schedule.interviewDate).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                              </div>
-                            </td>
-
-                            <td className="px-5 py-4">
-                              <div className="font-semibold text-slate-900 dark:text-white">
-                                <CandidateProfileLink candidate={schedule.candidateId} className="text-slate-900 dark:text-white">
-                                  {schedule.candidateId?.name || "Unknown"}
-                                </CandidateProfileLink>
-                              </div>
-                            </td>
-
-                            <td className="px-5 py-4 text-slate-600 dark:text-slate-400">
-                              {schedule.candidateId?.position || "N/A"}
-                            </td>
-
-                            <td className="px-5 py-4">
-                              <div className="flex flex-col gap-1 items-start">
-                                <span className="font-medium text-amber-600 dark:text-amber-500 whitespace-nowrap">
-                                  {schedule.round}
-                                </span>
-                                <span className="text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">
-                                  {schedule.type}
-                                </span>
-                              </div>
-                            </td>
-
-                            <td className="px-5 py-4">
-                              {(() => {
-                                const s = schedule.status;
-                                const colors = {
-                                  Scheduled:   "bg-blue-100 text-blue-800",
-                                  Completed:   "bg-green-100 text-green-800",
-                                  Shortlisted: "bg-emerald-100 text-emerald-800",
-                                  Hold:        "bg-yellow-100 text-yellow-800",
-                                  Submitted:   "bg-sky-100 text-sky-800",
-                                  Cancelled:   "bg-red-100 text-red-800",
-                                  "No Show":   "bg-red-100 text-red-800",
-                                  Rejected:    "bg-rose-100 text-rose-800",
-                                };
-                                return (
-                                  <span className={`text-xs font-semibold px-2.5 py-1 rounded-full whitespace-nowrap ${colors[s] || "bg-gray-100 text-gray-700"}`}>
-                                    {s || "Scheduled"}
-                                  </span>
-                                );
-                              })()}
-                            </td>
-
-                            <td className="px-5 py-4 text-slate-600 dark:text-slate-400 font-medium">
-                              <RecruiterDetailsTrigger recruiter={schedule.recruiterId || { name: "Admin" }} className="text-slate-600 dark:text-slate-400 font-medium">
-                                {schedule.recruiterId?.name || schedule.recruiterId?.firstName || "Admin"}
-                              </RecruiterDetailsTrigger>
-                            </td>
-
-                            <td className="px-5 py-4 text-right">
-                               <button 
-                                 onClick={() => handleDelete(schedule._id)} 
-                                 className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors inline-flex"
-                                 title="Delete Schedule"
-                               >
-                                  <Trash2 className="w-4 h-4" />
-                               </button>
-                            </td>
-
+                  <>
+                    {/* Desktop View - Table */}
+                    <div className="hidden md:block overflow-x-auto">
+                      <table className="w-full text-sm text-left border-collapse">
+                        <thead className="bg-slate-100 dark:bg-slate-800/50 text-slate-600 dark:text-slate-400">
+                          <tr>
+                            <th className="px-5 py-3 font-medium whitespace-nowrap">Date & Time</th>
+                            <th className="px-5 py-3 font-medium">Candidate</th>
+                            <th className="px-5 py-3 font-medium">Position</th>
+                            <th className="px-5 py-3 font-medium">Round & Mode</th>
+                            <th className="px-5 py-3 font-medium">Status</th>
+                            <th className="px-5 py-3 font-medium">Scheduled By</th>
+                            <th className="px-5 py-3 font-medium text-right">Actions</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                          {visibleSchedules.map(schedule => (
+                            <tr key={schedule._id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
+                              
+                              <td className="px-5 py-4 whitespace-nowrap">
+                                <div className="font-semibold text-slate-900 dark:text-white">
+                                  {new Date(schedule.interviewDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                </div>
+                                <div className="text-xs text-indigo-600 dark:text-indigo-400 font-bold mt-0.5">
+                                  {new Date(schedule.interviewDate).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                </div>
+                              </td>
+
+                              <td className="px-5 py-4">
+                                <div className="font-semibold text-slate-900 dark:text-white">
+                                  <CandidateProfileLink candidate={schedule.candidateId} className="text-slate-900 dark:text-white">
+                                    {schedule.candidateId?.name || "Unknown"}
+                                  </CandidateProfileLink>
+                                </div>
+                              </td>
+
+                              <td className="px-5 py-4 text-slate-600 dark:text-slate-400">
+                                {schedule.candidateId?.position || "N/A"}
+                              </td>
+
+                              <td className="px-5 py-4">
+                                <div className="flex flex-col gap-1 items-start">
+                                  <span className="font-medium text-amber-600 dark:text-amber-500 whitespace-nowrap">
+                                    {schedule.round}
+                                  </span>
+                                  <span className="text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">
+                                    {schedule.type}
+                                  </span>
+                                </div>
+                              </td>
+
+                              <td className="px-5 py-4">
+                                {(() => {
+                                  const s = schedule.status;
+                                  const colors = {
+                                    Scheduled:   "bg-blue-100 text-blue-800",
+                                    Completed:   "bg-green-100 text-green-800",
+                                    Shortlisted: "bg-emerald-100 text-emerald-800",
+                                    Hold:        "bg-yellow-100 text-yellow-800",
+                                    Submitted:   "bg-sky-100 text-sky-800",
+                                    Cancelled:   "bg-red-100 text-red-800",
+                                    "No Show":   "bg-red-100 text-red-800",
+                                    Rejected:    "bg-rose-100 text-rose-800",
+                                  };
+                                  return (
+                                    <span className={`text-xs font-semibold px-2.5 py-1 rounded-full whitespace-nowrap ${colors[s] || "bg-gray-100 text-gray-700"}`}>
+                                      {s || "Scheduled"}
+                                    </span>
+                                  );
+                                })()}
+                              </td>
+
+                              <td className="px-5 py-4 text-slate-600 dark:text-slate-400 font-medium">
+                                <RecruiterDetailsTrigger recruiter={schedule.recruiterId || { name: "Admin" }} className="text-slate-600 dark:text-slate-400 font-medium">
+                                  {schedule.recruiterId?.name || schedule.recruiterId?.firstName || "Admin"}
+                                </RecruiterDetailsTrigger>
+                              </td>
+
+                              <td className="px-5 py-4 text-right">
+                                 <button 
+                                   onClick={() => handleDelete(schedule._id)} 
+                                   className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors inline-flex"
+                                   title="Delete Schedule"
+                                 >
+                                    <Trash2 className="w-4 h-4" />
+                                 </button>
+                              </td>
+
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Mobile View - Cards List */}
+                    <div className="md:hidden space-y-4 p-4 bg-slate-50/50 dark:bg-slate-900/20">
+                      {visibleSchedules.map((schedule) => {
+                        const s = schedule.status;
+                        const colors = {
+                          Scheduled:   "bg-blue-100 text-blue-850 dark:bg-blue-950/40 dark:text-blue-400 border border-blue-200/30",
+                          Completed:   "bg-green-100 text-green-850 dark:bg-green-950/40 dark:text-green-400 border border-green-200/30",
+                          Shortlisted: "bg-emerald-100 text-emerald-850 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200/30",
+                          Hold:        "bg-yellow-100 text-yellow-850 dark:bg-yellow-950/40 dark:text-yellow-400 border border-yellow-200/30",
+                          Submitted:   "bg-sky-100 text-sky-850 dark:bg-sky-950/40 dark:text-sky-400 border border-sky-200/30",
+                          Cancelled:   "bg-red-100 text-red-850 dark:bg-red-950/40 dark:text-red-400 border border-red-200/30",
+                          "No Show":   "bg-red-100 text-red-850 dark:bg-red-950/40 dark:text-red-400 border border-red-200/30",
+                          Rejected:    "bg-rose-100 text-rose-850 dark:bg-rose-950/40 dark:text-rose-400 border border-rose-200/30",
+                        };
+                        const statusBadge = (
+                          <span className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full ${colors[s] || "bg-gray-100 text-gray-700"}`}>
+                            {s || "Scheduled"}
+                          </span>
+                        );
+
+                        return (
+                          <div key={schedule._id} className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm space-y-3">
+                            <div className="flex justify-between items-start">
+                              <div className="space-y-0.5">
+                                <div className="text-[10px] text-indigo-650 dark:text-indigo-400 font-bold uppercase tracking-wide">
+                                  {new Date(schedule.interviewDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} at {new Date(schedule.interviewDate).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                </div>
+                                <h4 className="font-bold text-slate-900 dark:text-white text-base">
+                                  <CandidateProfileLink candidate={schedule.candidateId} className="text-slate-900 dark:text-white hover:text-indigo-600 dark:hover:text-indigo-400">
+                                    {schedule.candidateId?.name || "Unknown"}
+                                  </CandidateProfileLink>
+                                </h4>
+                              </div>
+                              {statusBadge}
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-x-2 gap-y-1.5 text-xs border-t border-slate-100 dark:border-slate-800 pt-3">
+                              <div>
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 block">Position</span>
+                                <span className="font-semibold text-slate-700 dark:text-slate-300">{schedule.candidateId?.position || "N/A"}</span>
+                              </div>
+                              <div>
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 block">Round & Mode</span>
+                                <span className="font-semibold text-amber-600 dark:text-amber-500 block">{schedule.round}</span>
+                                <span className="inline-block text-[9px] font-extrabold px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 uppercase tracking-wider mt-0.5">{schedule.type}</span>
+                              </div>
+                            </div>
+
+                            <div className="flex justify-between items-center border-t border-slate-100 dark:border-slate-800 pt-3 text-xs">
+                              <div>
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 block">Scheduled By</span>
+                                <RecruiterDetailsTrigger recruiter={schedule.recruiterId || { name: "Admin" }} className="font-semibold text-slate-700 dark:text-slate-300">
+                                  {schedule.recruiterId?.name || schedule.recruiterId?.firstName || "Admin"}
+                                </RecruiterDetailsTrigger>
+                              </div>
+                              <button 
+                                onClick={() => handleDelete(schedule._id)} 
+                                className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors border border-slate-150 dark:border-slate-800"
+                                title="Delete Schedule"
+                              >
+                                <Trash2 className="w-4 h-4 text-red-500" />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
                 )}
              </div>
           </div>

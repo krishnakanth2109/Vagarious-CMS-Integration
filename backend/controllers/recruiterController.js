@@ -1,4 +1,6 @@
 import User from '../models/User.js';
+import Candidate from '../models/Candidate.js';
+import Interview from '../models/Interview.js';
 import { admin } from '../middleware/authMiddleware.js';
 import { v2 as cloudinary } from 'cloudinary';
 import { sendBrevoEmail } from '../services/email.js';
@@ -437,6 +439,34 @@ export const getUsersByRole = async (req, res) => {
       .sort({ firstName: 1 });
 
     res.json(users);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// @desc    Get stats for recruiter profile dashboard
+// @route   GET /api/recruiters/profile/stats
+// @access  Private
+// ─────────────────────────────────────────────────────────────────────────────
+export const getProfileStats = async (req, res) => {
+  try {
+    const recruiterId = req.user._id;
+    const [totalSubmissions, interviews, offers, joined, rejected] = await Promise.all([
+      Candidate.countDocuments({ recruiterId }),
+      Interview.countDocuments({ recruiterId }),
+      Candidate.countDocuments({ recruiterId, status: 'Selected' }),
+      Candidate.countDocuments({ recruiterId, status: 'Joined' }),
+      Candidate.countDocuments({ recruiterId, status: 'Rejected' }),
+    ]);
+
+    res.json({
+      totalSubmissions,
+      interviews,
+      offers,
+      joined,
+      rejected,
+    });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
