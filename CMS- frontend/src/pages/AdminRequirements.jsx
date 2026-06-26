@@ -21,6 +21,80 @@ const ModalPortal = ({ children }) => {
   return createPortal(children, document.body);
 };
 
+const parseMarkdownToHtml = (markdown) => {
+  if (!markdown) return "";
+  
+  const lines = markdown.split('\n');
+  let html = [];
+  let activeListType = null; // null, 'ul', or 'ol'
+
+  const closeListIfActive = () => {
+    if (activeListType === 'ul') {
+      html.push("</ul>");
+    } else if (activeListType === 'ol') {
+      html.push("</ol>");
+    }
+    activeListType = null;
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    let line = lines[i].trim();
+
+    // Check for empty line
+    if (line === "") {
+      closeListIfActive();
+      html.push('<div class="h-2"></div>'); // Spacing for paragraph breaks
+      continue;
+    }
+
+    // Process inline formatting first (bold, italic)
+    line = line.replace(/\*\*(.*?)\*\*/g, '<strong class="font-bold text-zinc-900 dark:text-zinc-100">$1</strong>');
+    line = line.replace(/\*(.*?)\*/g, '<em class="italic">$1</em>');
+    line = line.replace(/_(.*?)_/g, '<em class="italic">$1</em>');
+
+    // Headers
+    if (line.startsWith("### ")) {
+      closeListIfActive();
+      html.push(`<h4 class="text-base font-bold text-zinc-900 dark:text-zinc-100 mt-4 mb-2">${line.substring(4)}</h4>`);
+    } else if (line.startsWith("## ")) {
+      closeListIfActive();
+      html.push(`<h3 class="text-lg font-bold text-zinc-900 dark:text-zinc-100 mt-5 mb-2">${line.substring(3)}</h3>`);
+    } else if (line.startsWith("# ")) {
+      closeListIfActive();
+      html.push(`<h2 class="text-xl font-bold text-zinc-900 dark:text-zinc-100 mt-6 mb-3">${line.substring(2)}</h2>`);
+    }
+    // Unordered bullet list
+    else if (line.startsWith("- ") || line.startsWith("* ")) {
+      if (activeListType !== 'ul') {
+        closeListIfActive();
+        html.push('<ul class="list-disc pl-5 my-2 space-y-1 text-zinc-700 dark:text-zinc-300">');
+        activeListType = 'ul';
+      }
+      const content = line.substring(2);
+      html.push(`<li>${content}</li>`);
+    }
+    // Ordered numerical list
+    else if (/^\d+\.\s/.test(line)) {
+      if (activeListType !== 'ol') {
+        closeListIfActive();
+        html.push('<ol class="list-decimal pl-5 my-2 space-y-1 text-zinc-700 dark:text-zinc-300">');
+        activeListType = 'ol';
+      }
+      const content = line.replace(/^\d+\.\s/, '');
+      html.push(`<li>${content}</li>`);
+    }
+    // Regular paragraph line
+    else {
+      closeListIfActive();
+      html.push(`<p class="text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed mb-1">${line}</p>`);
+    }
+  }
+
+  closeListIfActive();
+
+  return html.join("\n");
+};
+
 const getRecruiterDetailsByName = (name, recruiters = []) => {
   const displayName = name || 'Unassigned';
   const found = recruiters.find((recruiter) => recruiter.name === displayName);
@@ -553,9 +627,10 @@ const JobDetailCard = ({ job, onClose, recruiters = [] }) => {
                  <DetailRow label="Job Description">
                    {job.jobDescription ? (
                      <div className="max-h-80 overflow-y-auto rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900">
-                       <p className="whitespace-pre-wrap text-sm leading-6 text-zinc-700 dark:text-zinc-300">
-                         {job.jobDescription}
-                       </p>
+                       <div
+                         className="text-sm leading-6 text-zinc-700 dark:text-zinc-300 select-text"
+                         dangerouslySetInnerHTML={{ __html: parseMarkdownToHtml(job.jobDescription) }}
+                       />
                      </div>
                    ) : '-'}
                  </DetailRow>
@@ -715,6 +790,20 @@ const CandidateMatchesModal = ({
     candidate.name || `${candidate.firstName || ''} ${candidate.lastName || ''}`.trim() || 'Unnamed Candidate'
   );
 
+  const getStatusBadgeClass = (status) => {
+    const s = String(status || '').toLowerCase();
+    if (['selected', 'joined'].includes(s)) {
+      return "bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-950/20 dark:border-emerald-800 dark:text-emerald-400";
+    }
+    if (['rejected', 'backout'].includes(s)) {
+      return "bg-rose-50 border-rose-200 text-rose-700 dark:bg-rose-950/20 dark:border-rose-800 dark:text-rose-400";
+    }
+    if (['hold'].includes(s)) {
+      return "bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-950/20 dark:border-amber-800 dark:text-amber-400";
+    }
+    return "bg-indigo-50 border-indigo-200 text-indigo-700 dark:bg-indigo-950/20 dark:border-indigo-800 dark:text-indigo-400";
+  };
+
   return (
     <ModalPortal>
     <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
@@ -773,7 +862,7 @@ const CandidateMatchesModal = ({
                             </span>
                           )}
                           {item.status && (
-                            <span className="rounded-full border border-blue-100 bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700">
+                            <span className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${getStatusBadgeClass(item.status)}`}>
                               {item.status}
                             </span>
                           )}
@@ -797,7 +886,7 @@ const CandidateMatchesModal = ({
                             )}
                           </>
                         )}
-                        {score && (
+                        {(score || mode === 'submitted') && (
                           <button
                             type="button"
                             onClick={() => onToggleCandidate(expanded ? null : candidateId)}
@@ -860,6 +949,82 @@ const CandidateMatchesModal = ({
                         </div>
                       </div>
                     )}
+
+                    {mode === 'submitted' && expanded && (
+                      <div className="mt-4 border-t border-zinc-100 pt-4 dark:border-zinc-800 space-y-4">
+                        <div className="grid gap-4 lg:grid-cols-2">
+                          {/* Submission Details */}
+                          <div className="space-y-3 bg-zinc-50 dark:bg-zinc-900/50 p-4 rounded-xl border border-zinc-100 dark:border-zinc-800">
+                            <h4 className="text-sm font-bold text-zinc-950 dark:text-zinc-50">Submission Info</h4>
+                            
+                            <div className="space-y-2 mt-2">
+                              <div className="flex items-center justify-between text-xs py-1 border-b border-zinc-200/50 dark:border-zinc-800/50">
+                                <span className="text-zinc-500 font-medium">Recruiter</span>
+                                <span className="font-semibold text-zinc-800 dark:text-zinc-200">{item.submittedByName || 'N/A'}</span>
+                              </div>
+                              <div className="flex items-center justify-between text-xs py-1 border-b border-zinc-200/50 dark:border-zinc-800/50">
+                                <span className="text-zinc-500 font-medium">Submitted Date</span>
+                                <span className="font-semibold text-zinc-800 dark:text-zinc-200">
+                                  {item.submittedAt ? new Date(item.submittedAt).toLocaleDateString(undefined, { dateStyle: 'medium' }) : 'N/A'}
+                                </span>
+                              </div>
+                              <div className="flex items-center justify-between text-xs py-1">
+                                <span className="text-zinc-500 font-medium">Current Status</span>
+                                <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold border ${getStatusBadgeClass(item.status)}`}>
+                                  {item.status || 'Pipeline'}
+                                </span>
+                              </div>
+                            </div>
+
+                            {item.notes && (
+                              <div className="mt-4 pt-3 border-t border-zinc-200 dark:border-zinc-700">
+                                <span className="text-zinc-500 font-bold uppercase tracking-wider text-[10px] block mb-1">Recruiter Notes</span>
+                                <div className="p-3 bg-white dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800 text-xs italic text-zinc-600 dark:text-zinc-400 whitespace-pre-wrap leading-relaxed shadow-sm">
+                                  "{item.notes}"
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Candidate Fast-Facts / Profile */}
+                          <div className="space-y-3 bg-zinc-50 dark:bg-zinc-900/50 p-4 rounded-xl border border-zinc-100 dark:border-zinc-800">
+                            <h4 className="text-sm font-bold text-zinc-950 dark:text-zinc-50">Candidate Profile</h4>
+                            
+                            <div className="space-y-2 mt-2">
+                              <div className="flex items-center justify-between text-xs py-1 border-b border-zinc-200/50 dark:border-zinc-800/50">
+                                <span className="text-zinc-500 font-medium">Contact Email</span>
+                                <a href={`mailto:${candidate.email}`} className="font-semibold text-blue-600 hover:underline dark:text-blue-400">{candidate.email || 'N/A'}</a>
+                              </div>
+                              <div className="flex items-center justify-between text-xs py-1 border-b border-zinc-200/50 dark:border-zinc-800/50">
+                                <span className="text-zinc-500 font-medium">Phone / Contact</span>
+                                <span className="font-semibold text-zinc-800 dark:text-zinc-200">{candidate.contact || 'N/A'}</span>
+                              </div>
+                              <div className="flex items-center justify-between text-xs py-1 border-b border-zinc-200/50 dark:border-zinc-800/50">
+                                <span className="text-zinc-500 font-medium">Total Experience</span>
+                                <span className="font-semibold text-zinc-800 dark:text-zinc-200">{candidate.totalExperience || 'N/A'}</span>
+                              </div>
+                              <div className="flex items-center justify-between text-xs py-1">
+                                <span className="text-zinc-500 font-medium">Location</span>
+                                <span className="font-semibold text-zinc-800 dark:text-zinc-200">{candidate.currentLocation || candidate.preferredLocation || 'N/A'}</span>
+                              </div>
+                            </div>
+
+                            {candidate.skills && (
+                              <div className="mt-4 pt-3 border-t border-zinc-200 dark:border-zinc-700">
+                                <span className="text-zinc-500 font-bold uppercase tracking-wider text-[10px] block mb-1.5">Candidate Skills</span>
+                                <div className="flex flex-wrap gap-1">
+                                  {String(candidate.skills).split(',').map((skill, sIdx) => (
+                                    <span key={sIdx} className="inline-flex items-center rounded-md bg-zinc-200 dark:bg-zinc-800 px-2 py-0.5 text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                                      {skill.trim()}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -914,6 +1079,8 @@ export default function AdminRequirements() {
   const [mandatorySkillInput, setMandatorySkillInput] = useState("");
   const [preferredSkillInput, setPreferredSkillInput] = useState("");
   const [isImportingJD, setIsImportingJD] = useState(false);
+  const [isGeneratingJD, setIsGeneratingJD] = useState(false);
+  const [jdTab, setJdTab] = useState("write");
   const [candidateModalJob, setCandidateModalJob] = useState(null);
   const [candidateModalMode, setCandidateModalMode] = useState('submitted');
   const [jobCandidates, setJobCandidates] = useState([]);
@@ -934,6 +1101,7 @@ export default function AdminRequirements() {
     setJobDescriptionModalOpen(false);
     setMandatorySkillInput("");
     setPreferredSkillInput("");
+    setJdTab("write");
     setErrors({});
     setForm(initialFormState);
   };
@@ -1228,11 +1396,53 @@ export default function AdminRequirements() {
       }
 
       setForm(prev => ({ ...prev, jobDescription: text }));
+      setJdTab("preview");
       toast({ title: "Imported", description: "Job description extracted successfully." });
     } catch (error) {
       toast({ title: "Import Failed", description: error.message || "Failed to import job description.", variant: "destructive" });
     } finally {
       setIsImportingJD(false);
+    }
+  };
+
+  const handleGenerateJD = async () => {
+    if (!form.position) {
+      toast({ title: "Role Required", description: "Please enter a Position / Role first to generate a JD.", variant: "destructive" });
+      return;
+    }
+
+    setIsGeneratingJD(true);
+    try {
+      const headers = await getAuthHeader();
+      const response = await fetch(`${API_URL}/jobs/generate-jd`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          position: form.position,
+          clientName: form.clientName,
+          jobType: form.jobType,
+          location: form.location,
+          experience: form.experience,
+          relevantExperience: form.relevantExperience,
+          qualification: form.qualification,
+          salaryBudget: form.salaryBudget,
+          skills: form.skills,
+          preferredSkills: form.preferredSkills,
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to generate Job Description');
+      }
+
+      const data = await response.json();
+      setForm(prev => ({ ...prev, jobDescription: data.text || "" }));
+      setJdTab("preview");
+      toast({ title: "JD Generated", description: "Professional JD has been drafted and loaded below." });
+    } catch (error) {
+      toast({ title: "Generation Failed", description: error.message || "Failed to generate job description.", variant: "destructive" });
+    } finally {
+      setIsGeneratingJD(false);
     }
   };
 
@@ -1272,12 +1482,21 @@ export default function AdminRequirements() {
     }
 
     setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    return {
+      isValid: Object.keys(newErrors).length === 0,
+      errors: newErrors
+    };
   };
 
   const handleSubmit = async () => {
-    if (!validateForm()) {
-      toast({ title: "Validation Error", description: "Please fix the highlighted fields", variant: "destructive" });
+    const { isValid, errors: validationErrors } = validateForm();
+    if (!isValid) {
+      const errorMsg = Object.values(validationErrors).join(". ");
+      toast({ 
+        title: "Validation Error", 
+        description: errorMsg || "Please fix the highlighted fields", 
+        variant: "destructive" 
+      });
       return;
     }
 
@@ -1472,6 +1691,9 @@ export default function AdminRequirements() {
         id: submission.candidateId?._id || submission.candidateId || submission._id,
         status: submission.pipelineStage || submission.status,
         candidate: submission.candidateId,
+        submittedByName: submission.submittedByName || (submission.submittedBy ? `${submission.submittedBy.firstName || ''} ${submission.submittedBy.lastName || ''}`.trim() : null) || 'N/A',
+        submittedAt: submission.submittedAt || submission.createdAt,
+        notes: submission.notes || '',
       })).filter((item) => item.candidate));
     } catch (error) {
       toast({
@@ -2123,46 +2345,103 @@ export default function AdminRequirements() {
                     <div className="flex flex-wrap items-center gap-2">
                       <button
                         type="button"
-                      disabled={isImportingJD}
-                      onClick={() => pdfInputRef.current?.click()}
-                      className="inline-flex items-center justify-center px-4 py-2 border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 rounded-lg text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-50"
-                    >
-                      {isImportingJD ? "Importing..." : "Import PDF"}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={isImportingJD}
-                      onClick={() => docxInputRef.current?.click()}
-                      className="inline-flex items-center justify-center px-4 py-2 border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 rounded-lg text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-50"
-                    >
-                      {isImportingJD ? "Importing..." : "Import DOCX"}
-                    </button>
-                    <input
-                      ref={pdfInputRef}
-                      type="file"
-                      accept=".pdf,application/pdf"
-                      className="hidden"
-                      onChange={(event) => handleImportJD(event, "pdf")}
-                    />
-                    <input
-                      ref={docxInputRef}
-                      type="file"
-                      accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                      className="hidden"
-                      onChange={(event) => handleImportJD(event, "docx")}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-zinc-500 mb-1">Job Description</label>
-                    <textarea
-                      value={form.jobDescription || ""}
-                      onChange={(e) => setForm(prev => ({ ...prev, jobDescription: e.target.value }))}
-                      rows={8}
-                      placeholder="Describe responsibilities, requirements, and role context..."
-                      className={`${inputCls} resize-none ${errors.jobDescription ? "border-red-500 focus:ring-red-500" : ""}`}
-                    />
-                    <div className="mt-1 flex justify-end text-xs text-zinc-400">
-                      {(form.jobDescription || "").length} characters
+                        disabled={isImportingJD}
+                        onClick={() => pdfInputRef.current?.click()}
+                        className="inline-flex items-center justify-center px-4 py-2 border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 rounded-lg text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-50"
+                      >
+                        {isImportingJD ? "Importing..." : "Import PDF"}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isImportingJD}
+                        onClick={() => docxInputRef.current?.click()}
+                        className="inline-flex items-center justify-center px-4 py-2 border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 rounded-lg text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-50"
+                      >
+                        {isImportingJD ? "Importing..." : "Import DOCX"}
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={isGeneratingJD || isImportingJD}
+                        onClick={handleGenerateJD}
+                        className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 text-white dark:bg-indigo-500 rounded-lg text-sm font-semibold hover:bg-indigo-700 dark:hover:bg-indigo-600 disabled:opacity-50 shadow-sm transition-all"
+                      >
+                        {isGeneratingJD ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            <span>Generating...</span>
+                          </>
+                        ) : (
+                          <>
+                            <span>✨ Generate JD</span>
+                          </>
+                        )}
+                      </button>
+
+                      <input
+                        ref={pdfInputRef}
+                        type="file"
+                        accept=".pdf,application/pdf"
+                        className="hidden"
+                        onChange={(event) => handleImportJD(event, "pdf")}
+                      />
+                      <input
+                        ref={docxInputRef}
+                        type="file"
+                        accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                        className="hidden"
+                        onChange={(event) => handleImportJD(event, "docx")}
+                      />
+                    </div>
+                  <div className="flex flex-col h-[400px]">
+                    <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 pb-2 mb-3">
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setJdTab("write")}
+                          className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                            jdTab === "write"
+                              ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 shadow-sm"
+                              : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                          }`}
+                        >
+                          Write
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setJdTab("preview")}
+                          className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                            jdTab === "preview"
+                              ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 shadow-sm"
+                              : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                          }`}
+                        >
+                          Preview
+                        </button>
+                      </div>
+                      <span className="text-xs text-zinc-400 dark:text-zinc-500 font-medium">
+                        {(form.jobDescription || "").length} characters
+                      </span>
+                    </div>
+
+                    <div className="flex-1 min-h-0">
+                      {jdTab === "write" ? (
+                        <textarea
+                          value={form.jobDescription || ""}
+                          onChange={(e) => setForm(prev => ({ ...prev, jobDescription: e.target.value }))}
+                          placeholder="Describe responsibilities, requirements, and role context..."
+                          className={`${inputCls} w-full h-full min-h-[300px] resize-none ${
+                            errors.jobDescription ? "border-red-500 focus:ring-red-500" : ""
+                          }`}
+                        />
+                      ) : (
+                        <div
+                          className="w-full h-full min-h-[300px] p-4 overflow-y-auto border border-zinc-300 dark:border-zinc-700 rounded-lg bg-zinc-50 dark:bg-zinc-950/50 text-zinc-800 dark:text-zinc-200 select-text"
+                          dangerouslySetInnerHTML={{
+                            __html: parseMarkdownToHtml(form.jobDescription) || '<p class="text-zinc-400 dark:text-zinc-500 italic text-center py-8">No description generated yet.</p>'
+                          }}
+                        />
+                      )}
                     </div>
                     {errors.jobDescription && <p className="text-xs text-red-500 mt-1">{errors.jobDescription}</p>}
                   </div>

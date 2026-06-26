@@ -1,6 +1,6 @@
 import express from 'express';
 import multer from 'multer';
-import { getJobs, createJob, updateJob, deleteJob } from '../controllers/jobController.js';
+import { getJobs, createJob, updateJob, deleteJob, generateJobDescription } from '../controllers/jobController.js';
 import { protect } from '../middleware/authMiddleware.js';
 import Job from '../models/Job.js';
 import { extractTextFromFile } from '../services/documents.js';
@@ -52,6 +52,7 @@ router.get('/public', async (req, res) => {
 
 // ── PROTECTED ──────────────────────────────────────────────────────────────────
 router.use(protect);
+router.post('/generate-jd', generateJobDescription);
 router.post('/import-jd', (req, res) => {
   uploadJD.single('file')(req, res, async (error) => {
     if (error?.code === 'LIMIT_FILE_SIZE') {
