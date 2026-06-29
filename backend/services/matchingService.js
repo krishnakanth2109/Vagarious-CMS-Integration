@@ -1,3 +1,5 @@
+import Job from '../models/Job.js';
+
 const SCORE_WEIGHTS = { skills: 50, experience: 25, role: 10, education: 10, location: 5 };
 
 const MATCH_LEVELS = [
@@ -9,6 +11,34 @@ const MATCH_LEVELS = [
 ];
 
 const normalize = (val) => (val || '').toString().trim().toLowerCase();
+
+export const normalizeSkillLocal = (val) => {
+  if (!val) return '';
+  const clean = val.toLowerCase().trim();
+  const compact = clean.replace(/[\s\.\-_]/g, '');
+  const aliases = {
+    reactjs: 'react',
+    react: 'react',
+    'react.js': 'react',
+    nodejs: 'node',
+    node: 'node',
+    'node.js': 'node',
+    expressjs: 'express',
+    express: 'express',
+    'express.js': 'express',
+    mongodb: 'mongodb',
+    mongo: 'mongodb',
+    postgres: 'postgresql',
+    postgresql: 'postgresql',
+    tailwindcss: 'tailwind',
+    tailwind: 'tailwind',
+    javascript: 'javascript',
+    js: 'javascript',
+    typescript: 'typescript',
+    ts: 'typescript'
+  };
+  return aliases[compact] || compact;
+};
 
 const normalizeSkill = (val) => {
   const compact = normalize(val).replace(/[^a-z0-9]/g, '');
@@ -29,6 +59,121 @@ const toArr = (value) => {
   if (Array.isArray(value)) return value.map((item) => String(item).trim()).filter(Boolean);
   if (typeof value === 'string') return value.split(/[,;\n]+/).map((item) => item.trim()).filter(Boolean);
   return [];
+};
+
+export const evaluateLocalRoleRelevance = (candidateRole, jobRole) => {
+  const c = (candidateRole || '').toLowerCase().trim();
+  const j = (jobRole || '').toLowerCase().trim();
+  if (!c || !j) return { level: 'none', score: 0 };
+  
+  if (c === j) return { level: 'exact', score: 20 };
+  
+  const cleanRole = (role) => {
+    return role
+      .replace(/[\s\.\-_]+/g, ' ')
+      .replace(/\b(sr|jr|senior|junior|lead|expert|intern|fresher|trainee|associate)\b/gi, '')
+      .trim();
+  };
+  
+  const cClean = cleanRole(c);
+  const jClean = cleanRole(j);
+  
+  if (cClean === jClean) return { level: 'exact', score: 20 };
+  
+  if (cClean.includes(jClean) || jClean.includes(cClean)) return { level: 'strong', score: 14 };
+  
+  const frontendRoles = ['frontend', 'front end', 'react', 'angular', 'vue', 'ui'];
+  const backendRoles = ['backend', 'back end', 'node', 'express', 'python', 'java', 'golang', 'php', '.net'];
+  const fullstackRoles = ['fullstack', 'full stack', 'mern', 'mean', 'web developer'];
+  const devopsRoles = ['devops', 'dev ops', 'sre', 'system admin', 'cloud'];
+  
+  const inGroup = (role, group) => group.some(term => role.includes(term));
+  
+  if ((inGroup(cClean, devopsRoles) && !inGroup(jClean, devopsRoles)) || 
+      (inGroup(jClean, devopsRoles) && !inGroup(cClean, devopsRoles))) {
+    return { level: 'none', score: 0 };
+  }
+  
+  if ((cClean.includes('node') && jClean.includes('backend')) || (jClean.includes('node') && cClean.includes('backend'))) {
+    return { level: 'strong', score: 14 };
+  }
+  if ((cClean.includes('react') && jClean.includes('frontend')) || (jClean.includes('react') && cClean.includes('frontend'))) {
+    return { level: 'strong', score: 14 };
+  }
+  if ((cClean.includes('mern') && jClean.includes('full stack')) || (cClean.includes('mern') && jClean.includes('fullstack')) ||
+      (jClean.includes('mern') && cClean.includes('full stack')) || (jClean.includes('mern') && cClean.includes('fullstack'))) {
+    return { level: 'strong', score: 14 };
+  }
+  if (cClean.includes('mern') || jClean.includes('mern')) {
+    const other = cClean.includes('mern') ? jClean : cClean;
+    if (other.includes('react') || other.includes('node') || other.includes('frontend') || other.includes('backend') || other.includes('fullstack') || other.includes('full stack')) {
+      return { level: 'strong', score: 14 };
+    }
+  }
+  
+  const ignoreWords = ['developer', 'engineer', 'analyst', 'specialist', 'stack', 'tech', 'technology', 'role', 'consultant'];
+  const cWords = cClean.split(/\s+/).filter(w => w.length > 1 && !ignoreWords.includes(w));
+  const jWords = jClean.split(/\s+/).filter(w => w.length > 1 && !ignoreWords.includes(w));
+  
+  const common = cWords.filter(w => jWords.includes(w));
+  if (common.length > 0) {
+    return { level: 'partial', score: 10 };
+  }
+  
+  return { level: 'none', score: 0 };
+};
+
+export const isJobMatchingCandidate = (candidate, job) => {
+  const cSkills = toArr(candidate.skills);
+  const jMandatory = toArr(job.mandatorySkills).length ? toArr(job.mandatorySkills) : toArr(job.skills);
+  
+  const candidateSkillSet = new Set(cSkills.map(normalizeSkillLocal).filter(Boolean));
+  const matchedMandatorySkills = jMandatory.filter(skill => candidateSkillSet.has(normalizeSkillLocal(skill)));
+  
+  const totalMandatorySkills = jMandatory.length;
+  const requiredSkillMatches = Math.min(3, totalMandatorySkills);
+  
+  // Condition 1: at least 3 mandatory skills match (or all of them if total is less than 3)
+  const skillsMatch = totalMandatorySkills > 0 && matchedMandatorySkills.length >= requiredSkillMatches;
+  
+  // Condition 2: matching role or position
+  const roleRelevance = evaluateLocalRoleRelevance(candidate.position, job.position);
+  const roleMatch = roleRelevance.level !== 'none' && roleRelevance.level !== 'weak';
+  
+  return skillsMatch || roleMatch;
+};
+
+export const getMatchingJobsCountForCandidates = async (candidates, user) => {
+  if (!candidates || candidates.length === 0) return {};
+  
+  const jobQuery = { active: true };
+  if (user && user.role === 'recruiter') {
+    const possibleNames = [
+      (user.firstName && user.lastName) ? `${user.firstName} ${user.lastName}` : null,
+      user.name, user.fullName, user.username, user.email
+    ].filter(Boolean);
+
+    jobQuery.$or = [
+      { primaryRecruiter: { $in: possibleNames } },
+      { secondaryRecruiter: { $in: possibleNames } }
+    ];
+  }
+  
+  const jobs = await Job.find(jobQuery)
+    .select('_id position mandatorySkills skills active clientName location')
+    .lean();
+    
+  const counts = {};
+  for (const candidate of candidates) {
+    let count = 0;
+    for (const job of jobs) {
+      if (isJobMatchingCandidate(candidate, job)) {
+        count++;
+      }
+    }
+    counts[candidate._id.toString()] = count;
+  }
+  return counts;
 };
 
 const parseExperienceToMonths = (token) => {

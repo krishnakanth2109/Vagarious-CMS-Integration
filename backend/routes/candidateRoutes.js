@@ -12,15 +12,17 @@ import { protect } from '../middleware/authMiddleware.js';
 import { bulkImportCandidates } from '../controllers/bulkImportController.js';
 import { updateCandidateStatus, updateCandidateRemarks, inlineUpdateCandidate } from '../controllers/candidateStatusController.js';
 import { sendJobInvitationEmail } from '../services/email.js';
+import { getMatchingJobsCountForCandidates, isJobMatchingCandidate } from '../services/matchingService.js';
+import { processDetailedMatchingForCandidate } from '../services/groqMatchingService.js';
 
 const router = express.Router();
 
 const CANDIDATE_VIEWS = {
-  dashboard: 'candidateId name firstName lastName email position status recruiterId recruiterName client currentCompany dateAdded createdAt',
+  dashboard: 'candidateId name firstName lastName email position skills status recruiterId recruiterName client currentCompany dateAdded createdAt',
   recruiters: 'candidateId name firstName lastName email contact position skills totalExperience status recruiterId recruiterName client currentCompany dateAdded createdAt active',
-  reports: 'candidateId name firstName lastName email contact position client source status recruiterId recruiterName dateAdded createdAt updatedAt remarks notes',
-  schedule: 'candidateId name firstName lastName email contact position status recruiterId recruiterName active',
-  invoice: 'candidateId name firstName lastName email position client ctc status recruiterId recruiterName dateAdded createdAt',
+  reports: 'candidateId name firstName lastName email contact position skills client source status recruiterId recruiterName dateAdded createdAt updatedAt remarks notes',
+  schedule: 'candidateId name firstName lastName email contact position skills status recruiterId recruiterName active',
+  invoice: 'candidateId name firstName lastName email position skills client ctc status recruiterId recruiterName dateAdded createdAt',
   matching: 'candidateId name firstName lastName email contact alternateNumber currentLocation preferredLocation position skills totalExperience relevantExperience education ctc ectc noticePeriod linkedin source status recruiterId recruiterName client currentCompany remarks dateAdded createdAt active',
 };
 
@@ -226,6 +228,14 @@ router.get('/', async (req, res) => {
       .sort({ createdAt: -1 })
       .select(CANDIDATE_VIEWS[req.query.view] || '')
       .lean(); // FIX 2: plain objects — faster serialisation on large lists
+
+    if (candidates.length > 0) {
+      const counts = await getMatchingJobsCountForCandidates(candidates, req.user);
+      candidates.forEach((candidate) => {
+        candidate.matchingJobsCount = counts[candidate._id.toString()] || 0;
+      });
+    }
+
     if (req.query.includeSubmissions === 'true' && candidates.length > 0) {
       const candidateIds = candidates.map((candidate) => candidate._id);
       const submissions = await CandidateSubmission.find({ candidateId: { $in: candidateIds } })
@@ -586,6 +596,67 @@ router.put('/bulk-assign', async (req, res) => {
   } catch (error) {
     console.error('Bulk assign error:', error);
     res.status(500).json({ message: error.message });
+  }
+});
+
+// ── GET matching jobs for a candidate (detailed scoring) ──────────────────────────
+router.get('/:candidateId/matching-jobs', async (req, res) => {
+  try {
+    const { candidateId } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(candidateId)) {
+      return res.status(400).json({ message: 'Invalid candidate ID' });
+    }
+
+    const candidate = await Candidate.findById(candidateId).lean();
+    if (!candidate) {
+      return res.status(404).json({ message: 'Candidate not found' });
+    }
+
+    // Access control
+    if (req.user.role !== 'admin' && req.user.role !== 'manager') {
+      const ownerIdStr = candidate.recruiterId?._id?.toString() || candidate.recruiterId?.toString();
+      if (ownerIdStr !== req.user._id.toString()) {
+        return res.status(403).json({ message: 'Not authorized to view this candidate' });
+      }
+    }
+
+    // Fetch active accessible jobs
+    const jobQuery = { active: true };
+    if (req.user && req.user.role === 'recruiter') {
+      const possibleNames = [
+        (req.user.firstName && req.user.lastName) ? `${req.user.firstName} ${req.user.lastName}` : null,
+        req.user.name, req.user.fullName, req.user.username, req.user.email
+      ].filter(Boolean);
+
+      jobQuery.$or = [
+        { primaryRecruiter: { $in: possibleNames } },
+        { secondaryRecruiter: { $in: possibleNames } }
+      ];
+    }
+    const jobs = await Job.find(jobQuery).lean();
+
+    // Filter qualifying jobs
+    const qualifyingJobs = jobs.filter(job => isJobMatchingCandidate(candidate, job));
+
+    if (qualifyingJobs.length === 0) {
+      return res.json({
+        success: true,
+        candidateName: candidate.name || `${candidate.firstName || ''} ${candidate.lastName || ''}`.trim(),
+        jobs: []
+      });
+    }
+
+    // Run detailed scoring
+    const detailedMatches = await processDetailedMatchingForCandidate(candidate, qualifyingJobs, req.user);
+
+    return res.json({
+      success: true,
+      candidateName: candidate.name || `${candidate.firstName || ''} ${candidate.lastName || ''}`.trim(),
+      jobs: detailedMatches
+    });
+  } catch (error) {
+    console.error('Detailed candidate matching error:', error);
+    res.status(500).json({ message: error.message || 'Failed to calculate matching jobs.' });
   }
 });
 

@@ -11,6 +11,7 @@ import { RecruiterDetailsTrigger } from "@/components/RecruiterDetailsModal";
 import { MatchBreakdownBar, ScoreBadge, SkillChips } from "@/components/Score/ScoreComponents";
 import { getMatchingCandidatesByJobId } from "@/utils/candidateMatching";
 
+
 const BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/$/, '');
 const API_URL  = `${BASE_URL}/api`;
 

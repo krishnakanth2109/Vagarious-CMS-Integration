@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import CandidateProfileLink from '@/components/CandidateProfileLink';
+import { ScoreBadge, MatchBreakdownBar, SkillChips } from '@/components/Score/ScoreComponents';
 import BulkCandidateImportModal from '@/components/BulkCandidateImportModal';
 import CandidateExportModal from '@/components/CandidateExportModal';
 import ClientJobSubmissions from '@/components/ClientJobSubmissions';
@@ -580,6 +581,12 @@ export default function AdminCandidates() {
   const [isLoadingSubmissions, setIsLoadingSubmissions] = useState(false);
   const [isParsingResume, setIsParsingResume] = useState(false);
   const [resumeSuccess, setResumeSuccess] = useState({ show: false, fileName: '', fieldsCount: 0 });
+  const [matchingJobsCandidate, setMatchingJobsCandidate] = useState(null);
+  const [matchingJobs, setMatchingJobs] = useState([]);
+  const [loadingMatchingJobs, setLoadingMatchingJobs] = useState(false);
+  const [matchingJobsError, setMatchingJobsError] = useState(null);
+  const [viewingJobDetails, setViewingJobDetails] = useState(null);
+  const [expandedJobId, setExpandedJobId] = useState(null);
 
   const [searchInput, setSearchInput] = useState('');
   const [searchKeywords, setSearchKeywords] = useState([]);
@@ -714,6 +721,38 @@ export default function AdminCandidates() {
   };
 
   useEffect(() => { fetchData(); }, []);
+
+  const fetchMatchingJobs = async (candidate) => {
+    setLoadingMatchingJobs(true);
+    setMatchingJobsError(null);
+    setMatchingJobs([]);
+    try {
+      const headers = getAuthHeader();
+      const res = await fetch(`${API_URL}/candidates/${candidate._id}/matching-jobs`, {
+        headers,
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || 'Failed to fetch matching jobs');
+      }
+      setMatchingJobs(data.jobs || []);
+    } catch (err) {
+      console.error(err);
+      setMatchingJobsError('Detailed analysis is temporarily unavailable. Showing rule-based scores.');
+    } finally {
+      setLoadingMatchingJobs(false);
+    }
+  };
+
+  useEffect(() => {
+    if (matchingJobsCandidate) {
+      fetchMatchingJobs(matchingJobsCandidate);
+    }
+  }, [matchingJobsCandidate]);
+
+  const openMatchingJobsModal = (candidate) => {
+    setMatchingJobsCandidate(candidate);
+  };
 
   const handleInputChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -1450,6 +1489,206 @@ export default function AdminCandidates() {
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank');
   };
 
+  const renderMatchingJobsModal = () => {
+    if (!matchingJobsCandidate) return null;
+
+    return (
+      <ModalPortal>
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" onClick={() => setMatchingJobsCandidate(null)} />
+          <div className="relative flex max-h-[90vh] w-[95vw] max-w-7xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+            {/* Header */}
+            <div className="flex items-start justify-between bg-slate-950 p-6 text-white">
+              <div>
+                <h2 className="text-xl font-bold tracking-tight text-white">Matching Jobs – {matchingJobsCandidate.name}</h2>
+                <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-300">
+                  <span className="font-mono bg-slate-800 px-2 py-0.5 rounded text-white">{getCandidateId(matchingJobsCandidate)}</span>
+                  <span>•</span>
+                  <span>{matchingJobsCandidate.position || 'No Role Specified'}</span>
+                  <span>•</span>
+                  <span>Skills: {Array.isArray(matchingJobsCandidate.skills) ? matchingJobsCandidate.skills.join(', ') : (matchingJobsCandidate.skills || 'N/A')}</span>
+                </div>
+              </div>
+              <button
+                onClick={() => setMatchingJobsCandidate(null)}
+                className="rounded-lg p-2 text-slate-300 hover:bg-white/10 hover:text-white cursor-pointer"
+              >
+                <X className="h-5 w-5 text-white" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto bg-slate-50 p-6 sleek-scrollbar">
+              {loadingMatchingJobs ? (
+                <div className="flex flex-col items-center justify-center py-20 gap-3">
+                  <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+                  <p className="text-sm font-medium text-slate-600 animate-pulse">Calculating matching scores...</p>
+                </div>
+              ) : matchingJobsError ? (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-800 text-sm mb-4">
+                  ⚠️ {matchingJobsError}
+                </div>
+              ) : matchingJobs.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-20 text-center">
+                  <Briefcase className="h-12 w-12 text-slate-300 mb-2" />
+                  <p className="text-sm font-medium text-slate-600">No jobs matched the required skills and role.</p>
+                </div>
+              ) : (
+                  <div className="space-y-4">
+                    {matchingJobs.map((item) => {
+                      const { job, finalScore, matchPercentage, matchLevel, roleMatchLevel, matchedMandatorySkills, missingMandatorySkills, matchedPreferredSkills, missingPreferredSkills, experienceMatch, qualificationMatch, reason, breakdown, scoringSource, source } = item;
+                      const jobId = job._id || job.id;
+                      const scoreVal = finalScore ?? matchPercentage ?? 0;
+                      const expanded = expandedJobId === jobId;
+                      const resolvedSource = scoringSource || source || 'fallback';
+
+                      return (
+                        <div key={jobId} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm hover:shadow-md transition-shadow">
+                          {/* Card Header Row */}
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="rounded-md bg-blue-50 border border-blue-100 px-2 py-0.5 font-mono text-xs text-blue-600 font-bold">
+                                  {job.jobCode}
+                                </span>
+                                <h3 className="font-bold text-slate-900 text-base">{job.position}</h3>
+                                <span className="text-slate-350">•</span>
+                                <span className="text-sm text-slate-500 font-medium">{job.clientName}</span>
+                              </div>
+                              <p className="mt-1.5 text-xs text-slate-500 flex flex-wrap gap-x-3 gap-y-1">
+                                <span>📍 {job.location || 'Location not set'}</span>
+                                <span>•</span>
+                                <span>Role Match: <strong className="capitalize text-slate-700">{roleMatchLevel || 'N/A'}</strong></span>
+                                <span>•</span>
+                                <span>Experience Req: <strong className="text-slate-700">{job.experience ? `${job.experience} Years` : 'Any'}</strong></span>
+                              </p>
+                            </div>
+
+                            {/* Score & Expand Controls */}
+                            <div className="flex items-center gap-3 justify-between sm:justify-end">
+                              <div className="flex items-center gap-2">
+                                <ScoreBadge score={scoreVal} />
+                                <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">
+                                  {matchLevel || 'Match'}
+                                </span>
+                              </div>
+                              
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setExpandedJobId(expanded ? null : jobId)}
+                                  className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-500 transition-colors cursor-pointer"
+                                  title={expanded ? "Hide Details" : "Show Details"}
+                                >
+                                  <svg className={`h-5 w-5 transform transition-transform ${expanded ? 'rotate-185' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                                    <polyline points="6 9 12 15 18 9" />
+                                  </svg>
+                                </button>
+                                <button
+                                  onClick={() => setViewingJobDetails(job)}
+                                  className="px-3 py-1.5 border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-semibold cursor-pointer transition"
+                                  title="View Job Details"
+                                >
+                                  Details
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    const candidate = matchingJobsCandidate;
+                                    setMatchingJobsCandidate(null);
+                                    openEditDialog(candidate);
+                                  }}
+                                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold cursor-pointer transition text-white"
+                                >
+                                  Submit
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Expandable Details Container */}
+                          {expanded && (
+                            <div className="mt-4 border-t border-slate-150 pt-4 space-y-4 animate-in fade-in duration-200">
+                              {resolvedSource === 'fallback' && (
+                                <div className="rounded-lg bg-amber-50 px-4 py-2 text-xs font-semibold text-amber-800 border border-amber-250">
+                                  ⚠️ Advanced matching analysis was temporarily unavailable. Showing rule-based matching metrics.
+                                </div>
+                              )}
+                              
+                              <div className="grid gap-4 lg:grid-cols-2">
+                                {/* Left Side: Match Overview & Breakdown */}
+                                <div className="space-y-3 bg-slate-50 p-4 rounded-xl border border-slate-100">
+                                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wide">Match Overview</h4>
+                                  <p className="text-sm text-slate-700 leading-relaxed font-medium">
+                                    {reason || 'Qualified matching profile based on job requirements and skills.'}
+                                  </p>
+
+                                  <div className="grid grid-cols-2 gap-2 mt-4 pt-3 border-t border-slate-200">
+                                    <div className="text-xs">
+                                      <span className="text-slate-400 block uppercase font-bold tracking-wider text-[9px]">Role Match</span>
+                                      <span className="font-semibold text-slate-800 text-sm capitalize">{roleMatchLevel || 'N/A'}</span>
+                                    </div>
+                                    <div className="text-xs">
+                                      <span className="text-slate-400 block uppercase font-bold tracking-wider text-[9px]">Experience Req</span>
+                                      <span className="font-semibold text-slate-800 text-sm">{experienceMatch || (job.experience ? `${job.experience} Years` : 'N/A')}</span>
+                                    </div>
+                                    <div className="text-xs mt-2">
+                                      <span className="text-slate-400 block uppercase font-bold tracking-wider text-[9px]">Qualification</span>
+                                      <span className="font-semibold text-slate-800 text-sm">{qualificationMatch || (job.qualification || 'N/A')}</span>
+                                    </div>
+                                    <div className="text-xs mt-2">
+                                      <span className="text-slate-400 block uppercase font-bold tracking-wider text-[9px]">Scoring Model</span>
+                                      <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-semibold border mt-0.5 ${
+                                        resolvedSource === 'groq' 
+                                          ? 'bg-indigo-50 border-indigo-200 text-indigo-700' 
+                                          : 'bg-slate-100 border-slate-200 text-slate-600'
+                                      }`}>
+                                        {resolvedSource === 'groq' ? 'Advanced Match' : 'Rule-Based Score'}
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  {breakdown && (
+                                    <div className="mt-4 pt-3 border-t border-slate-200">
+                                      <MatchBreakdownBar breakdown={breakdown} />
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Right Side: Skill Alignments */}
+                                <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3">Skill Alignments</h4>
+                                  <SkillChips
+                                    matchedMandatory={matchedMandatorySkills || []}
+                                    missingMandatory={missingMandatorySkills || []}
+                                    matchedPreferred={matchedPreferredSkills || []}
+                                    missingPreferred={missingPreferredSkills || []}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="flex justify-end border-t border-slate-200 bg-slate-50 p-4">
+              <button
+                onClick={() => setMatchingJobsCandidate(null)}
+                className="px-5 py-2.5 border border-slate-300 bg-white rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      </ModalPortal>
+    );
+  };
+
   return (
     <div className="flex-1 grid grid-cols-1 min-w-0 w-full p-6 pb-48 overflow-y-auto overflow-x-hidden bg-slate-50 dark:bg-slate-950 min-h-screen">
       <div className="w-full max-w-full mx-auto space-y-6">
@@ -1605,6 +1844,7 @@ export default function AdminCandidates() {
                         />
                       </th>
                       <th className="px-4 py-3 cursor-pointer whitespace-nowrap" onClick={() => handleSort('candidateId')}>ID <SortIcon field="candidateId" /></th>
+                      <th className="px-4 py-3 whitespace-nowrap">Matching Jobs</th>
                       <th className="px-4 py-3 cursor-pointer whitespace-nowrap" onClick={() => handleSort('name')}>Candidate Name <SortIcon field="name" /></th>
                       <th className="px-4 py-3 whitespace-nowrap text-blue-600 font-bold">Recruiter</th>
                       <th className="px-4 py-3 whitespace-nowrap">Client</th>
@@ -1633,6 +1873,21 @@ export default function AdminCandidates() {
                             />
                           </td>
                           <td className="px-4 py-3 font-mono text-xs text-blue-600 font-bold cursor-pointer whitespace-nowrap" onClick={() => { navigator.clipboard.writeText(getCandidateId(c)); toast({ title: "Copied ID" }); }}>{getCandidateId(c)}</td>
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            {c.matchingJobsCount > 0 ? (
+                              <button
+                                onClick={() => openMatchingJobsModal(c)}
+                                className="font-semibold text-blue-600 hover:text-blue-800 hover:underline text-sm focus:outline-none flex items-center gap-1.5 px-2 py-1 rounded bg-blue-50/50 hover:bg-blue-50 cursor-pointer"
+                                title="View matching jobs"
+                              >
+                                {c.matchingJobsCount} {c.matchingJobsCount === 1 ? 'Job' : 'Jobs'}
+                              </button>
+                            ) : (
+                              <span className="text-slate-400 text-sm px-2 py-1 select-none">
+                                0 Jobs
+                              </span>
+                            )}
+                          </td>
                           <td className="px-4 py-3 whitespace-nowrap">
                             <CandidateProfileLink candidate={c} className="text-slate-900">{c.name}</CandidateProfileLink>
                             <div className="mt-0.5 text-xs font-medium text-slate-400">{c.position || '-'}</div>
@@ -1698,6 +1953,20 @@ export default function AdminCandidates() {
                           >
                             {getCandidateId(c)}
                           </span>
+                          <span className="text-slate-300">•</span>
+                          {c.matchingJobsCount > 0 ? (
+                            <button
+                              onClick={() => openMatchingJobsModal(c)}
+                              className="text-xs font-semibold text-blue-600 hover:underline cursor-pointer"
+                              title="View matching jobs"
+                            >
+                              {c.matchingJobsCount} {c.matchingJobsCount === 1 ? 'Job' : 'Jobs'}
+                            </button>
+                          ) : (
+                            <span className="text-xs text-slate-400 select-none">
+                              0 Jobs
+                            </span>
+                          )}
                         </div>
                         <div className="flex items-center gap-1">
                           <button className="p-1 hover:bg-slate-100 rounded text-blue-600" onClick={() => { setViewCandidate(c); setIsViewDialogOpen(true); }}><Eye className="h-4 w-4" /></button>
@@ -2375,6 +2644,15 @@ export default function AdminCandidates() {
           </div>
         </div>
         </ModalPortal>
+      )}
+
+      {renderMatchingJobsModal()}
+
+      {viewingJobDetails && (
+        <JobDetailsModal
+          job={viewingJobDetails}
+          onClose={() => setViewingJobDetails(null)}
+        />
       )}
 
       {/* Today Submissions Modal — Admin only */}

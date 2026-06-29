@@ -11,12 +11,12 @@ const groq = GROQ_MATCHING_ENABLED ? new Groq({ apiKey: process.env.GROQ_API_KEY
 
 // Weight setup
 const SCORE_WEIGHTS = {
-  mandatorySkills: 40,
-  preferredSkills: 15,
-  roleRelevance: 20,
+  mandatorySkills: 45,
+  roleRelevance: 25,
+  preferredSkills: 10,
   experience: 10,
   qualification: 5,
-  jobDescription: 5,
+  jobDescription: 0,
   otherCriteria: 5
 };
 
@@ -260,16 +260,16 @@ export const buildDeterministicScore = (candidate, job) => {
     : 'No specific qualification required';
 
   const breakdown = {
-    skills: Math.round(((mandatorySkillPct * 40 + preferredSkillPct * 15) / 55) * 0.50), // out of 50
-    experience: Math.round(experiencePct * 0.25), // out of 25
-    role: Math.round(rolePct * 0.10), // out of 10
-    education: Math.round(qualificationPct * 0.10), // out of 10
-    location: Math.round(((otherPct * 5 + jdOverlapPct * 5) / 10) * 0.05), // out of 5
-    mandatorySkills: Math.round(mandatorySkillPct * 0.40),
-    preferredSkills: Math.round(preferredSkillPct * 0.15),
-    roleRelevance: Math.round(rolePct * 0.20),
+    skills: Math.round(((mandatorySkillPct * 45 + preferredSkillPct * 10) / 55) * 0.55), // out of 55
+    experience: Math.round(experiencePct * 0.10), // out of 10
+    role: Math.round(rolePct * 0.25), // out of 25
+    education: Math.round(qualificationPct * 0.05), // out of 5
+    location: Math.round(otherPct * 0.05), // out of 5
+    mandatorySkills: Math.round(mandatorySkillPct * 0.45),
+    preferredSkills: Math.round(preferredSkillPct * 0.10),
+    roleRelevance: Math.round(rolePct * 0.25),
     qualification: Math.round(qualificationPct * 0.05),
-    jobDescription: Math.round(jdOverlapPct * 0.05),
+    jobDescription: Math.round(jdOverlapPct * 0.00),
     otherCriteria: Math.round(otherPct * 0.05)
   };
 
@@ -497,16 +497,16 @@ export const evaluateCandidateJobMatch = async (candidate, job) => {
     const rolePct = (roleScore / 20) * 100;
 
     const breakdown = {
-      skills: Math.round(((mandatorySkillPct * 40 + preferredSkillPct * 15) / 55) * 0.50), // out of 50
-      experience: Math.round(experiencePct * 0.25), // out of 25
-      role: Math.round(rolePct * 0.10), // out of 10
-      education: Math.round(qualificationPct * 0.10), // out of 10
-      location: Math.round(((otherPct * 5 + (jobDescriptionScore / 5 * 100) * 5) / 10) * 0.05), // out of 5
-      mandatorySkills: Math.round(mandatorySkillPct * 0.40),
-      preferredSkills: Math.round(preferredSkillPct * 0.15),
-      roleRelevance: Math.round(rolePct * 0.20),
+      skills: Math.round(((mandatorySkillPct * 45 + preferredSkillPct * 10) / 55) * 0.55), // out of 55
+      experience: Math.round(experiencePct * 0.10), // out of 10
+      role: Math.round(rolePct * 0.25), // out of 25
+      education: Math.round(qualificationPct * 0.05), // out of 5
+      location: Math.round(otherPct * 0.05), // out of 5
+      mandatorySkills: Math.round(mandatorySkillPct * 0.45),
+      preferredSkills: Math.round(preferredSkillPct * 0.10),
+      roleRelevance: Math.round(rolePct * 0.25),
       qualification: Math.round(qualificationPct * 0.05),
-      jobDescription: Math.round(jobDescriptionScore),
+      jobDescription: Math.round(jobDescriptionScore * 0.00),
       otherCriteria: Math.round(otherPct * 0.05)
     };
 
@@ -712,4 +712,91 @@ export const processMatchingCandidates = async (candidates, job, reqUser) => {
     failed: failedCount,
     candidates: results
   };
+};
+
+export const processDetailedMatchingForCandidate = async (candidate, qualifyingJobs, reqUser) => {
+  const results = [];
+  const tenantOwnerId = candidate.recruiterId || reqUser?._id;
+  const expectedSource = GROQ_MATCHING_ENABLED ? 'groq' : 'fallback';
+
+  const jobEvaluations = qualifyingJobs.map(job => {
+    const localEval = buildDeterministicScore(candidate, job);
+    return {
+      job,
+      preliminaryScore: localEval.finalScore,
+      localEval
+    };
+  }).sort((a, b) => b.preliminaryScore - a.preliminaryScore);
+
+  const topJobsLimit = parseInt(process.env.GROQ_MATCH_MAX_CANDIDATES || '10', 10);
+
+  for (let i = 0; i < jobEvaluations.length; i++) {
+    const { job, localEval, preliminaryScore } = jobEvaluations[i];
+    const jobId = job._id || job.id;
+
+    // Check cache
+    const cacheDoc = await MatchScore.findOne({
+      tenantOwnerId,
+      candidateId: candidate._id || candidate.id,
+      requirementId: jobId
+    }).lean();
+
+    if (cacheDoc && cacheDoc.result) {
+      const candidateUpdatedTime = new Date(candidate.updatedAt).getTime();
+      const jobUpdatedTime = new Date(job.updatedAt).getTime();
+      const cacheCandTime = cacheDoc.candidateUpdatedAt ? new Date(cacheDoc.candidateUpdatedAt).getTime() : 0;
+      const cacheJobTime = cacheDoc.requirementUpdatedAt ? new Date(cacheDoc.requirementUpdatedAt).getTime() : 0;
+
+      const cacheFresh = cacheCandTime === candidateUpdatedTime &&
+                         cacheJobTime === jobUpdatedTime &&
+                         cacheDoc.source === expectedSource;
+
+      if (cacheFresh) {
+        results.push({
+          job,
+          ...cacheDoc.result,
+          preliminaryScore
+        });
+        continue;
+      }
+    }
+
+    if (i < topJobsLimit) {
+      const matchResult = await evaluateCandidateJobMatch(candidate, job);
+
+      await MatchScore.findOneAndUpdate(
+        {
+          tenantOwnerId,
+          candidateId: candidate._id || candidate.id,
+          requirementId: jobId
+        },
+        {
+          tenantOwnerId,
+          candidateId: candidate._id || candidate.id,
+          requirementId: jobId,
+          candidateUpdatedAt: candidate.updatedAt,
+          requirementUpdatedAt: job.updatedAt,
+          source: matchResult.scoringSource,
+          result: matchResult
+        },
+        { upsert: true, new: true, setDefaultsOnInsert: true }
+      );
+
+      results.push({
+        job,
+        ...matchResult,
+        preliminaryScore
+      });
+    } else {
+      results.push({
+        job,
+        ...localEval,
+        preliminaryScore,
+        reason: 'Rule-based evaluation (limit exceeded)'
+      });
+    }
+  }
+
+  results.sort((a, b) => b.finalScore - a.finalScore);
+  return results;
 };

@@ -21,11 +21,11 @@ export const ScoreBadge = ({ score = 0 }) => {
 
 export const MatchBreakdownBar = ({ breakdown }) => {
   const items = [
-    { label: 'Skills (50)', value: breakdown?.skills || 0, max: 50, color: 'bg-blue-500' },
-    { label: 'Experience (25)', value: breakdown?.experience || 0, max: 25, color: 'bg-teal-500' },
-    { label: 'Role (10)', value: breakdown?.role || 0, max: 10, color: 'bg-indigo-500' },
-    { label: 'Education (10)', value: breakdown?.education || 0, max: 10, color: 'bg-purple-500' },
-    { label: 'Location (5)', value: breakdown?.location || 0, max: 5, color: 'bg-pink-500' },
+    { label: 'Skills (55)', value: breakdown?.skills || 0, max: 55, color: 'bg-blue-500' },
+    { label: 'Role Relevance (25)', value: breakdown?.role || 0, max: 25, color: 'bg-indigo-500' },
+    { label: 'Experience (10)', value: breakdown?.experience || 0, max: 10, color: 'bg-teal-500' },
+    { label: 'Education (5)', value: breakdown?.education || 0, max: 5, color: 'bg-purple-500' },
+    { label: 'Location/Other (5)', value: breakdown?.location || 0, max: 5, color: 'bg-pink-500' },
   ];
 
   return (
