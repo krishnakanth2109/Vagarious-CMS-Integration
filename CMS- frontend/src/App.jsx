@@ -30,6 +30,9 @@ const InterviewSession        = lazy(() => import('@/pages/InterviewSession'));
 const JobApplications         = lazy(() => import('@/pages/JobApplications'));
 const CandidateProfile        = lazy(() => import('@/pages/CandidateProfile'));
 const UserGuide               = lazy(() => import('@/pages/UserGuide'));
+const ExternalContacts        = lazy(() => import('@/pages/ExternalContacts'));
+const ExternalClients         = lazy(() => import('@/pages/ExternalClients'));
+const AdminContactInquiries   = lazy(() => import('@/pages/AdminContactInquiries'));
 
 // Manager Specific Pages (Lazy)
 const ManagerDashboard = lazy(() => import('@/pages/ManagerDashboard'));
@@ -113,6 +116,9 @@ function AppRoutes() {
           <Route path="agreements" element={<AgreementGenerator />} />
           <Route path="job-applications" element={<JobApplications />} />
           <Route path="user-guide" element={<UserGuide />} />
+          <Route path="external-imports/contacts" element={<ExternalContacts />} />
+          <Route path="external-imports/clients" element={<ExternalClients />} />
+          <Route path="contact-inquiries" element={<AdminContactInquiries />} />
         </Route>
         <Route path="/recruiter" element={
           <ProtectedRoute allowedRoles={['recruiter', 'manager', 'admin']}>

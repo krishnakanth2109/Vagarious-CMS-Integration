@@ -1,5 +1,6 @@
 import Message from '../models/Message.js';
 import User from '../models/User.js';
+import Channel from '../models/Channel.js';
 
 // Batch resolve display names for a list of from/to values
 const batchResolveNames = async (values) => {
@@ -32,7 +33,8 @@ const batchResolveNames = async (values) => {
 // @route   GET /api/messages
 export const getMessages = async (req, res) => {
   try {
-    const { role, username, id } = req.user;
+    const { role, username, _id } = req.user;
+    const id = _id?.toString();
     let query;
 
     if (role === 'admin') {
@@ -62,7 +64,7 @@ export const getMessages = async (req, res) => {
 
     const enhancedMessages = messages.map(msg => ({
       ...msg,
-      fromName: resolve(msg.from),
+      fromName: (msg.from === 'admin' && msg.senderName) ? msg.senderName : resolve(msg.from),
       toName:   resolve(msg.to),
     }));
 
@@ -77,11 +79,20 @@ export const getMessages = async (req, res) => {
 export const sendMessage = async (req, res) => {
   try {
     const { to, subject, content } = req.body;
-    const { role, id } = req.user;
+    const { role, _id, firstName, lastName, username } = req.user;
+    const id = _id?.toString();
 
     const from = role === 'admin' ? 'admin' : id;
+    const senderName = [firstName, lastName].filter(Boolean).join(' ') || username || 'Admin';
 
-    const message = await Message.create({ from, to, subject, content });
+    const message = await Message.create({
+      from,
+      to,
+      subject,
+      content,
+      senderId: _id,
+      senderName
+    });
 
     const resolve = await batchResolveNames([from, to]);
     res.status(201).json({ ...message.toObject(), fromName: resolve(from), toName: resolve(to) });
@@ -98,26 +109,53 @@ export const updateMessage = async (req, res) => {
     if (!message) return res.status(404).json({ message: 'Message not found' });
 
     // Allow the recipient to mark as read, or the sender/admin to edit content
+    const userId = req.user._id?.toString();
     const isAdmin   = req.user.role === 'admin';
-    const isSender  = message.from === req.user.id || (isAdmin && message.from === 'admin');
+    const isSender  = message.from === userId || (isAdmin && message.from === 'admin');
     const isRecipient =
-      message.to === req.user.id ||
+      message.to === userId ||
       message.to === req.user.username ||
       (isAdmin && (message.to === 'admin' || message.to === 'all'));
 
-    if (!isAdmin && !isSender && !isRecipient) {
+    const isChannelMessage = !!message.channelId;
+    let isChannelMember = false;
+    if (isChannelMessage) {
+      const channel = await Channel.findById(message.channelId).lean();
+      if (channel) {
+        isChannelMember = channel.members.some(m => m.toString() === userId) || channel.type === 'public';
+      }
+    }
+
+    if (!isAdmin && !isSender && !isRecipient && !isChannelMember) {
       return res.status(401).json({ message: 'Not authorized' });
     }
 
     // Allow recipients to mark as read
-    if (typeof req.body.read === 'boolean' && isRecipient) {
-      message.read = req.body.read;
+    if (typeof req.body.read === 'boolean') {
+      if (isRecipient) {
+        message.read = req.body.read;
+      }
+      if (isChannelMessage && req.body.read === true) {
+        if (!message.readBy.includes(req.user._id)) {
+          message.readBy.push(req.user._id);
+        }
+      }
     }
 
     // Allow sender/admin to edit content fields
     if (isSender || isAdmin) {
       if (req.body.subject !== undefined) message.subject = req.body.subject || message.subject;
-      if (req.body.content !== undefined) message.content = req.body.content || message.content;
+      if (req.body.content !== undefined) {
+        // Enforce 15-minute edit window for non-admins
+        if (!isAdmin) {
+          const diffMinutes = (Date.now() - new Date(message.createdAt).getTime()) / 60000;
+          if (diffMinutes > 15) {
+            return res.status(400).json({ message: 'Messages can only be edited within 15 minutes of sending.' });
+          }
+        }
+        message.content = req.body.content || message.content;
+        message.edited = true;
+      }
     }
 
     const updatedMessage = await message.save();
@@ -134,12 +172,15 @@ export const deleteMessage = async (req, res) => {
     const message = await Message.findById(req.params.id);
     if (!message) return res.status(404).json({ message: 'Message not found' });
 
-    if (req.user.role !== 'admin' && message.from !== req.user.id) {
+    const userId = req.user._id?.toString();
+    if (req.user.role !== 'admin' && message.from !== userId) {
       return res.status(401).json({ message: 'Not authorized' });
     }
 
-    await message.deleteOne();
-    res.json({ message: 'Message removed', id: req.params.id });
+    message.deletedAt = new Date();
+    message.content = 'This message was deleted';
+    await message.save();
+    res.json({ id: message._id, deletedAt: message.deletedAt, content: message.content });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

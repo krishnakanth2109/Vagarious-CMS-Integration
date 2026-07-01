@@ -20,7 +20,21 @@ export const getChannels = async (req, res) => {
       .populate('createdBy', 'firstName lastName username')
       .populate('members', 'firstName lastName username role')
       .lean();
-    res.json(channels);
+
+    // Map each channel to include count of unread messages for the user
+    const enhanced = await Promise.all(
+      channels.map(async (ch) => {
+        const unreadCount = await Message.countDocuments({
+          channelId: ch._id,
+          deletedAt: null,
+          senderId: { $ne: userId },
+          readBy: { $ne: userId }
+        });
+        return { ...ch, unreadCount };
+      })
+    );
+
+    res.json(enhanced);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -155,12 +169,24 @@ export const getChannelMessages = async (req, res) => {
 
     const msgs = await Message.find({
       channelId: channel._id,
-      deletedAt: null,
       createdAt: { $lte: before },
     })
       .sort({ createdAt: 1 })
       .limit(limit)
       .lean();
+
+    // Bulk mark fetched channel messages as read by adding userId to readBy array if not already present
+    await Message.updateMany(
+      {
+        channelId: channel._id,
+        deletedAt: null,
+        senderId: { $ne: userId },
+        readBy: { $ne: userId }
+      },
+      {
+        $addToSet: { readBy: userId }
+      }
+    );
 
     res.json(msgs);
   } catch (error) {
@@ -258,7 +284,7 @@ export const deleteChannelMessage = async (req, res) => {
     msg.deletedAt = new Date();
     msg.content = 'This message was deleted';
     await msg.save();
-    res.json({ id: msg._id, deletedAt: msg.deletedAt });
+    res.json({ id: msg._id, deletedAt: msg.deletedAt, content: msg.content });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

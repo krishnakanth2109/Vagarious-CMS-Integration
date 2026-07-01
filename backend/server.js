@@ -26,6 +26,9 @@ import aiMockRoutes from './routes/aiMockRoutes.js';
 import jobApplicationRoutes from './routes/jobApplicationRoutes.js';
 import submissionRoutes from './routes/submissionRoutes.js';
 import scoreMatchRoutes from './routes/scoreMatch.routes.js';
+import externalContactRoutes from './routes/externalContactRoutes.js';
+import externalClientRoutes from './routes/externalClientRoutes.js';
+import contactRoutes from './routes/contactRoutes.js';
 
 // ── Agreement Module Routes ───────────────────────────────────────────────────
 import { connectAgreementDB } from './config/agreementDatabase.js';
@@ -113,6 +116,9 @@ const startServer = async () => {
 
 startServer();
 
+// Keep track of online users and their connected socket IDs
+const onlineUsers = new Map(); // roomId -> Set of socket.ids
+
 // ── Socket.IO events ───────────────────────────────────────────────────────────
 io.on('connection', (socket) => {
   console.log(`⚡ Socket Connected: ${socket.id}`);
@@ -122,12 +128,32 @@ io.on('connection', (socket) => {
     if (roomId) {
       socket.join(roomId);
       console.log(`👤 Socket joined room: ${roomId}`);
+
+      // If roomId is a 24-character ObjectID or 'admin', it's a DM / user room
+      if (/^[a-f\d]{24}$/i.test(roomId) || roomId === 'admin') {
+        if (!onlineUsers.has(roomId)) {
+          onlineUsers.set(roomId, new Set());
+        }
+        onlineUsers.get(roomId).add(socket.id);
+        
+        // Broadcast the list of online user IDs
+        io.emit('online_users', Array.from(onlineUsers.keys()));
+      }
     }
   });
 
   socket.on('leave_room', (roomId) => {
     if (roomId) {
       socket.leave(roomId);
+      console.log(`👤 Socket left room: ${roomId}`);
+      
+      if (onlineUsers.has(roomId)) {
+        onlineUsers.get(roomId).delete(socket.id);
+        if (onlineUsers.get(roomId).size === 0) {
+          onlineUsers.delete(roomId);
+        }
+        io.emit('online_users', Array.from(onlineUsers.keys()));
+      }
     }
   });
 
@@ -162,8 +188,39 @@ io.on('connection', (socket) => {
     socket.broadcast.emit('channel_deleted', payload);
   });
 
+  socket.on('message_deleted', (payload) => {
+    if (payload.channelId) {
+      socket.to(`channel_${payload.channelId}`).emit('message_deleted', payload);
+    } else if (payload.to) {
+      socket.to(payload.to).emit('message_deleted', payload);
+    }
+  });
+
+  socket.on('message_updated', (payload) => {
+    if (payload.channelId) {
+      socket.to(`channel_${payload.channelId}`).emit('message_updated', payload);
+    } else if (payload.to) {
+      socket.to(payload.to).emit('message_updated', payload);
+    }
+  });
+
   socket.on('disconnect', () => {
     console.log(`⚡ Socket Disconnected: ${socket.id}`);
+
+    let changed = false;
+    for (const [roomId, socketIds] of onlineUsers.entries()) {
+      if (socketIds.has(socket.id)) {
+        socketIds.delete(socket.id);
+        if (socketIds.size === 0) {
+          onlineUsers.delete(roomId);
+          changed = true;
+        }
+      }
+    }
+
+    if (changed) {
+      io.emit('online_users', Array.from(onlineUsers.keys()));
+    }
   });
 });
 
@@ -182,6 +239,9 @@ app.use('/api/ai-mock', aiMockRoutes);
 app.use('/api/job-applications', jobApplicationRoutes);
 app.use('/api/submissions', submissionRoutes);
 app.use('/api/score-match', scoreMatchRoutes);
+app.use('/api/externalcontacts', externalContactRoutes);
+app.use('/api/externalclients', externalClientRoutes);
+app.use('/api/contact', contactRoutes);
 
 // ── Agreement Module Routes ────────────────────────────────────────────────────
 app.use('/agreement-companies', agreementCompanyRoutes);
@@ -201,6 +261,9 @@ app.use('/channels', channelRoutes);
 app.use('/ai-mock', aiMockRoutes);
 app.use('/job-applications', jobApplicationRoutes);
 app.use('/score-match', scoreMatchRoutes);
+app.use('/externalcontacts', externalContactRoutes);
+app.use('/externalclients', externalClientRoutes);
+app.use('/contact', contactRoutes);
 
 // Mount AI mock routes at root so index.html can call /start-session-interview etc. directly
 app.use('/', aiMockRoutes);
