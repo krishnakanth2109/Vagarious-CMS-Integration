@@ -1,6 +1,78 @@
+import multer from 'multer';
+import { v2 as cloudinary } from 'cloudinary';
 import Message from '../models/Message.js';
 import User from '../models/User.js';
 import Channel from '../models/Channel.js';
+import { sanitizeMessageAttachments } from '../utils/messageAttachments.js';
+
+cloudinary.config({
+  cloud_name: process.env.CLOUD_NAME,
+  api_key: process.env.CLOUD_API_KEY,
+  api_secret: process.env.CLOUD_API_SECRET,
+});
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 20 * 1024 * 1024 },
+});
+
+const getCloudinaryResourceType = (mimeType = '') => {
+  if (!mimeType) return 'raw';
+  if (mimeType.startsWith('image/')) return 'image';
+  if (mimeType.startsWith('video/')) return 'video';
+  return 'raw';
+};
+
+const getFileExtension = (fileName = '') => {
+  const clean = fileName.split('?')[0].split('#')[0];
+  const parts = clean.split('.');
+  return parts.length > 1 ? parts.pop().toLowerCase() : '';
+};
+
+export const uploadDMAttachment = [
+  upload.single('file'),
+  async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: 'No file uploaded' });
+      }
+
+      const resourceType = getCloudinaryResourceType(req.file.mimetype);
+      const result = await new Promise((resolve, reject) => {
+        const uploadStream = cloudinary.uploader.upload_stream(
+          {
+            folder: 'vts/dm-attachments',
+            resource_type: resourceType,
+            use_filename: true,
+            unique_filename: false,
+            overwrite: false,
+            filename_override: req.file.originalname,
+            ...(resourceType === 'image' ? {
+              transformation: [{ quality: 'auto' }, { fetch_format: 'auto' }],
+            } : {}),
+          },
+          (error, response) => {
+            if (error) return reject(error);
+            resolve(response);
+          }
+        );
+        uploadStream.end(req.file.buffer);
+      });
+
+      return res.json({
+        fileName: req.file.originalname,
+        url: result.secure_url,
+        publicId: result.public_id,
+        mimeType: req.file.mimetype,
+        size: req.file.size,
+        resourceType: result.resource_type,
+        format: result.format || getFileExtension(req.file.originalname),
+      });
+    } catch (error) {
+      return res.status(500).json({ message: error.message || 'Attachment upload failed' });
+    }
+  },
+];
 
 // Batch resolve display names for a list of from/to values
 const batchResolveNames = async (values) => {
@@ -78,18 +150,29 @@ export const getMessages = async (req, res) => {
 // @route   POST /api/messages
 export const sendMessage = async (req, res) => {
   try {
-    const { to, subject, content } = req.body;
+    const { to, subject, content, attachments = [] } = req.body;
     const { role, _id, firstName, lastName, username } = req.user;
     const id = _id?.toString();
 
     const from = role === 'admin' ? 'admin' : id;
     const senderName = [firstName, lastName].filter(Boolean).join(' ') || username || 'Admin';
 
+    const safeAttachments = sanitizeMessageAttachments(attachments);
+
+    if (Array.isArray(attachments) && attachments.length > 0 && safeAttachments.length === 0) {
+      return res.status(400).json({ message: 'Invalid attachment metadata' });
+    }
+
+    if (!content?.trim() && safeAttachments.length === 0) {
+      return res.status(400).json({ message: 'Message content or attachment is required' });
+    }
+
     const message = await Message.create({
       from,
       to,
       subject,
-      content,
+      content: content?.trim() || '',
+      attachments: safeAttachments,
       senderId: _id,
       senderName
     });
@@ -144,8 +227,14 @@ export const updateMessage = async (req, res) => {
 
     // Allow sender/admin to edit content fields
     if (isSender || isAdmin) {
+      if (req.body.attachments !== undefined) {
+        return res.status(400).json({ message: 'Attachments cannot be edited' });
+      }
       if (req.body.subject !== undefined) message.subject = req.body.subject || message.subject;
       if (req.body.content !== undefined) {
+        if (Array.isArray(message.attachments) && message.attachments.length > 0) {
+          return res.status(400).json({ message: 'Attachment messages cannot be edited' });
+        }
         // Enforce 15-minute edit window for non-admins
         if (!isAdmin) {
           const diffMinutes = (Date.now() - new Date(message.createdAt).getTime()) / 60000;
@@ -179,6 +268,7 @@ export const deleteMessage = async (req, res) => {
 
     message.deletedAt = new Date();
     message.content = 'This message was deleted';
+    message.attachments = [];
     await message.save();
     res.json({ id: message._id, deletedAt: message.deletedAt, content: message.content });
   } catch (error) {

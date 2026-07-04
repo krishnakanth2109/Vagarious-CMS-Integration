@@ -95,13 +95,6 @@ router.get('/', protect, asyncHandler(async (req, res) => {
   }
 
   const list = await ExternalContact.find(query).sort({ createdAt: -1 }).lean();
-  console.log('[ExternalContacts][GET] Loaded contacts', {
-    count: list.length,
-    query,
-    dbName: mongoose.connection.db?.databaseName,
-    readyState: mongoose.connection.readyState,
-    collection: ExternalContact.collection?.name,
-  });
   res.json(list);
 }));
 

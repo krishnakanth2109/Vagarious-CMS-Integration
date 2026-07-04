@@ -11,8 +11,17 @@ const messageSchema = mongoose.Schema({
   senderName:  { type: String, default: '' },
 
   subject:  { type: String, default: '' },
-  content:  { type: String, required: true },
+  content:  { type: String, default: '' },
   type:     { type: String, enum: ['text', 'system', 'announcement'], default: 'text' },
+  attachments: [{
+    fileName: { type: String, default: '' },
+    url: { type: String, default: '' },
+    publicId: { type: String, default: '' },
+    mimeType: { type: String, default: '' },
+    size: { type: Number, default: 0 },
+    resourceType: { type: String, default: 'raw' },
+    format: { type: String, default: '' },
+  }],
 
   // Reply threading
   replyTo:      { type: mongoose.Schema.Types.ObjectId, ref: 'Message', default: null },

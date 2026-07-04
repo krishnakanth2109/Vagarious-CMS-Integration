@@ -3,7 +3,7 @@ import {
   Send, Search, Plus, X, Check, Reply, Trash2, Smile,
   Hash, Lock, Megaphone, Users, Settings, ChevronDown, ChevronRight,
   Edit2, MessageSquare, Shield, Crown, Loader2, AlertCircle, Pin,
-  MessageCircle, AtSign, ArrowLeft, Menu
+  MessageCircle, AtSign, ArrowLeft, Menu, Paperclip, Download
 } from 'lucide-react';
 import { format, isToday, isYesterday } from 'date-fns';
 import io from 'socket.io-client';
@@ -13,12 +13,17 @@ import { useToast } from '@/hooks/use-toast';
 const BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/$/, '');
 const API_URL  = `${BASE_URL}/api`;
 
-const getAuthHeader = () => {
+const getAuthHeader = (contentType = 'application/json') => {
   try {
     const s = sessionStorage.getItem('currentUser');
     const t = s ? JSON.parse(s)?.idToken : null;
-    return { Authorization: `Bearer ${t || ''}`, 'Content-Type': 'application/json' };
-  } catch { return { 'Content-Type': 'application/json' }; }
+    return {
+      Authorization: `Bearer ${t || ''}`,
+      ...(contentType ? { 'Content-Type': contentType } : {}),
+    };
+  } catch {
+    return contentType ? { 'Content-Type': contentType } : {};
+  }
 };
 
 const getCurrentUser = () => {
@@ -47,6 +52,242 @@ const fmtTime = (d) => {
 };
 
 // Deterministic color from a string — ash-safe palette
+const getFileExtension = (fileName = '') => {
+  const clean = fileName.split('?')[0].split('#')[0];
+  const parts = clean.split('.');
+  return parts.length > 1 ? parts.pop().toLowerCase() : '';
+};
+
+const getAttachmentKind = (attachment = {}) => {
+  const mimeType = (attachment.mimeType || '').toLowerCase();
+  const ext = getFileExtension(attachment.fileName || attachment.url || '');
+
+  if (mimeType.startsWith('image/')) return 'image';
+  if (mimeType.startsWith('video/')) return 'video';
+  if (mimeType === 'application/pdf' || ext === 'pdf') return 'pdf';
+  if (/word|msword|officedocument\.wordprocessingml/.test(mimeType) || ['doc', 'docx'].includes(ext)) return 'word';
+  if (/excel|spreadsheet|csv/.test(mimeType) || ['xls', 'xlsx', 'csv'].includes(ext)) return 'excel';
+  if (/powerpoint|presentation/.test(mimeType) || ['ppt', 'pptx'].includes(ext)) return 'powerpoint';
+  if (/zip|compressed|archive|x-rar|7z/.test(mimeType) || ['zip', 'rar', '7z'].includes(ext)) return 'zip';
+  return 'file';
+};
+
+const MIME_EXTENSION_MAP = {
+  'application/pdf': 'pdf',
+  'application/msword': 'doc',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+  'application/vnd.ms-excel': 'xls',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+  'application/vnd.ms-powerpoint': 'ppt',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
+  'application/zip': 'zip',
+  'application/x-zip-compressed': 'zip',
+  'text/csv': 'csv',
+  'text/plain': 'txt',
+};
+
+const KIND_EXTENSION_MAP = {
+  image: 'jpg',
+  video: 'mp4',
+  pdf: 'pdf',
+  word: 'docx',
+  excel: 'xlsx',
+  powerpoint: 'pptx',
+  zip: 'zip',
+  file: '',
+};
+
+const getExtensionForMime = (mimeType = '') => {
+  const clean = mimeType.split(';')[0].toLowerCase();
+  if (MIME_EXTENSION_MAP[clean]) return MIME_EXTENSION_MAP[clean];
+  if (clean === 'image/jpeg') return 'jpg';
+  if (clean.startsWith('image/')) return clean.split('/')[1] || '';
+  if (clean.startsWith('video/')) return clean.split('/')[1] || '';
+  return '';
+};
+
+const isExtensionCompatible = (extension = '', mimeType = '') => {
+  const ext = extension.toLowerCase();
+  const expected = getExtensionForMime(mimeType);
+  if (!ext || !expected) return true;
+  if (expected === ext) return true;
+  if (expected === 'jpg' && ext === 'jpeg') return true;
+  return false;
+};
+
+const sanitizeDownloadFileName = (fileName = '') => {
+  const clean = fileName
+    .replace(/[<>:"/\\|?*\x00-\x1F]/g, '_')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return clean || 'Attachment';
+};
+
+const getAttachmentDownloadFileName = (attachment = {}, blobType = '') => {
+  const kind = getAttachmentKind(attachment);
+  const originalName = sanitizeDownloadFileName(attachment.fileName || 'Attachment');
+  const originalExt = getFileExtension(originalName);
+  const blobExt = getExtensionForMime(blobType);
+  const metadataExt = getExtensionForMime(attachment.mimeType || '') || (attachment.format || '').toLowerCase();
+  const fallbackExt = KIND_EXTENSION_MAP[kind];
+  const safestExt = blobExt || metadataExt || fallbackExt;
+
+  if (originalExt && (!blobType || isExtensionCompatible(originalExt, blobType))) {
+    return originalName;
+  }
+
+  const nameWithoutExt = originalExt
+    ? originalName.slice(0, -(originalExt.length + 1))
+    : originalName;
+
+  return safestExt ? `${nameWithoutExt}.${safestExt}` : originalName;
+};
+
+const triggerBrowserDownload = (blob, fileName) => {
+  const blobUrl = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = blobUrl;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+};
+
+const getCloudinaryAttachmentUrl = (url, fileName) => {
+  if (!url || !url.includes('/upload/')) return url;
+  const encodedName = encodeURIComponent(fileName).replace(/[!'()*]/g, char =>
+    `%${char.charCodeAt(0).toString(16).toUpperCase()}`
+  );
+  return url.replace('/upload/', `/upload/fl_attachment:${encodedName}/`);
+};
+
+const downloadAttachment = async (attachment = {}) => {
+  const url = attachment.url;
+  if (!url) return;
+
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error('Download failed');
+
+    const blob = await response.blob();
+    const fileName = getAttachmentDownloadFileName(attachment, blob.type);
+    triggerBrowserDownload(blob, fileName);
+  } catch (error) {
+    console.error('Attachment download failed:', error);
+    const fallbackName = getAttachmentDownloadFileName(attachment);
+    const fallback = document.createElement('a');
+    fallback.href = getCloudinaryAttachmentUrl(url, fallbackName);
+    fallback.target = '_blank';
+    fallback.rel = 'noreferrer';
+    fallback.download = fallbackName;
+    document.body.appendChild(fallback);
+    fallback.click();
+    fallback.remove();
+  }
+};
+
+const getAttachmentIcon = (kind) => ({
+  image: '📷',
+  video: '🎥',
+  pdf: '📄',
+  word: '📄',
+  excel: '📊',
+  powerpoint: '📽',
+  zip: '🗜',
+  file: '📎',
+}[kind] || '📎');
+
+const getAttachmentTypeLabel = (kind) => ({
+  image: 'Photo',
+  video: 'Video',
+  pdf: 'PDF document',
+  word: 'Word document',
+  excel: 'Spreadsheet',
+  powerpoint: 'Presentation',
+  zip: 'Archive',
+  file: 'Attachment',
+}[kind] || 'Attachment');
+
+const getAttachmentPreview = (attachment = {}) => {
+  const kind = getAttachmentKind(attachment);
+  const icon = getAttachmentIcon(kind);
+  const fileName = attachment.fileName || '';
+
+  if (kind === 'image') return `${icon} Photo`;
+  if (kind === 'video') return `${icon} Video`;
+  if (fileName) return `${icon} ${fileName}`;
+  return `${icon} Attachment`;
+};
+
+const getMessagePreview = (msg = {}) => {
+  if (msg.deletedAt) return msg.content || 'This message was deleted';
+  const content = (msg.content || '').trim();
+  if (content) return content;
+  const firstAttachment = Array.isArray(msg.attachments) ? msg.attachments[0] : null;
+  return firstAttachment ? getAttachmentPreview(firstAttachment) : '';
+};
+
+const AttachmentDisplay = ({ attachment, isMine }) => {
+  const kind = getAttachmentKind(attachment);
+  const fileName = attachment?.fileName || 'Attachment';
+  const typeLabel = getAttachmentTypeLabel(kind);
+  const icon = getAttachmentIcon(kind);
+  const url = attachment?.url || '#';
+  const metaText = attachment?.mimeType || typeLabel;
+  const linkClass = isMine ? 'text-white/90 hover:bg-black/10' : 'text-slate-700 hover:bg-slate-100';
+  const shellClass = isMine ? 'border-white/20 bg-black/10' : 'border-slate-200 bg-slate-50';
+
+  if (kind === 'image') {
+    return (
+      <div className={`overflow-hidden rounded-xl border ${shellClass}`}>
+        <a href={url} target="_blank" rel="noreferrer" title={fileName}>
+          <img src={url} alt={fileName} className="max-h-72 w-full object-cover" />
+        </a>
+        <button type="button" onClick={() => downloadAttachment(attachment)}
+          className={`flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-xs ${linkClass}`}>
+          <span className="min-w-0 truncate font-medium">{fileName}</span>
+          <Download className="h-4 w-4 flex-shrink-0" />
+        </button>
+      </div>
+    );
+  }
+
+  if (kind === 'video') {
+    return (
+      <div className={`overflow-hidden rounded-xl border ${shellClass}`}>
+        <video controls className="max-h-72 w-full bg-black">
+          <source src={url} type={attachment?.mimeType || 'video/mp4'} />
+        </video>
+        <button type="button" onClick={() => downloadAttachment(attachment)}
+          className={`flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-xs ${linkClass}`}>
+          <span className="min-w-0 truncate font-medium">{fileName}</span>
+          <Download className="h-4 w-4 flex-shrink-0" />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`flex items-center gap-3 rounded-xl border px-3 py-3 text-sm transition-colors ${shellClass}`}>
+      <div className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg text-lg ${isMine ? 'bg-white/15' : 'bg-white'}`}>
+        {icon}
+      </div>
+      <div className="min-w-0 flex-1">
+        <a href={url} target="_blank" rel="noreferrer" className={`block truncate font-semibold ${linkClass}`}>
+          {fileName}
+        </a>
+        <div className={`truncate text-xs ${isMine ? 'text-white/70' : 'text-slate-500'}`}>{metaText}</div>
+      </div>
+      <button type="button" onClick={() => downloadAttachment(attachment)}
+        className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full transition-colors ${linkClass}`}
+        title="Download attachment">
+        <Download className="h-4 w-4 opacity-80" />
+      </button>
+    </div>
+  );
+};
+
 const colorOf = (name) => {
   const p = ['#6366f1','#8b5cf6','#0ea5e9','#10b981','#f59e0b','#ef4444','#ec4899','#14b8a6'];
   let h = 0;
@@ -348,6 +589,11 @@ export default function TeamsChat({ role: roleProp }) {
   const [replyingTo, setReplyingTo] = useState(null);
   const [showEmoji,  setShowEmoji]  = useState(false);
   const [editingMessage, setEditingMessage] = useState(null);
+  const [pendingAttachment, setPendingAttachment] = useState(null);
+  const [uploadingAttachment, setUploadingAttachment] = useState(false);
+  const [uploadingFile, setUploadingFile] = useState(null);
+  const localUrlRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   const [sidebarSearch,     setSidebarSearch]     = useState('');
   const [showCreateModal,   setShowCreateModal]   = useState(false);
@@ -367,6 +613,15 @@ export default function TeamsChat({ role: roleProp }) {
   const inputRef   = useRef(null);
 
   const { toast } = useToast();
+
+  // Cleanup object URLs on unmount to prevent leaks
+  useEffect(() => {
+    return () => {
+      if (localUrlRef.current) {
+        URL.revokeObjectURL(localUrlRef.current);
+      }
+    };
+  }, []);
 
   // ── Refs for socket event listeners to prevent stale closures ──────────────
   const channelsRef = useRef([]);
@@ -405,7 +660,7 @@ export default function TeamsChat({ role: roleProp }) {
       title = `New message from ${msg.senderName || msg.fromName || 'User'}`;
     }
 
-    const body = msg.content;
+    const body = getMessagePreview(msg);
 
     // 1. Toast in-app notification
     toast({
@@ -426,6 +681,8 @@ export default function TeamsChat({ role: roleProp }) {
   // ── 15-Minute Edit Permission Helper ───────────────────────────────────────
   const canEdit = useCallback((msg) => {
     if (!msg || msg.deletedAt) return false;
+    const hasAttachments = Array.isArray(msg.attachments) && msg.attachments.length > 0;
+    if (hasAttachments) return false;
     const isMyMsg = (msg.senderId?.toString() === myId) || (msg.from === myDMId);
     if (!isMyMsg) return false;
     const diffMinutes = (Date.now() - new Date(msg.createdAt).getTime()) / 60000;
@@ -493,7 +750,7 @@ export default function TeamsChat({ role: roleProp }) {
         ch._id === msg.channelId
           ? {
               ...ch,
-              lastMessage: msg.content,
+              lastMessage: getMessagePreview(msg),
               lastMessageAt: msg.createdAt,
               unreadCount: (ch._id !== activeChannelIdRef.current && msg.senderId !== myId)
                 ? (ch.unreadCount || 0) + 1
@@ -527,7 +784,7 @@ export default function TeamsChat({ role: roleProp }) {
           return prev.map(d => d.id === partnerId
             ? {
                 ...d,
-                lastMessage: msg.content,
+                lastMessage: getMessagePreview(msg),
                 lastMessageAt: msg.createdAt,
                 unread: d.id !== activeDMIdRef.current ? (d.unread || 0) + 1 : 0,
                 name: (partnerId === 'admin' && msg.senderName && msg.senderName !== 'Admin') ? msg.senderName : d.name
@@ -551,9 +808,16 @@ export default function TeamsChat({ role: roleProp }) {
       if (activeChannelIdRef.current === id) setActiveChannelId(null);
     });
 
-    socketRef.current.on('message_deleted', ({ id }) => {
+    socketRef.current.on('message_deleted', ({ id, channelId }) => {
       setMessages(prev => prev.map(m =>
-        m._id === id ? { ...m, deletedAt: new Date().toISOString(), content: 'This message was deleted' } : m
+        m._id === id
+          ? {
+              ...m,
+              deletedAt: new Date().toISOString(),
+              content: 'This message was deleted',
+              attachments: []
+            }
+          : m
       ));
     });
 
@@ -607,14 +871,14 @@ export default function TeamsChat({ role: roleProp }) {
         map.set(otherId, {
           id: otherId,
           name: otherName,
-          lastMessage: m.content,
+          lastMessage: getMessagePreview(m),
           lastMessageAt: m.createdAt,
           unread: 0,
           adminSenderName: (otherId === 'admin' && m.from === 'admin') ? (m.senderName || m.fromName) : ''
         });
       } else {
         const cur = map.get(otherId);
-        cur.lastMessage = m.content;
+        cur.lastMessage = getMessagePreview(m);
         cur.lastMessageAt = m.createdAt;
         if (otherId === 'admin' && m.from === 'admin' && (m.senderName || m.fromName)) {
           cur.adminSenderName = m.senderName || m.fromName;
@@ -702,9 +966,69 @@ export default function TeamsChat({ role: roleProp }) {
     return () => { window.removeEventListener('scroll', close, true); window.removeEventListener('click', close); };
   }, []);
 
+  const handleCancelAttachment = useCallback(() => {
+    if (localUrlRef.current) {
+      URL.revokeObjectURL(localUrlRef.current);
+      localUrlRef.current = null;
+    }
+    setUploadingFile(null);
+    setPendingAttachment(null);
+    setUploadingAttachment(false);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  }, []);
+
+  const handleAttachmentSelect = useCallback(async (event) => {
+    const file = event.target.files?.[0];
+    const input = event.target;
+    if (!file || (!activeDMId && !activeChannelId) || editingMessage) return;
+
+    setPendingAttachment(null);
+    
+    // Revoke old URL if it exists
+    if (localUrlRef.current) {
+      URL.revokeObjectURL(localUrlRef.current);
+    }
+    
+    const localUrl = URL.createObjectURL(file);
+    localUrlRef.current = localUrl;
+    setUploadingFile({
+      name: file.name,
+      type: file.type,
+      size: file.size,
+      localUrl
+    });
+    setUploadingAttachment(true);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch(`${API_URL}/messages/upload`, {
+        method: 'POST',
+        headers: getAuthHeader(null),
+        body: formData,
+      });
+      if (!res.ok) throw new Error('Attachment upload failed');
+      const uploaded = await res.json();
+      setPendingAttachment(uploaded);
+    } catch (e) {
+      console.error(e);
+      toast({ title: 'Attachment upload failed', description: e.message || 'Please try again.', variant: 'destructive' });
+      setUploadingFile(null);
+      if (localUrlRef.current) {
+        URL.revokeObjectURL(localUrlRef.current);
+        localUrlRef.current = null;
+      }
+    } finally {
+      if (input) input.value = '';
+      setUploadingAttachment(false);
+    }
+  }, [activeChannelId, activeDMId, editingMessage, toast]);
+
   // ── Send message ──────────────────────────────────────────────────────────
   const handleSend = useCallback(async () => {
-    if (!text.trim()) return;
+    if (!text.trim() && !pendingAttachment) return;
     if (!activeChannelId && !activeDMId) return;
     setSending(true);
 
@@ -749,55 +1073,75 @@ export default function TeamsChat({ role: roleProp }) {
 
     const optimisticId = `opt_${Date.now()}`;
     const isChannel = !!activeChannelId;
+    const sentText = text.trim();
+    const attachmentToSend = pendingAttachment;
+    const attachmentsToSend = attachmentToSend ? [attachmentToSend] : [];
+    const replyPreviewText = replyingTo ? getMessagePreview(replyingTo).slice(0, 60) : '';
 
     // Optimistic message
     const optimistic = isChannel
       ? { _id: optimisticId, channelId: activeChannelId, senderId: myId, senderName: myName,
-          content: text.trim(), type: 'text', replyTo: replyingTo?._id || null,
-          replyPreview: replyingTo?.content?.slice(0, 60) || '',
+          content: sentText, type: 'text', replyTo: replyingTo?._id || null,
+          replyPreview: replyPreviewText,
+          ...(attachmentsToSend.length ? { attachments: attachmentsToSend } : {}),
           createdAt: new Date().toISOString(), _optimistic: true }
-      : { _id: optimisticId, from: myDMId, to: activeDMId, content: text.trim(),
-          fromName: myName, createdAt: new Date().toISOString(), _optimistic: true };
+      : { _id: optimisticId, from: myDMId, to: activeDMId, content: sentText,
+          attachments: attachmentsToSend, fromName: myName, createdAt: new Date().toISOString(), _optimistic: true };
 
     setMessages(prev => [...prev, optimistic]);
-    const sentText = text.trim();
     setText('');
     setReplyingTo(null);
+    setPendingAttachment(null);
+    setUploadingFile(null);
 
     try {
       let saved;
       if (isChannel) {
+        const channelPayload = {
+          content: sentText,
+          replyTo: replyingTo?._id || null,
+          replyPreview: replyPreviewText,
+        };
+        if (attachmentsToSend.length) channelPayload.attachments = attachmentsToSend;
+
         const res = await fetch(`${API_URL}/channels/${activeChannelId}/messages`, {
           method: 'POST', headers: getAuthHeader(),
-          body: JSON.stringify({ content: sentText, replyTo: replyingTo?._id || null, replyPreview: replyingTo?.content?.slice(0, 60) || '' }),
+          body: JSON.stringify(channelPayload),
         });
         if (!res.ok) throw new Error('Send failed');
         saved = await res.json();
         if (socketRef.current) socketRef.current.emit('channel_message', { ...saved, to: `channel_${activeChannelId}` });
         setChannels(prev => prev.map(ch =>
-          ch._id === activeChannelId ? { ...ch, lastMessage: saved.content, lastMessageAt: saved.createdAt } : ch
+          ch._id === activeChannelId ? { ...ch, lastMessage: getMessagePreview(saved), lastMessageAt: saved.createdAt } : ch
         ));
       } else {
         // DM via legacy messages endpoint
         const res = await fetch(`${API_URL}/messages`, {
           method: 'POST', headers: getAuthHeader(),
-          body: JSON.stringify({ to: activeDMId, subject: 'Direct Message', content: sentText }),
+          body: JSON.stringify({ to: activeDMId, subject: 'Direct Message', content: sentText, attachments: attachmentsToSend }),
         });
         if (!res.ok) throw new Error('Send failed');
         saved = await res.json();
         if (socketRef.current) socketRef.current.emit('send_message', { ...saved, to: activeDMId });
         setDms(prev => prev.map(d =>
-          d.id === activeDMId ? { ...d, lastMessage: sentText, lastMessageAt: saved.createdAt } : d
+          d.id === activeDMId ? { ...d, lastMessage: getMessagePreview(saved), lastMessageAt: saved.createdAt } : d
         ));
       }
       setMessages(prev => prev.map(m => m._id === optimisticId ? saved : m));
+
+      // Cleanup object URL on successful send
+      if (localUrlRef.current) {
+        URL.revokeObjectURL(localUrlRef.current);
+        localUrlRef.current = null;
+      }
     } catch {
       setMessages(prev => prev.filter(m => m._id !== optimisticId));
       setText(sentText);
+      setPendingAttachment(attachmentToSend);
     } finally {
       setSending(false);
     }
-  }, [text, activeChannelId, activeDMId, myId, myDMId, myName, replyingTo, editingMessage, toast]);
+  }, [text, activeChannelId, activeDMId, myId, myDMId, myName, replyingTo, editingMessage, pendingAttachment, toast]);
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
@@ -819,6 +1163,7 @@ export default function TeamsChat({ role: roleProp }) {
 
   // ── Delete message ────────────────────────────────────────────────────────
   const handleDeleteMsg = async (id) => {
+    const deletedMessage = messages.find(m => m._id === id);
     try {
       if (activeChannelId) {
         const res = await fetch(`${API_URL}/channels/${activeChannelId}/messages/${id}`, {
@@ -827,7 +1172,7 @@ export default function TeamsChat({ role: roleProp }) {
         if (res.ok) {
           const d = await res.json();
           setMessages(prev => prev.map(m =>
-            m._id === id ? { ...m, deletedAt: d.deletedAt || new Date().toISOString(), content: 'This message was deleted' } : m
+            m._id === id ? { ...m, deletedAt: d.deletedAt || new Date().toISOString(), content: 'This message was deleted', attachments: [] } : m
           ));
           if (socketRef.current) {
             socketRef.current.emit('message_deleted', { id, channelId: activeChannelId });
@@ -838,7 +1183,12 @@ export default function TeamsChat({ role: roleProp }) {
         if (res.ok) {
           const d = await res.json();
           setMessages(prev => prev.map(m =>
-            m._id === id ? { ...m, deletedAt: d.deletedAt || new Date().toISOString(), content: 'This message was deleted' } : m
+            m._id === id ? { ...m, deletedAt: d.deletedAt || new Date().toISOString(), content: 'This message was deleted', attachments: [] } : m
+          ));
+          setDms(prev => prev.map(dm =>
+            dm.id === activeDMId && deletedMessage?.createdAt && dm.lastMessageAt === deletedMessage.createdAt
+              ? { ...dm, lastMessage: 'This message was deleted' }
+              : dm
           ));
           if (socketRef.current) {
             socketRef.current.emit('message_deleted', { id, to: activeDMId });
@@ -924,6 +1274,76 @@ export default function TeamsChat({ role: roleProp }) {
   }, [messages]);
 
   const existingDMIds = dms.map(d => d.id);
+
+  const attachmentPreviewMarkup = useMemo(() => {
+    if (!uploadingFile && !pendingAttachment) return null;
+
+    const name = uploadingFile ? uploadingFile.name : pendingAttachment.fileName;
+    const size = uploadingFile ? uploadingFile.size : pendingAttachment.size;
+    const url = uploadingFile ? uploadingFile.localUrl : pendingAttachment.url;
+    const mimeType = uploadingFile ? uploadingFile.type : pendingAttachment.mimeType;
+    
+    const attachmentObj = { mimeType, fileName: name, url };
+    const kind = getAttachmentKind(attachmentObj);
+    const icon = getAttachmentIcon(kind);
+
+    const formatBytes = (bytes) => {
+      if (!bytes) return '';
+      if (bytes < 1024) return `${bytes} B`;
+      if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
+      return `${(bytes / 1048576).toFixed(1)} MB`;
+    };
+
+    return (
+      <div className="mb-3 relative rounded-2xl border border-slate-200 bg-slate-50/50 p-2.5 flex items-start gap-3 shadow-sm group/preview animate-in fade-in duration-200">
+        {/* Media / Icon Preview */}
+        <div className="relative w-20 h-20 rounded-xl overflow-hidden bg-slate-200 border border-slate-100 flex-shrink-0 flex items-center justify-center select-none shadow-inner">
+          {kind === 'image' && (
+            <img src={url} alt={name} className="w-full h-full object-cover" />
+          )}
+          {kind === 'video' && (
+            <video src={url} className="w-full h-full object-cover" muted playsInline />
+          )}
+          {kind !== 'image' && kind !== 'video' && (
+            <span className="text-3xl">{icon}</span>
+          )}
+
+          {/* Uploading overlay */}
+          {uploadingAttachment && (
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-xs flex flex-col items-center justify-center gap-1.5">
+              <Loader2 className="w-5 h-5 text-white animate-spin" />
+              <span className="text-[9px] text-white/90 font-bold uppercase tracking-wider">Uploading</span>
+            </div>
+          )}
+        </div>
+
+        {/* Text details */}
+        <div className="flex-1 min-w-0 pr-8 self-center">
+          <p className="text-xs font-bold text-slate-700 truncate">{name}</p>
+          <div className="flex items-center gap-2 mt-1">
+            <span className="text-[10px] text-slate-400 font-semibold uppercase bg-slate-200/60 px-1.5 py-0.5 rounded">
+              {kind}
+            </span>
+            {size ? (
+              <span className="text-[10px] text-slate-400 font-medium">
+                {formatBytes(size)}
+              </span>
+            ) : null}
+          </div>
+        </div>
+
+        {/* Cancel button */}
+        <button
+          type="button"
+          onClick={handleCancelAttachment}
+          className="absolute top-2 right-2 w-7 h-7 bg-white hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-full border border-slate-200/80 shadow-xs flex items-center justify-center transition-all duration-150 active:scale-95 animate-in zoom-in-90 duration-200"
+          title="Remove attachment"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+    );
+  }, [uploadingFile, pendingAttachment, uploadingAttachment, handleCancelAttachment]);
 
   // ── Loading state ─────────────────────────────────────────────────────────
   if (loading) {
@@ -1027,7 +1447,7 @@ export default function TeamsChat({ role: roleProp }) {
               <Reply className="w-4 h-4 text-slate-400" /> Reply
             </button>
             {canEdit(contextMenu.msg) && (
-              <button onClick={() => { setEditingMessage(contextMenu.msg); setText(contextMenu.msg.content); inputRef.current?.focus(); setContextMenu(null); }}
+              <button onClick={() => { setEditingMessage(contextMenu.msg); setText(contextMenu.msg.content); setPendingAttachment(null); inputRef.current?.focus(); setContextMenu(null); }}
                 className="flex items-center gap-3 w-full px-4 py-3 sm:py-2.5 text-sm text-[var(--chat-text)] hover:bg-slate-50 transition-colors min-h-[44px] sm:min-h-[36px] text-left">
                 <Edit2 className="w-4 h-4 text-slate-400" /> Edit Message
               </button>
@@ -1290,7 +1710,7 @@ export default function TeamsChat({ role: roleProp }) {
                 {/* Hamburger menu for tablets to show sidebar drawer */}
                 <button
                   onClick={() => setMobileSidebarOpen(true)}
-                  className="hidden sm:inline-block lg:hidden p-1.5 rounded-full text-slate-500 hover:bg-slate-100 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
+                  className="hidden sm:inline-flex lg:hidden p-1.5 rounded-full text-slate-500 hover:bg-slate-100 transition-colors min-w-[44px] min-h-[44px] items-center justify-center"
                 >
                   <Menu className="w-5 h-5" />
                 </button>
@@ -1476,7 +1896,18 @@ export default function TeamsChat({ role: roleProp }) {
 
                                   {/* Message content */}
                                   <div className="px-3.5 py-2">
-                                    {msg.content}
+                                    {msg.content ? <div className="whitespace-pre-wrap break-words">{msg.content}</div> : null}
+                                    {!isDeleted && Array.isArray(msg.attachments) && msg.attachments.length > 0 && (
+                                      <div className={`mt-2 space-y-2 ${msg.content ? 'pt-1' : ''}`}>
+                                        {msg.attachments.map((attachment, index) => (
+                                          <AttachmentDisplay
+                                            key={`${attachment?.url || index}-${index}`}
+                                            attachment={attachment}
+                                            isMine={isMine}
+                                          />
+                                        ))}
+                                      </div>
+                                    )}
                                     {msg.edited && isConsecutive && (
                                       <span className={`ml-1.5 text-[11px] font-normal italic select-none ${isMine ? 'text-white/60' : 'text-slate-400'}`}>
                                         (edited)
@@ -1496,7 +1927,7 @@ export default function TeamsChat({ role: roleProp }) {
                                       <Reply className="w-3.5 h-3.5" />
                                     </button>
                                     {canEdit(msg) && (
-                                      <button onClick={() => { setEditingMessage(msg); setText(msg.content); inputRef.current?.focus(); }}
+                                      <button onClick={() => { setEditingMessage(msg); setText(msg.content); setPendingAttachment(null); inputRef.current?.focus(); }}
                                         className="p-1 rounded-full text-slate-400 hover:text-[var(--chat-primary)] hover:bg-slate-50 transition-colors"
                                         title="Edit Message">
                                         <Edit2 className="w-3.5 h-3.5" />
@@ -1552,6 +1983,8 @@ export default function TeamsChat({ role: roleProp }) {
                         </div>
                       )}
 
+                      {attachmentPreviewMarkup}
+
                       <div className="relative flex items-center gap-2 bg-slate-100 border border-slate-200 rounded-full px-3 py-1.5 focus-within:border-[var(--chat-primary)]/40 focus-within:bg-white transition-all shadow-sm">
                         {showEmoji && (
                           <EmojiPicker
@@ -1563,6 +1996,22 @@ export default function TeamsChat({ role: roleProp }) {
                           className={`flex-shrink-0 p-2 rounded-full transition-colors min-w-[44px] min-h-[44px] sm:min-w-[36px] sm:min-h-[36px] flex items-center justify-center ${showEmoji ? 'text-[var(--chat-primary)] bg-slate-200' : 'text-slate-400 hover:text-slate-600'}`}>
                           <Smile className="w-5 h-5" />
                         </button>
+
+                        {!editingMessage && (
+                          <>
+                            <input
+                              ref={fileInputRef}
+                              type="file"
+                              className="hidden"
+                              accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.txt,.zip,.rar,.7z"
+                              onChange={handleAttachmentSelect}
+                            />
+                            <button onClick={() => fileInputRef.current?.click()} disabled={uploadingAttachment}
+                              className={`flex-shrink-0 p-2 rounded-full transition-colors min-w-[44px] min-h-[44px] sm:min-w-[36px] sm:min-h-[36px] flex items-center justify-center ${uploadingAttachment ? 'text-slate-400 cursor-not-allowed' : 'text-slate-400 hover:text-slate-600'}`}>
+                              {uploadingAttachment ? <Loader2 className="w-4 h-4 animate-spin" /> : <Paperclip className="w-4 h-4" />}
+                            </button>
+                          </>
+                        )}
 
                         <textarea
                           ref={inputRef}
@@ -1577,9 +2026,9 @@ export default function TeamsChat({ role: roleProp }) {
                           style={{ maxHeight: 120 }}
                         />
 
-                        <button onClick={handleSend} disabled={!text.trim() || sending}
+                        <button onClick={handleSend} disabled={(!text.trim() && !pendingAttachment) || sending}
                           className={`flex-shrink-0 w-9 h-9 sm:w-8 sm:h-8 rounded-full flex items-center justify-center transition-all shadow-xs min-h-[44px] sm:min-h-[32px] min-w-[44px] sm:min-w-[32px]
-                            ${text.trim() ? 'bg-[var(--chat-primary)] text-white hover:bg-[var(--chat-primary-hover)]' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}>
+                            ${text.trim() || pendingAttachment ? 'bg-[var(--chat-primary)] text-white hover:bg-[var(--chat-primary-hover)]' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}>
                           <Send className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
                         </button>
                       </div>

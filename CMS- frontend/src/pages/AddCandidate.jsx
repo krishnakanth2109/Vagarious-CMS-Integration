@@ -1826,12 +1826,12 @@ export default function AdminCandidates() {
                 className="tbl-scroll rounded-t-xl bg-slate-100 border-b border-slate-200 w-full"
                 style={{ overflowX: 'auto', overflowY: 'hidden', height: '18px' }}
               >
-                <div style={{ width: '1800px', height: '1px' }}></div>
+                <div style={{ width: '1700px', height: '1px' }}></div>
               </div>
 
               {/* TABLE CONTAINER */}
               <div ref={bottomScrollRef} onScroll={handleBottomScroll} className="tbl-scroll w-full hidden md:block" style={{ overflowX: 'auto' }}>
-                <table className="w-full text-sm text-left border-collapse min-w-[1800px]">
+                <table className="w-full text-sm text-left border-collapse min-w-[1700px]">
                   <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200">
                     <tr>
                       <th className="px-4 py-3 w-12 text-center whitespace-nowrap">
@@ -1853,7 +1853,6 @@ export default function AdminCandidates() {
                       <th className="px-4 py-3 whitespace-nowrap">Experience</th>
                       <th className="px-4 py-3 whitespace-nowrap">CTC / ECTC</th>
                       <th className="px-4 py-3 whitespace-nowrap">Status</th>
-                      <th className="px-4 py-3 whitespace-nowrap">Remarks</th>
                       <th className="px-4 py-3 text-right whitespace-nowrap">Actions</th>
                     </tr>
                   </thead>
@@ -1913,7 +1912,6 @@ export default function AdminCandidates() {
                               ))}
                             </div>
                           </td>
-                          <td className="px-4 py-3 text-xs text-slate-500 truncate max-w-[100px]">{c.remarks || '-'}</td>
                           <td className="px-4 py-3 text-right whitespace-nowrap">
                             <div className="flex justify-end items-center gap-2">
                               <Eye className="h-4 w-4 text-blue-600 cursor-pointer" onClick={() => { setViewCandidate(c); setIsViewDialogOpen(true); }} />

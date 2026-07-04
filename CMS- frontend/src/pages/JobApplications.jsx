@@ -6,11 +6,11 @@ import CandidateProfileLink from '@/components/CandidateProfileLink';
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 const STATUS_COLORS = {
-  New:         { bg: 'bg-blue-100',   text: 'text-blue-700',   dot: 'bg-blue-500'   },
-  Reviewed:    { bg: 'bg-yellow-100', text: 'text-yellow-700', dot: 'bg-yellow-500' },
-  Shortlisted: { bg: 'bg-green-100',  text: 'text-green-700',  dot: 'bg-green-500'  },
-  Rejected:    { bg: 'bg-red-100',    text: 'text-red-700',    dot: 'bg-red-500'    },
-  Hired:       { bg: 'bg-purple-100', text: 'text-purple-700', dot: 'bg-purple-500' },
+  New: { bg: 'bg-blue-100', text: 'text-blue-700', dot: 'bg-blue-500' },
+  Reviewed: { bg: 'bg-yellow-100', text: 'text-yellow-700', dot: 'bg-yellow-500' },
+  Shortlisted: { bg: 'bg-green-100', text: 'text-green-700', dot: 'bg-green-500' },
+  Rejected: { bg: 'bg-red-100', text: 'text-red-700', dot: 'bg-red-500' },
+  Hired: { bg: 'bg-purple-100', text: 'text-purple-700', dot: 'bg-purple-500' },
 };
 
 const STATUS_OPTIONS = ['All', 'New', 'Reviewed', 'Shortlisted', 'Rejected', 'Hired'];
@@ -26,10 +26,10 @@ function StatusBadge({ status }) {
 }
 
 function DetailModal({ app, onClose, onStatusChange, canEdit }) {
-  const [status, setStatus]     = useState(app.status);
-  const [notes, setNotes]       = useState(app.adminNotes || '');
-  const [saving, setSaving]     = useState(false);
-  const { authHeaders }         = useAuth();
+  const [status, setStatus] = useState(app.status);
+  const [notes, setNotes] = useState(app.adminNotes || '');
+  const [saving, setSaving] = useState(false);
+  const { authHeaders } = useAuth();
   const [promoting, setPromoting] = useState(false);
   const [promoteStep, setPromoteStep] = useState('idle'); // 'idle' | 'confirm' | 'success' | 'error'
   const [promoteResult, setPromoteResult] = useState(null);
@@ -70,7 +70,7 @@ function DetailModal({ app, onClose, onStatusChange, canEdit }) {
       onStatusChange(res.data.application); // update table row immediately
     } catch (err) {
       const data = err.response?.data;
-      const msg  = data?.details || data?.message || err.message || 'Promotion failed. Please try again.';
+      const msg = data?.details || data?.message || err.message || 'Promotion failed. Please try again.';
       setPromoteResult({ error: msg });
       setPromoteStep('error');
     } finally {
@@ -94,7 +94,7 @@ function DetailModal({ app, onClose, onStatusChange, canEdit }) {
           </div>
           <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100 transition-colors text-slate-500 hover:text-slate-800">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
             </svg>
           </button>
         </div>
@@ -110,12 +110,12 @@ function DetailModal({ app, onClose, onStatusChange, canEdit }) {
           {/* Details Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {[
-              { label: 'Experience',         value: `${app.experience} yrs` },
-              { label: 'Current Company',    value: app.currentCompany || '—' },
-              { label: 'Current Role',       value: app.currentRole    || '—' },
+              { label: 'Experience', value: `${app.experience} yrs` },
+              { label: 'Current Company', value: app.currentCompany || '—' },
+              { label: 'Current Role', value: app.currentRole || '—' },
               { label: 'Preferred Location', value: app.preferredLocation },
-              { label: 'Notice Period',      value: app.noticePeriod   || '—' },
-              { label: 'Applied On',         value: new Date(app.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) },
+              { label: 'Notice Period', value: app.noticePeriod || '—' },
+              { label: 'Applied On', value: new Date(app.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) },
             ].map(({ label, value }) => (
               <div key={label}>
                 <p className="text-xs text-slate-400 font-semibold uppercase tracking-wide">{label}</p>
@@ -154,11 +154,10 @@ function DetailModal({ app, onClose, onStatusChange, canEdit }) {
                     <button
                       key={s}
                       onClick={() => setStatus(s)}
-                      className={`px-3 py-1.5 rounded-lg text-sm font-semibold border transition-all ${
-                        status === s
+                      className={`px-3 py-1.5 rounded-lg text-sm font-semibold border transition-all ${status === s
                           ? 'bg-[#283086] text-white border-[#283086] shadow-sm'
                           : 'bg-white text-slate-600 border-slate-200 hover:border-[#283086] hover:text-[#283086]'
-                      }`}
+                        }`}
                     >
                       {s}
                     </button>
@@ -192,13 +191,13 @@ function DetailModal({ app, onClose, onStatusChange, canEdit }) {
                 <p className="text-sm text-slate-600 mt-3 bg-slate-50 p-3 rounded-xl">{app.adminNotes}</p>
               )}
             </div>
-          )}\n
+          )}
           {/* ── Move to Candidates DB ─────────────────────────────────── */}
           {canEdit && (
             <div className="border-t-2 border-dashed border-emerald-200 pt-5">
               <p className="text-xs text-emerald-700 font-bold uppercase tracking-wider mb-3 flex items-center gap-2">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
                 </svg>
                 Move to Candidates DB
               </p>
@@ -207,7 +206,7 @@ function DetailModal({ app, onClose, onStatusChange, canEdit }) {
               {app.promotedCandidateId ? (
                 <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-center gap-3">
                   <svg width="18" height="18" className="text-emerald-600 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="20 6 9 17 4 12"/>
+                    <polyline points="20 6 9 17 4 12" />
                   </svg>
                   <p className="text-sm text-emerald-700 font-semibold">
                     Already promoted to Candidate DB.
@@ -218,7 +217,7 @@ function DetailModal({ app, onClose, onStatusChange, canEdit }) {
                 <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
                   <div className="flex items-center gap-2 mb-1">
                     <svg width="16" height="16" className="text-emerald-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="20 6 9 17 4 12"/>
+                      <polyline points="20 6 9 17 4 12" />
                     </svg>
                     <p className="text-sm font-bold text-emerald-700">Promoted successfully!</p>
                   </div>
@@ -267,7 +266,7 @@ function DetailModal({ app, onClose, onStatusChange, canEdit }) {
                     >
                       {promoting ? (
                         <>
-                          <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10" strokeOpacity="0.25"/><path d="M12 2a10 10 0 0 1 10 10" strokeLinecap="round"/></svg>
+                          <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10" strokeOpacity="0.25" /><path d="M12 2a10 10 0 0 1 10 10" strokeLinecap="round" /></svg>
                           Promoting...
                         </>
                       ) : 'Yes, Move to Candidates'}
@@ -281,7 +280,7 @@ function DetailModal({ app, onClose, onStatusChange, canEdit }) {
                   className="w-full flex items-center justify-center gap-2 py-3 text-sm font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 hover:border-emerald-400 rounded-xl transition-all"
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>
+                    <path d="M5 12h14" /><path d="m12 5 7 7-7 7" />
                   </svg>
                   Move to Candidates DB
                 </button>
@@ -297,12 +296,12 @@ function DetailModal({ app, onClose, onStatusChange, canEdit }) {
 export default function JobApplications() {
   const { authHeaders, userRole } = useAuth();
   const [applications, setApplications] = useState([]);
-  const [loading, setLoading]           = useState(true);
-  const [error, setError]               = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
-  const [search, setSearch]             = useState('');
-  const [selectedApp, setSelectedApp]   = useState(null);
-  const [stats, setStats]               = useState({ total: 0, new: 0, shortlisted: 0, hired: 0 });
+  const [search, setSearch] = useState('');
+  const [selectedApp, setSelectedApp] = useState(null);
+  const [stats, setStats] = useState({ total: 0, new: 0, shortlisted: 0, hired: 0 });
 
   const canEdit = userRole === 'admin' || userRole === 'manager';
 
@@ -323,10 +322,10 @@ export default function JobApplications() {
       const apps = res.data.applications || [];
       setApplications(apps);
       setStats({
-        total:       res.data.total || apps.length,
-        new:         apps.filter(a => a.status === 'New').length,
+        total: res.data.total || apps.length,
+        new: apps.filter(a => a.status === 'New').length,
         shortlisted: apps.filter(a => a.status === 'Shortlisted').length,
-        hired:       apps.filter(a => a.status === 'Hired').length,
+        hired: apps.filter(a => a.status === 'Hired').length,
       });
     } catch (err) {
       setError('Failed to load applications. Please try again.');
@@ -373,10 +372,10 @@ export default function JobApplications() {
       {/* Stats Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         {[
-          { label: 'Total',       value: stats.total,       color: 'text-[#283086]', bg: 'bg-[#283086]/10' },
-          { label: 'New',         value: stats.new,         color: 'text-blue-600',  bg: 'bg-blue-50'      },
-          { label: 'Shortlisted', value: stats.shortlisted, color: 'text-green-600', bg: 'bg-green-50'     },
-          { label: 'Hired',       value: stats.hired,       color: 'text-purple-600',bg: 'bg-purple-50'    },
+          { label: 'Total', value: stats.total, color: 'text-[#283086]', bg: 'bg-[#283086]/10' },
+          { label: 'New', value: stats.new, color: 'text-blue-600', bg: 'bg-blue-50' },
+          { label: 'Shortlisted', value: stats.shortlisted, color: 'text-green-600', bg: 'bg-green-50' },
+          { label: 'Hired', value: stats.hired, color: 'text-purple-600', bg: 'bg-purple-50' },
         ].map(({ label, value, color, bg }) => (
           <div key={label} className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
             <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">{label}</p>
@@ -390,7 +389,7 @@ export default function JobApplications() {
         {/* Search */}
         <div className="relative flex-1 w-full">
           <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+            <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
           </svg>
           <input
             type="text"
@@ -407,11 +406,10 @@ export default function JobApplications() {
             <button
               key={s}
               onClick={() => setStatusFilter(s)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
-                statusFilter === s
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${statusFilter === s
                   ? 'bg-[#283086] text-white border-[#283086]'
                   : 'bg-white text-slate-600 border-slate-200 hover:border-[#283086] hover:text-[#283086]'
-              }`}
+                }`}
             >
               {s}
             </button>
@@ -424,7 +422,7 @@ export default function JobApplications() {
           className="flex items-center gap-1.5 text-sm text-[#283086] font-semibold hover:underline"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+            <polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
           </svg>
           Refresh
         </button>
@@ -440,7 +438,7 @@ export default function JobApplications() {
       ) : applications.length === 0 ? (
         <div className="text-center py-32 text-slate-400">
           <svg className="w-12 h-12 mx-auto mb-4 opacity-40" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
           <p className="font-semibold text-lg">No applications found</p>
           <p className="text-sm mt-1">Try changing the filters or wait for new submissions.</p>
@@ -534,7 +532,7 @@ export default function JobApplications() {
                         {app.promotedCandidateId && (
                           <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-full">
                             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                              <polyline points="20 6 9 17 4 12"/>
+                              <polyline points="20 6 9 17 4 12" />
                             </svg>
                             In Candidates DB
                           </span>

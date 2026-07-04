@@ -1898,11 +1898,11 @@ export default function RecruiterCandidates() {
                 className="w-full overflow-x-auto overflow-y-hidden sleek-scrollbar rounded-t-xl bg-slate-50 border-b border-slate-100"
                 style={{ height: '10px' }}
               >
-                <div style={{ width: '1600px', height: '1px' }}></div>
+                <div style={{ width: '1500px', height: '1px' }}></div>
               </div>
 
               <div ref={bottomScrollRef} onScroll={handleBottomScroll} className="w-full overflow-x-auto sleek-scrollbar rounded-b-xl">
-                <table className="w-full text-sm text-left border-collapse min-w-[1600px]">
+                <table className="w-full text-sm text-left border-collapse min-w-[1500px]">
                   <thead className="bg-slate-50 text-slate-500 font-semibold border-b">
                     <tr>
                       <th className="p-4 w-12 whitespace-nowrap"><input type="checkbox" checked={allVisibleCandidatesSelected} onChange={selectAllCandidates} className="h-4 w-4 rounded border-slate-300" title="Select all visible candidates" /></th>
@@ -1917,7 +1917,6 @@ export default function RecruiterCandidates() {
                       <th className="p-3 whitespace-nowrap">Experience</th>
                       <th className="p-3 whitespace-nowrap">CTC / ECTC</th>
                       <th className="p-3 whitespace-nowrap">Status</th>
-                      <th className="p-3 whitespace-nowrap">Remarks</th>
                       <th className="p-3 text-right whitespace-nowrap">Actions</th>
                     </tr>
                   </thead>
@@ -1966,7 +1965,6 @@ export default function RecruiterCandidates() {
                               ))}
                             </div>
                           </td>
-                          <td className="p-3 text-xs text-slate-500 truncate max-w-[150px] whitespace-nowrap">{c.remarks || '-'}</td>
                           <td className="p-3 text-right whitespace-nowrap">
                             <div className="flex justify-end gap-1">
                               <button className="p-1 hover:bg-slate-100 rounded" onClick={() => openViewDialog(c)}><Eye className="h-3.5 w-3.5 text-blue-600" /></button>

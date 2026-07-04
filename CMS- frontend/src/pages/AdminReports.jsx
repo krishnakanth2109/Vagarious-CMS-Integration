@@ -585,7 +585,7 @@ export function ReportsDashboard({ recruiterOnly = false }) {
 
   const [filters, setFilters] = useState({
     startDate: "",
-    endDate: localDateStr(),
+    endDate: "",
     recruiterId: "all",
     status: "all",
     client: "all",
@@ -798,8 +798,20 @@ export function ReportsDashboard({ recruiterOnly = false }) {
   }, [filteredCandidates]);
 
   const trendData = useMemo(() => {
-    const start = new Date(`${filters.startDate || firstDayOfMonth()}T00:00:00`);
-    const end = new Date(`${filters.endDate || localDateStr()}T00:00:00`);
+    let startStr = filters.startDate;
+    let endStr = filters.endDate;
+
+    if (!startStr || !endStr) {
+      const candidateDates = filteredCandidates.map(candidateDate).filter(Boolean);
+      if (candidateDates.length > 0) {
+        candidateDates.sort();
+        if (!startStr) startStr = candidateDates[0];
+        if (!endStr) endStr = candidateDates[candidateDates.length - 1];
+      }
+    }
+
+    const start = new Date(`${startStr || firstDayOfMonth()}T00:00:00`);
+    const end = new Date(`${endStr || localDateStr()}T00:00:00`);
     const dayCount = Math.max(1, Math.ceil((end - start) / 86400000) + 1);
     const groupByMonth = dayCount > 45;
     const map = new Map();
@@ -849,7 +861,14 @@ export function ReportsDashboard({ recruiterOnly = false }) {
     filteredCandidateRows.slice(candidatePageStart - 1, candidatePageEnd)
   ), [filteredCandidateRows, candidatePageStart, candidatePageEnd]);
 
-  const filterLabel = `${prettyDate(filters.startDate)} to ${prettyDate(filters.endDate)}`;
+  const filterLabel =
+    (!filters.startDate && !filters.endDate)
+      ? "All Time"
+      : (!filters.startDate)
+        ? `Up to ${prettyDate(filters.endDate)}`
+        : (!filters.endDate)
+          ? `From ${prettyDate(filters.startDate)}`
+          : `${prettyDate(filters.startDate)} to ${prettyDate(filters.endDate)}`;
 
   const candidateDetailColumns = useMemo(() => {
     const dynamicKeys = [...new Set(filteredCandidateRows.flatMap((candidate) => Object.keys(candidate || {})))]
@@ -1021,8 +1040,8 @@ export function ReportsDashboard({ recruiterOnly = false }) {
 
   const resetFilters = () => {
     setFilters({
-      startDate: firstDayOfMonth(),
-      endDate: localDateStr(),
+      startDate: "",
+      endDate: "",
       recruiterId: "all",
       status: "all",
       client: "all",

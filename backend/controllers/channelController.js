@@ -1,6 +1,7 @@
 import Channel from '../models/Channel.js';
 import Message from '../models/Message.js';
 import User from '../models/User.js';
+import { getMessagePreviewText, sanitizeMessageAttachments } from '../utils/messageAttachments.js';
 
 // ── GET /api/channels  — list channels the user belongs to (or all public if admin)
 export const getChannels = async (req, res) => {
@@ -211,8 +212,16 @@ export const sendChannelMessage = async (req, res) => {
       return res.status(403).json({ message: 'Not a member of this channel' });
     }
 
-    const { content, replyTo, replyPreview } = req.body;
-    if (!content?.trim()) return res.status(400).json({ message: 'Content is required' });
+    const { content, replyTo, replyPreview, attachments = [] } = req.body;
+    const safeAttachments = sanitizeMessageAttachments(attachments);
+
+    if (Array.isArray(attachments) && attachments.length > 0 && safeAttachments.length === 0) {
+      return res.status(400).json({ message: 'Invalid attachment metadata' });
+    }
+
+    if (!content?.trim() && safeAttachments.length === 0) {
+      return res.status(400).json({ message: 'Message content or attachment is required' });
+    }
 
     const senderName = [firstName, lastName].filter(Boolean).join(' ') || username || 'User';
 
@@ -220,7 +229,8 @@ export const sendChannelMessage = async (req, res) => {
       channelId: channel._id,
       senderId: userId,
       senderName,
-      content: content.trim(),
+      content: content?.trim() || '',
+      attachments: safeAttachments,
       type: 'text',
       replyTo: replyTo || null,
       replyPreview: replyPreview || '',
@@ -229,7 +239,7 @@ export const sendChannelMessage = async (req, res) => {
 
     // Update channel last message
     channel.lastMessageAt = new Date();
-    channel.lastMessage = content.trim().slice(0, 80);
+    channel.lastMessage = getMessagePreviewText(message).slice(0, 80);
     await channel.save();
 
     res.status(201).json(message);
@@ -283,6 +293,7 @@ export const deleteChannelMessage = async (req, res) => {
 
     msg.deletedAt = new Date();
     msg.content = 'This message was deleted';
+    msg.attachments = [];
     await msg.save();
     res.json({ id: msg._id, deletedAt: msg.deletedAt, content: msg.content });
   } catch (error) {

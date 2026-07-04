@@ -166,6 +166,8 @@ export default function AdminRecruiters() {
   const [viewMode, setViewMode] = useState("grid");
   const [sortField, setSortField] = useState("name");
   const [sortOrder, setSortOrder] = useState("asc");
+  // FIX: Added openActionMenuId for custom menu control
+  const [openActionMenuId, setOpenActionMenuId] = useState(null);
 
   // ── Modals ────────────────────────────────────────────────────────────────
   const [showModal, setShowModal] = useState(false);
@@ -401,6 +403,8 @@ export default function AdminRecruiters() {
 
   // ── Modal openers ─────────────────────────────────────────────────────────
   const openEditModal = (r) => {
+    // FIX: Close menu when opening modal
+    setOpenActionMenuId(null);
     setEditRecruiter({
       id: r.id, recruiterId: r.recruiterId || "",
       firstName: r.firstName, lastName: r.lastName,
@@ -462,6 +466,8 @@ export default function AdminRecruiters() {
   );
 
   const openCandidatesForRecruiter = (recruiter, filter, label) => {
+    // FIX: Close menu when opening modal
+    setOpenActionMenuId(null);
     setSelectedRecruiter(recruiter);
     setCandidatesModalTitle(`${label} — ${recruiter.firstName} ${recruiter.lastName}`);
     setCandidateFilterType(filter);
@@ -577,6 +583,64 @@ export default function AdminRecruiters() {
       body: performanceData.map((d) => [d.date, d.submissions, d.turnups, d.joined]),
     });
     doc.save(`${selectedRecruiter.firstName}_${selectedRecruiter.lastName}_report.pdf`);
+  };
+
+  // FIX: Custom ActionMenu component with proper positioning
+  const ActionMenu = ({ recruiter, compactLabel = "Performance Report" }) => {
+    const isOpen = openActionMenuId === recruiter.id;
+    const active = isActive(recruiter);
+
+    return (
+      <div
+        className="relative inline-flex"
+        onBlur={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget)) {
+            setOpenActionMenuId(null);
+          }
+        }}
+      >
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label={`Actions for ${recruiter.firstName} ${recruiter.lastName}`}
+          aria-expanded={isOpen}
+          onClick={(event) => {
+            event.stopPropagation();
+            setOpenActionMenuId((current) => current === recruiter.id ? null : recruiter.id);
+          }}
+          className="h-8 w-8 rounded-lg shrink-0 text-slate-400 hover:text-slate-600 hover:bg-slate-50 dark:hover:text-slate-200 dark:hover:bg-slate-800"
+        >
+          <MoreVertical className="h-4.5 w-4.5" />
+        </Button>
+
+        {isOpen && (
+          <div className="absolute right-0 top-full z-50 mt-2 w-56 overflow-hidden rounded-md border border-gray-200 bg-white p-1 text-sm text-gray-800 shadow-xl dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
+            <button type="button" className="flex w-full items-center gap-2 rounded px-2 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-800" onMouseDown={(e) => e.preventDefault()} onClick={() => openEditModal(recruiter)}>
+              <Edit className="h-4 w-4" /> Edit Credentials
+            </button>
+            <button type="button" className="flex w-full items-center gap-2 rounded px-2 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-800" onMouseDown={(e) => e.preventDefault()} onClick={() => { setSelectedRecruiter(recruiter); setShowPerformanceModal(true); setPerformanceData([]); }}>
+              <TrendingUp className="h-4 w-4" /> {compactLabel}
+            </button>
+            <button type="button" className="flex w-full items-center gap-2 rounded px-2 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-800" onMouseDown={(e) => e.preventDefault()} onClick={() => openCandidatesForRecruiter(recruiter, null, 'All Candidates')}>
+              <Users className="h-4 w-4" /> View Candidates
+            </button>
+            <div className="my-1 h-px bg-gray-100 dark:bg-gray-800" />
+            <button
+              type="button"
+              className={`flex w-full items-center gap-2 rounded px-2 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-800 ${active ? 'text-amber-600' : 'text-emerald-600'}`}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => { setRecruiterToToggle(recruiter); setShowDeactivateModal(true); }}
+            >
+              {active ? <UserX className="h-4 w-4" /> : <UserCheck className="h-4 w-4" />}
+              {active ? 'Deactivate' : 'Activate'}
+            </button>
+            <button type="button" className="flex w-full items-center gap-2 rounded px-2 py-2 text-left text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40" onMouseDown={(e) => e.preventDefault()} onClick={() => { setRecruiterToDelete(recruiter); setShowDeleteModal(true); }}>
+              <Trash2 className="h-4 w-4" /> Delete Account
+            </button>
+          </div>
+        )}
+      </div>
+    );
   };
 
   return (
@@ -703,19 +767,18 @@ export default function AdminRecruiters() {
           <div className="flex flex-wrap items-center gap-3 w-full md:w-auto justify-end">
             <div className="flex items-center gap-2">
               <span className="text-xs font-semibold text-slate-400 dark:text-slate-500">Sort:</span>
-              <Select value={sortField} onValueChange={setSortField}>
-                <SelectTrigger className="w-[140px] border-slate-200 dark:border-slate-800 dark:bg-slate-950/60 rounded-xl">
-                  <SelectValue placeholder="Sort by" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="name">Name</SelectItem>
-                  <SelectItem value="email">Email</SelectItem>
-                  <SelectItem value="id">User ID</SelectItem>
-                  <SelectItem value="total">Candidates</SelectItem>
-                  <SelectItem value="joined">Joined</SelectItem>
-                  <SelectItem value="selected">Selected</SelectItem>
-                </SelectContent>
-              </Select>
+              <select
+                 value={sortField}
+                 onChange={(e) => setSortField(e.target.value)}
+                 className="h-9 w-[140px] rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                >
+               <option value="name">Name</option>
+               <option value="email">Email</option>
+               <option value="id">User ID</option>
+               <option value="total">Candidates</option>
+               <option value="joined">Joined</option>
+               <option value="selected">Selected</option>
+              </select>
             </div>
 
             <div className="flex items-center border border-slate-200 rounded-xl overflow-hidden bg-white dark:border-slate-800 dark:bg-slate-950 p-0.5">
@@ -762,7 +825,7 @@ export default function AdminRecruiters() {
                   return (
                     <div
                       key={r.id}
-                      className={`group relative overflow-hidden rounded-2xl border bg-white p-6 shadow-sm hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:-translate-y-1 transition-all duration-300 dark:bg-slate-900/60 dark:backdrop-blur-sm ${!isAct
+                      className={`group relative overflow-visible rounded-2xl border bg-white p-6 shadow-sm hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:-translate-y-1 transition-all duration-300 dark:bg-slate-900/60 dark:backdrop-blur-sm ${!isAct
                           ? 'border-red-200/60 bg-red-50/5 dark:border-red-950/10'
                           : isAdmin
                             ? 'border-indigo-100 hover:border-indigo-200/80 dark:border-indigo-950/30'
@@ -809,42 +872,8 @@ export default function AdminRecruiters() {
                           </div>
                         </div>
 
-                        {/* Card Options Actions Menu */}
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg shrink-0 text-slate-400 hover:text-slate-600 hover:bg-slate-50 dark:hover:text-slate-200 dark:hover:bg-slate-800">
-                              <MoreVertical className="h-4.5 w-4.5" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-48 rounded-xl shadow-lg border border-slate-200/60 dark:border-slate-800">
-                            <DropdownMenuItem onClick={() => openEditModal(r)} className="rounded-lg">
-                              <Edit className="h-4 w-4 mr-2 text-slate-400" /> Edit Credentials
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => { setSelectedRecruiter(r); setShowPerformanceModal(true); setPerformanceData([]); }} className="rounded-lg">
-                              <TrendingUp className="h-4 w-4 mr-2 text-indigo-500" /> Performance
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => openCandidatesForRecruiter(r, null, 'All Candidates')} className="rounded-lg">
-                              <Users className="h-4 w-4 mr-2 text-sky-500" /> View Candidates
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator className="dark:bg-slate-800" />
-                            <DropdownMenuItem
-                              onClick={() => { setRecruiterToToggle(r); setShowDeactivateModal(true); }}
-                              className={`rounded-lg ${isAct ? 'text-amber-600' : 'text-emerald-600'}`}
-                            >
-                              {isAct ? (
-                                <><UserX className="h-4 w-4 mr-2" /> Deactivate</>
-                              ) : (
-                                <><UserCheck className="h-4 w-4 mr-2" /> Activate</>
-                              )}
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              className="text-red-600 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/20"
-                              onClick={() => { setRecruiterToDelete(r); setShowDeleteModal(true); }}
-                            >
-                              <Trash2 className="h-4 w-4 mr-2" /> Delete Account
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                        {/* FIX: Using custom ActionMenu instead of DropdownMenu */}
+                        <ActionMenu recruiter={r} />
                       </div>
 
                       {/* Info lines (Email & Phone) */}
@@ -966,34 +995,8 @@ export default function AdminRecruiters() {
                               {st.joined}
                             </td>
                             <td className="px-6 py-4 text-right">
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:text-slate-200 dark:hover:bg-slate-800"><MoreVertical className="h-4.5 w-4.5" /></Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="rounded-xl border border-slate-200 dark:border-slate-800 shadow-md">
-                                  <DropdownMenuItem onClick={() => openEditModal(r)} className="rounded-lg">
-                                    <Edit className="h-4 w-4 mr-2" /> Edit Credentials
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => { setSelectedRecruiter(r); setShowPerformanceModal(true); setPerformanceData([]); }} className="rounded-lg">
-                                    <TrendingUp className="h-4 w-4 mr-2" /> Performance
-                                  </DropdownMenuItem>
-                                  <DropdownMenuSeparator className="dark:bg-slate-800" />
-                                  <DropdownMenuItem
-                                    onClick={() => { setRecruiterToToggle(r); setShowDeactivateModal(true); }}
-                                    className={`rounded-lg ${isAct ? 'text-amber-600' : 'text-emerald-600'}`}
-                                  >
-                                    {isAct ? (
-                                      <><UserX className="h-4 w-4 mr-2" />Deactivate</>
-                                    ) : (
-                                      <><UserCheck className="h-4 w-4 mr-2" />Activate</>
-                                    )}
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem className="text-red-600 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/20"
-                                    onClick={() => { setRecruiterToDelete(r); setShowDeleteModal(true); }}>
-                                    <Trash2 className="h-4 w-4 mr-2" /> Delete
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
+                              {/* FIX: Using custom ActionMenu instead of DropdownMenu */}
+                              <ActionMenu recruiter={r} compactLabel="Performance" />
                             </td>
                           </tr>
                         );

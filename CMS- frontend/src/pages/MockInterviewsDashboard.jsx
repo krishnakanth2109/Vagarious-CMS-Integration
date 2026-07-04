@@ -166,6 +166,32 @@ export default function MockInterviewsDashboard() {
   const role = String(userRole || '').toLowerCase();
   const adminId = (role === 'admin' || role === 'manager') ? 'all' : (currentUser?._id || currentUser?.id || 'admin_user');
 
+  const candidateDropdownRef = React.useRef(null);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [candidateSearchText, setCandidateSearchText] = useState('');
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (candidateDropdownRef.current && !candidateDropdownRef.current.contains(event.target)) {
+        setIsDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  const filteredCandidatesForSelect = useMemo(() => {
+    const query = candidateSearchText.trim().toLowerCase();
+    const list = Array.isArray(allCandidates) ? allCandidates : [];
+    if (!query) return list;
+    return list.filter(c => 
+      (c.name || '').toLowerCase().includes(query) || 
+      (c.email || '').toLowerCase().includes(query)
+    );
+  }, [allCandidates, candidateSearchText]);
+
 
   const openResults = async (linkId) => {
     setResultsLoading(true);
@@ -1132,16 +1158,86 @@ export default function MockInterviewsDashboard() {
                 <div className="space-y-6 animate-in fade-in slide-in-from-top-2 duration-300">
                   <div>
                     <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2">Select Existing Candidate (Optional)</label>
-                    <select
-                      value={selectedCandidateId}
-                      onChange={(e) => handleSelectCandidate(e.target.value)}
-                      className="w-full px-4 py-3 bg-gray-50 focus:bg-white border border-gray-200 focus:border-indigo-500 rounded-xl text-sm font-medium transition-all appearance-none cursor-pointer"
-                    >
-                      <option value="">-- Select Candidate --</option>
-                      {(allCandidates || []).map(c => (
-                        <option key={c._id || c.id} value={c._id || c.id}>{c.name} ({c.email})</option>
-                      ))}
-                    </select>
+                    <div className="relative" ref={candidateDropdownRef}>
+                      <button
+                        type="button"
+                        onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                        className="w-full px-4 py-3 bg-gray-50 focus:bg-white border border-gray-200 focus:border-indigo-500 rounded-xl text-sm font-medium transition-all text-left flex justify-between items-center cursor-pointer"
+                      >
+                        <span className="truncate">
+                          {selectedCandidateId 
+                            ? `${candidateName} (${candidateEmail})` 
+                            : "-- Select Candidate --"}
+                        </span>
+                        <ChevronDown className="w-4 h-4 text-gray-500 shrink-0 ml-2" />
+                      </button>
+                      
+                      {isDropdownOpen && (
+                        <div className="absolute z-30 mt-1.5 w-full bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150">
+                          <div className="p-2 border-b border-gray-100 bg-slate-50/50">
+                            <div className="relative">
+                              <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
+                              <input
+                                type="text"
+                                autoFocus
+                                placeholder="Search candidates..."
+                                value={candidateSearchText}
+                                onChange={(e) => setCandidateSearchText(e.target.value)}
+                                className="w-full pl-9 pr-4 py-2 border border-gray-250 rounded-lg text-xs bg-white outline-none"
+                              />
+                            </div>
+                          </div>
+                          <ul className="max-h-60 overflow-y-auto py-1 text-sm font-medium">
+                            {selectedCandidateId && (
+                              <li>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    handleSelectCandidate('');
+                                    setIsDropdownOpen(false);
+                                    setCandidateSearchText('');
+                                  }}
+                                  className="w-full text-left px-4 py-2 text-rose-500 hover:bg-rose-50 hover:text-rose-600 transition-colors cursor-pointer font-bold text-xs border-b border-gray-100"
+                                >
+                                  Clear Selection
+                                </button>
+                              </li>
+                            )}
+                            {filteredCandidatesForSelect.length > 0 ? (
+                              filteredCandidatesForSelect.map(c => {
+                                const id = c._id || c.id;
+                                const isSelected = selectedCandidateId === id;
+                                return (
+                                  <li key={id}>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        handleSelectCandidate(id);
+                                        setIsDropdownOpen(false);
+                                        setCandidateSearchText('');
+                                      }}
+                                      className={`w-full text-left px-4 py-2 hover:bg-indigo-50 transition-colors flex items-center justify-between cursor-pointer ${
+                                        isSelected ? 'bg-indigo-50/60 text-indigo-600 font-bold' : 'text-slate-700 font-medium'
+                                      }`}
+                                    >
+                                      <div className="truncate pr-4">
+                                        <span>{c.name}</span>
+                                        <span className="text-xs text-gray-400 block mt-0.5 truncate">{c.email}</span>
+                                      </div>
+                                      {isSelected && <CheckSquare className="w-4 h-4 text-indigo-500 shrink-0" />}
+                                    </button>
+                                  </li>
+                                );
+                              })
+                            ) : (
+                              <li className="px-4 py-3 text-xs text-gray-400 text-center select-none font-medium">
+                                No candidates found
+                              </li>
+                            )}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
