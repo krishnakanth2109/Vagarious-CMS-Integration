@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   Users, UserCheck, TrendingUp, PauseCircle, UserX, User,
-  ClipboardList, Briefcase, FileText
+  ClipboardList, Briefcase, FileText,
+  ArrowUpDown, ArrowUp, ArrowDown, Search, X
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -162,6 +163,11 @@ export default function AdminDashboard() {
   const [jobs,       setJobs      ] = useState([]);
   const [loading,    setLoading   ] = useState(true);
   const [performanceModal, setPerformanceModal] = useState(null);
+  const [sortField,        setSortField      ] = useState('submissions');
+  const [sortOrder,        setSortOrder      ] = useState('desc');
+  const [searchQuery,      setSearchQuery    ] = useState('');
+  const [tableStartDate,   setTableStartDate ] = useState('');
+  const [tableEndDate,     setTableEndDate   ] = useState('');
 
   // FIX: Added cleanup flag to prevent setState on unmounted component.
   // FIX: Promise.allSettled so a slow /jobs or /clients endpoint never blocks
@@ -191,6 +197,7 @@ export default function AdminDashboard() {
 
     fetchData();
     return () => { cancelled = true; };
+
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Memoized computed values ──────────────────────────────────────────────
@@ -204,11 +211,23 @@ export default function AdminDashboard() {
   }, [candidates]);
 
   const recruiterStats = useMemo(() => {
-    return recruiters
+    let stats = recruiters
       .filter(r => r._id || r.id)
       .map(r => {
         const rid   = r._id || r.id;
-        const cands = candidates.filter(c => getCandidateRecruiterId(c) === String(rid));
+        let cands = candidates.filter(c => getCandidateRecruiterId(c) === String(rid));
+
+        if (tableStartDate) {
+          const start = new Date(tableStartDate);
+          start.setHours(0, 0, 0, 0);
+          cands = cands.filter(c => new Date(c.dateAdded || c.createdAt) >= start);
+        }
+        if (tableEndDate) {
+          const end = new Date(tableEndDate);
+          end.setHours(23, 59, 59, 999);
+          cands = cands.filter(c => new Date(c.dateAdded || c.createdAt) <= end);
+        }
+
         const name  = r.name || `${r.firstName || ''} ${r.lastName || ''}`.trim();
         return {
           id:          String(rid),
@@ -219,11 +238,32 @@ export default function AdminDashboard() {
           pending:     cands.filter(c => ['submitted', 'pending'].includes(getSafeStatus(c.status))).length,
           hold:        cands.filter(c => getSafeStatus(c.status) === 'hold').length,
           rejected:    cands.filter(c => getSafeStatus(c.status) === 'rejected').length,
+          avgTimeToHire: 0,
         };
       })
-      .filter(r => r.fullName !== '')
-      .sort((a, b) => b.submissions - a.submissions);
-  }, [candidates, recruiters]);
+      .filter(r => r.fullName !== '');
+
+    if (searchQuery.trim() !== '') {
+      const q = searchQuery.toLowerCase();
+      stats = stats.filter(r => r.fullName.toLowerCase().includes(q));
+    }
+
+    stats.sort((a, b) => {
+      let valA = a[sortField];
+      let valB = b[sortField];
+      if (typeof valA === 'string') {
+        return sortOrder === 'asc'
+          ? valA.localeCompare(valB)
+          : valB.localeCompare(valA);
+      } else {
+        return sortOrder === 'asc'
+          ? (valA || 0) - (valB || 0)
+          : (valB || 0) - (valA || 0);
+      }
+    });
+
+    return stats;
+  }, [candidates, recruiters, sortField, sortOrder, searchQuery, tableStartDate, tableEndDate]);
 
   const recruiterTotals = useMemo(() => (
     RECRUITER_PERFORMANCE_COLUMNS.reduce((totals, column) => {
@@ -234,7 +274,10 @@ export default function AdminDashboard() {
 
   // FIX: barData was computed inline in JSX — now memoized.
   const barData = useMemo(
-    () => recruiterStats.slice(0, 6).map(r => ({ name: r.fullName.split(' ')[0], value: r.submissions })),
+    () => [...recruiterStats]
+      .sort((a, b) => b.submissions - a.submissions)
+      .slice(0, 6)
+      .map(r => ({ name: r.fullName.split(' ')[0], value: r.submissions })),
     [recruiterStats]
   );
 
@@ -260,6 +303,25 @@ export default function AdminDashboard() {
       rows,
     });
   }, [candidates, recruiterStats]);
+
+  const handleSort = useCallback((field) => {
+    if (sortField === field) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortOrder('desc');
+    }
+  }, [sortField, sortOrder]);
+
+  const renderSortIcon = useCallback((field) => {
+    if (sortField !== field) {
+      return <ArrowUpDown className="w-3 h-3 ml-1 text-gray-400 opacity-60 inline-block" />;
+    }
+    if (sortOrder === 'asc') {
+      return <ArrowUp className="w-3 h-3 ml-1 text-[#283086] inline-block" />;
+    }
+    return <ArrowDown className="w-3 h-3 ml-1 text-[#283086] inline-block" />;
+  }, [sortField, sortOrder]);
 
   if (loading) return (
     <div className="flex h-screen w-full items-center justify-center bg-[#f3f6fd]">
@@ -315,6 +377,8 @@ export default function AdminDashboard() {
         <div className="bg-white p-8 rounded-[1.5rem] shadow-sm border border-gray-100 flex items-center justify-between">
           <div className="flex-1">
             <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Avg. Time of Hire</p>
+
+
             <h3 className="text-4xl font-bold text-slate-800 mt-2">0.0%</h3>
             <div className="w-full h-2 bg-gray-100 rounded-full mt-6">
               <div className="h-full bg-[#283086] rounded-full w-[30%]" />
@@ -363,23 +427,86 @@ export default function AdminDashboard() {
 
       {/* ── Row 5: Table ── */}
       <div className="bg-white rounded-[1.5rem] shadow-sm border border-gray-100 overflow-hidden">
-        <div className="px-8 py-6 flex justify-between items-center bg-[#f8faff] border-b border-gray-100">
+        <div className="px-8 py-6 flex justify-between items-center bg-[#f8faff] border-b border-gray-100 flex-wrap gap-4">
           <h3 className="text-base font-bold text-slate-800">Recruiter Performance Details</h3>
-          <button onClick={() => navigate('/admin/recruiters')} className="bg-[#283086] text-white px-5 py-2.5 rounded text-xs font-bold uppercase tracking-wide hover:bg-blue-900 shadow-lg">
-            View All Recruiters
-          </button>
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="relative flex items-center">
+              <input
+                type="text"
+                placeholder="Search recruiter..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-8 pr-4 py-2.5 text-xs border border-gray-200 rounded-lg text-slate-700 font-medium focus:ring-2 focus:ring-[#283086] focus:outline-none w-48 bg-white"
+              />
+              <Search className="absolute left-2.5 w-3.5 h-3.5 text-gray-400" />
+            </div>
+
+            <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 shadow-sm text-[11px] text-slate-600 font-semibold">
+              <input
+                type="date"
+                value={tableStartDate}
+                onChange={(e) => setTableStartDate(e.target.value)}
+                className="border-none focus:outline-none bg-transparent text-slate-700 w-28 cursor-pointer"
+                title="Start Date"
+              />
+              <span className="text-gray-400 font-normal">to</span>
+              <input
+                type="date"
+                value={tableEndDate}
+                onChange={(e) => setTableEndDate(e.target.value)}
+                className="border-none focus:outline-none bg-transparent text-slate-700 w-28 cursor-pointer"
+                title="End Date"
+              />
+              {(tableStartDate || tableEndDate) && (
+                <button
+                  onClick={() => { setTableStartDate(''); setTableEndDate(''); }}
+                  className="text-gray-400 hover:text-red-500 ml-1 transition-colors"
+                  title="Clear Date Range"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            <button onClick={() => navigate('/admin/recruiters')} className="bg-[#283086] text-white px-5 py-2.5 rounded text-xs font-bold uppercase tracking-wide hover:bg-blue-900 shadow-lg whitespace-nowrap">
+              View All Recruiters
+            </button>
+          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-[#f8faff] text-gray-500 font-bold uppercase text-[10px] tracking-widest border-b border-gray-100">
               <tr>
-                <th className="px-8 py-5 text-left">Recruiter</th>
-                <th className="px-4 py-5 text-center">Submissions</th>
-                <th className="px-4 py-5 text-center">Hold</th>
-                <th className="px-4 py-5 text-center">Joined</th>
-                <th className="px-4 py-5 text-center">Rejected</th>
-                <th className="px-4 py-5 text-center">Pending</th>
-                <th className="px-8 py-5 text-right">Avg. Time to Hire</th>
+                <th
+                  className="px-8 py-5 text-left cursor-pointer select-none hover:text-slate-800 transition-colors"
+                  onClick={() => handleSort('fullName')}
+                >
+                  <div className="flex items-center gap-1">
+                    <span>Recruiter</span>
+                    {renderSortIcon('fullName')}
+                  </div>
+                </th>
+                {RECRUITER_PERFORMANCE_COLUMNS.map((column) => (
+                  <th
+                    key={column.key}
+                    className="px-4 py-5 text-center cursor-pointer select-none hover:text-slate-800 transition-colors"
+                    onClick={() => handleSort(column.key)}
+                  >
+                    <div className="flex items-center justify-center gap-1">
+                      <span>{column.label}</span>
+                      {renderSortIcon(column.key)}
+                    </div>
+                  </th>
+                ))}
+                <th
+                  className="px-8 py-5 text-right cursor-pointer select-none hover:text-slate-800 transition-colors"
+                  onClick={() => handleSort('avgTimeToHire')}
+                >
+                  <div className="flex items-center justify-end gap-1">
+                    <span>Avg. Time to Hire</span>
+                    {renderSortIcon('avgTimeToHire')}
+                  </div>
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50 bg-white">

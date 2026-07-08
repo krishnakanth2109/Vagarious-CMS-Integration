@@ -594,7 +594,7 @@ export default function AdminCandidates() {
   const [recruiterFilter, setRecruiterFilter] = useState('all');
   const [clientFilter, setClientFilter] = useState('all');
   const [activeStatFilter, setActiveStatFilter] = useState(null);
-  const [sortConfig, setSortConfig] = useState(null);
+  const [sortConfig, setSortConfig] = useState({ key: 'candidateId', direction: 'desc' });
   const [selectedIds, setSelectedIds] = useState([]);
   const [isJobInviteOpen, setIsJobInviteOpen] = useState(false);
 

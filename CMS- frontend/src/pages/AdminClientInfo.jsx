@@ -2,7 +2,9 @@ import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/AuthContext";
 import {
-  Building2, User, X, Eye, Pencil, Plus, CheckCircle, Ban, SlidersHorizontal, DollarSign
+  Building2, User, X, Eye, Pencil, Plus, CheckCircle, Ban, SlidersHorizontal, DollarSign,
+  Mail, Phone, Globe, MapPin, Percent, Calendar, ShieldAlert, FileText, Lock, CreditCard,
+  Tag, StickyNote, ExternalLink
 } from "lucide-react";
 
 const BASE_URL = (import.meta.env.VITE_API_URL || "http://localhost:5000").replace(/\/$/, '');
@@ -213,80 +215,268 @@ const ClientFormControlModal = ({ isOpen, onClose, config, onConfigChange }) => 
 
 /* ---------------- DETAIL MODAL ---------------- */
 const ClientDetailCard = ({ client, onClose }) => {
+  const initials = (client.companyName || "C")
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+
+  const hasCustomFields = client.customFields && Object.keys(client.customFields).length > 0;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      {/* Backdrop blur */}
+      <div 
+        className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm transition-opacity duration-300" 
+        onClick={onClose} 
+      />
+
+      {/* Main Modal Card */}
       <div
-        className="relative bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto border border-zinc-200 dark:border-zinc-800"
+        className="relative bg-white dark:bg-zinc-900 rounded-3xl shadow-2xl max-w-5xl w-full max-h-[85vh] overflow-hidden border border-zinc-200/80 dark:border-zinc-800/80 flex flex-col md:flex-row animate-in fade-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
-          {/* Grey Gradient Header */}
-          <div className="bg-gradient-to-r from-zinc-800 to-zinc-950 text-white p-6 rounded-t-2xl border-b border-zinc-700">
-            <div className="flex justify-between items-start">
-              <div>
-                <h2 className="text-2xl font-bold tracking-tight">{client.companyName}</h2>
-                <div className="flex items-center gap-3 mt-2 text-zinc-300 text-sm">
-                  <span className="bg-zinc-800 px-2 py-1 rounded-md border border-zinc-700 text-xs font-mono">
-                    {client.clientId}
+        {/* Left Column: Client Summary Card */}
+        <div className="w-full md:w-80 bg-zinc-50 dark:bg-zinc-950/40 p-8 border-b md:border-b-0 md:border-r border-zinc-200/60 dark:border-zinc-800/60 flex flex-col justify-between shrink-0">
+          <div className="space-y-6">
+            {/* Header info */}
+            <div className="flex flex-col items-center text-center space-y-4">
+              <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-indigo-600 text-white font-black text-3xl shadow-lg shadow-indigo-600/20 select-none">
+                {initials}
+              </div>
+              <div className="space-y-1">
+                <h2 className="text-xl font-bold tracking-tight text-zinc-900 dark:text-white leading-tight">{client.companyName}</h2>
+                {client.industry && (
+                  <span className="text-xs font-semibold text-zinc-400 block">{client.industry}</span>
+                )}
+              </div>
+              <span className={`inline-flex items-center justify-center rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-wider ${
+                client.active !== false
+                  ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/30"
+                  : "bg-rose-100 text-rose-700 dark:bg-rose-950/30 dark:text-rose-400 border border-rose-200 dark:border-rose-900/30"
+              }`}>
+                {client.active !== false ? "Active Partner" : "Inactive"}
+              </span>
+            </div>
+
+            <div className="h-px bg-zinc-200/60 dark:bg-zinc-800/60" />
+
+            {/* Quick stats list */}
+            <div className="space-y-4 text-xs font-semibold text-zinc-600 dark:text-zinc-400">
+              <div className="space-y-1">
+                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Client Identifier</span>
+                <span className="text-zinc-800 dark:text-zinc-300 font-mono tracking-wider bg-white dark:bg-zinc-900 px-2.5 py-1 rounded-md border border-zinc-200/50 dark:border-zinc-800/50 inline-block">
+                  {client.clientId || "N/A"}
+                </span>
+              </div>
+
+              {client.clientLocation && (
+                <div className="space-y-1">
+                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Office Location</span>
+                  <span className="text-zinc-850 dark:text-zinc-200 font-bold flex items-center gap-1.5">
+                    <MapPin className="w-3.5 h-3.5 text-zinc-450 shrink-0" />
+                    {client.clientLocation}
                   </span>
-                  {client.industry && <span>• {client.industry}</span>}
-                  {client.clientLocation && <span>• {client.clientLocation}</span>}
                 </div>
+              )}
+
+              {client.gstNumber && (
+                <div className="space-y-1">
+                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">GST IN</span>
+                  <span className="text-zinc-850 dark:text-zinc-200 font-bold font-mono tracking-wide">
+                    {client.gstNumber}
+                  </span>
+                </div>
+              )}
+
+              {client.website && (
+                <div className="space-y-1">
+                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Website URL</span>
+                  <a
+                    href={client.website.startsWith('http') ? client.website : `https://${client.website}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-indigo-600 hover:text-indigo-700 hover:underline dark:text-indigo-400 dark:hover:text-indigo-300 font-bold flex items-center gap-1"
+                  >
+                    {client.website.replace(/^https?:\/\/(www\.)?/, '')}
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="mt-8 pt-4 border-t border-zinc-200/60 dark:bg-transparent dark:border-zinc-800/60 text-[10px] font-bold text-zinc-400 space-y-2">
+            <div className="flex justify-between">
+              <span>Date Added:</span>
+              <span className="text-zinc-650 dark:text-zinc-400">{client.createdAt ? new Date(client.createdAt).toLocaleDateString(undefined, { dateStyle: 'medium' }) : '—'}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Last Sync:</span>
+              <span className="text-zinc-650 dark:text-zinc-400">{client.updatedAt ? new Date(client.updatedAt).toLocaleDateString(undefined, { dateStyle: 'medium' }) : '—'}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Right Column: Detailed Information Display */}
+        <div className="flex-1 overflow-y-auto max-h-[85vh] md:max-h-none flex flex-col justify-between">
+          <div className="p-8 space-y-8">
+            
+            {/* Header Title bar (hidden on mobile header) */}
+            <div className="hidden md:flex justify-between items-center border-b border-zinc-100 dark:border-zinc-800 pb-4">
+              <div>
+                <h3 className="text-lg font-black text-zinc-900 dark:text-white">Partner Fact Sheet</h3>
+                <p className="text-xs text-zinc-400 mt-0.5">Comprehensive view of business agreements and records</p>
               </div>
               <button
                 onClick={onClose}
-                className="p-1.5 hover:bg-zinc-700 rounded-lg text-zinc-400 hover:text-white"
+                className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-650 hover:bg-zinc-100 dark:hover:bg-zinc-800 dark:hover:text-white transition-colors"
               >
-                <X className="w-6 h-6" />
+                <X className="w-5 h-5" />
               </button>
             </div>
-          </div>
 
-          <div className="p-6 space-y-6 text-zinc-800 dark:text-zinc-300">
-            <div className="grid md:grid-cols-2 gap-8">
-              {/* Contact Info Card */}
-              <div className="bg-zinc-50 dark:bg-zinc-800/50 p-5 rounded-xl border border-zinc-100 dark:border-zinc-800">
-                <h3 className="font-semibold text-lg mb-4 flex items-center gap-2 text-zinc-900 dark:text-zinc-100 border-b border-zinc-200 dark:border-zinc-700 pb-2">
-                  <User className="w-5 h-5 text-zinc-500" /> Contact Details
-                </h3>
-                <div className="space-y-3 text-sm">
-                  <p className="flex justify-between"><span className="text-zinc-500">Contact Person:</span> <span className="font-medium">{client.contactPerson || "-"}</span></p>
-                  <p className="flex justify-between"><span className="text-zinc-500">Email:</span> <span className="font-medium">{client.email || "-"}</span></p>
-                  <p className="flex justify-between"><span className="text-zinc-500">Phone:</span> <span className="font-medium">{client.phone || "-"}</span></p>
-                  <p className="flex justify-between"><span className="text-zinc-500">Website:</span> <span className="font-medium">{client.website || "-"}</span></p>
-                  <p className="flex justify-between"><span className="text-zinc-500">Location:</span> <span className="font-medium">{client.clientLocation || "-"}</span></p>
-                  <div className="pt-2"><span className="text-zinc-500 block mb-1">Address:</span> <p className="font-medium text-xs leading-relaxed">{client.address || "-"}</p></div>
+            {/* Information Grid Section */}
+            <div className="space-y-6">
+              
+              {/* Primary Contact details */}
+              <div className="space-y-4">
+                <h4 className="text-[11px] font-black uppercase tracking-[0.15em] text-indigo-600 dark:text-indigo-400 flex items-center gap-2">
+                  <User className="w-3.5 h-3.5" />
+                  Primary Point of Contact
+                </h4>
+                <div className="grid md:grid-cols-2 gap-x-8 gap-y-4 bg-zinc-50/50 dark:bg-zinc-900/30 p-5 rounded-2xl border border-zinc-200/40 dark:border-zinc-800/40 text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                  <div className="flex justify-between py-1 border-b border-zinc-100 dark:border-zinc-900/20">
+                    <span className="text-zinc-400 font-medium">Contact Person</span>
+                    <span className="text-zinc-900 dark:text-white font-bold">{client.contactPerson || "—"}</span>
+                  </div>
+                  <div className="flex justify-between py-1 border-b border-zinc-100 dark:border-zinc-900/20">
+                    <span className="text-zinc-400 font-medium">Email Address</span>
+                    {client.email ? (
+                      <a href={`mailto:${client.email}`} className="text-indigo-600 hover:text-indigo-700 hover:underline dark:text-indigo-400 dark:hover:text-indigo-300 font-bold">
+                        {client.email}
+                      </a>
+                    ) : (
+                      <span className="text-zinc-500">—</span>
+                    )}
+                  </div>
+                  <div className="flex justify-between py-1">
+                    <span className="text-zinc-400 font-medium">Phone / mobile</span>
+                    {client.phone ? (
+                      <a href={`tel:${client.phone}`} className="text-indigo-600 hover:text-indigo-700 hover:underline dark:text-indigo-400 dark:hover:text-indigo-300 font-bold">
+                        {client.phone}
+                      </a>
+                    ) : (
+                      <span className="text-zinc-500">—</span>
+                    )}
+                  </div>
+                  {client.locationLink && (
+                    <div className="flex justify-between py-1">
+                      <span className="text-zinc-400 font-medium">Google Maps</span>
+                      <a
+                        href={client.locationLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-indigo-600 hover:text-indigo-700 hover:underline dark:text-indigo-400 dark:hover:text-indigo-300 flex items-center gap-1 font-bold"
+                      >
+                        View Map Location <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </div>
+                  )}
+                  {client.address && (
+                    <div className="col-span-2 pt-3 border-t border-zinc-100 dark:border-zinc-800/40 space-y-1.5">
+                      <span className="text-zinc-400 font-medium block">Office Address</span>
+                      <p className="text-zinc-800 dark:text-zinc-200 leading-relaxed font-medium bg-white dark:bg-zinc-950 px-4 py-3 rounded-xl border border-zinc-200/50 dark:border-zinc-800/50 font-sans">{client.address}</p>
+                    </div>
+                  )}
                 </div>
               </div>
 
-              {/* Business Terms Card */}
-              <div className="bg-zinc-50 dark:bg-zinc-800/50 p-5 rounded-xl border border-zinc-100 dark:border-zinc-800">
-                <h3 className="font-semibold text-lg mb-4 flex items-center gap-2 text-zinc-900 dark:text-zinc-100 border-b border-zinc-200 dark:border-zinc-700 pb-2">
-                  <Building2 className="w-5 h-5 text-zinc-500" /> Business Terms
-                </h3>
-                <div className="space-y-3 text-sm">
-                  <p className="flex justify-between"><span className="text-zinc-500">Commission Rate:</span> <span className="font-medium">{client.percentage ? `${client.percentage}%` : "-"}</span></p>
-                  <p className="flex justify-between"><span className="text-zinc-500">Candidate Period:</span> <span className="font-medium">{client.candidatePeriod ? `${client.candidatePeriod} months` : "-"}</span></p>
-                  <p className="flex justify-between"><span className="text-zinc-500">Replacement:</span> <span className="font-medium">{client.replacementPeriod ? `${client.replacementPeriod} days` : "-"}</span></p>
-                  <p className="flex justify-between"><span className="text-zinc-500">Locking Period:</span> <span className="font-medium">{client.lockingPeriod || "-"}</span></p>
-                  <p className="flex justify-between"><span className="text-zinc-500">Payment Mode:</span> <span className="font-medium">{client.paymentMode || "-"}</span></p>
-                  <p className="flex justify-between"><span className="text-zinc-500">GST Number:</span> <span className="font-medium font-mono text-xs">{client.gstNumber || "-"}</span></p>
-                  <p className="flex justify-between"><span className="text-zinc-500">Status:</span>
-                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${client.active ? 'bg-zinc-200 text-zinc-800 dark:bg-zinc-700 dark:text-zinc-200' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'}`}>
-                      {client.active ? "Active" : "Inactive"}
-                    </span>
-                  </p>
+              {/* Commercial Terms details */}
+              <div className="space-y-4">
+                <h4 className="text-[11px] font-black uppercase tracking-[0.15em] text-indigo-600 dark:text-indigo-400 flex items-center gap-2">
+                  <Building2 className="w-3.5 h-3.5" />
+                  Commercial Agreement Parameters
+                </h4>
+                <div className="grid md:grid-cols-2 gap-x-8 gap-y-4 bg-zinc-50/50 dark:bg-zinc-900/30 p-5 rounded-2xl border border-zinc-200/40 dark:border-zinc-800/40 text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                  <div className="flex justify-between py-1 border-b border-zinc-100 dark:border-zinc-900/20">
+                    <span className="text-zinc-400 font-medium">Commission Rate</span>
+                    <span className="text-zinc-900 dark:text-white font-bold">{client.percentage ? `${client.percentage}%` : "—"}</span>
+                  </div>
+                  <div className="flex justify-between py-1 border-b border-zinc-100 dark:border-zinc-900/20">
+                    <span className="text-zinc-400 font-medium">Candidate Period</span>
+                    <span className="text-zinc-900 dark:text-white font-bold">{client.candidatePeriod ? `${client.candidatePeriod} Months` : "—"}</span>
+                  </div>
+                  <div className="flex justify-between py-1">
+                    <span className="text-zinc-400 font-medium">Replacement Period</span>
+                    <span className="text-zinc-900 dark:text-white font-bold">{client.replacementPeriod ? `${client.replacementPeriod} Days` : "—"}</span>
+                  </div>
+                  <div className="flex justify-between py-1">
+                    <span className="text-zinc-400 font-medium">Locking Period</span>
+                    <span className="text-zinc-900 dark:text-white font-bold">{client.lockingPeriod ? `${client.lockingPeriod} Days` : "—"}</span>
+                  </div>
+                  <div className="col-span-2 flex justify-between py-1 border-t border-zinc-150 dark:border-zinc-800/45 pt-3">
+                    <span className="text-zinc-400 font-medium">Payment terms / Mode</span>
+                    <span className="text-zinc-900 dark:text-white font-bold">{client.paymentMode || "—"}</span>
+                  </div>
                 </div>
               </div>
+
+              {/* Custom fields details */}
+              {hasCustomFields && (
+                <div className="space-y-4">
+                  <h4 className="text-[11px] font-black uppercase tracking-[0.15em] text-indigo-600 dark:text-indigo-400 flex items-center gap-2">
+                    <SlidersHorizontal className="w-3.5 h-3.5" />
+                    Additional Metadata Fields
+                  </h4>
+                  <div className="grid md:grid-cols-2 gap-4">
+                    {Object.entries(client.customFields).map(([key, val]) => {
+                      if (val === undefined || val === null || val === "") return null;
+                      const label = key.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+                      return (
+                        <div key={key} className="bg-zinc-50/50 dark:bg-zinc-900/20 px-4 py-3.5 rounded-2xl border border-zinc-200/50 dark:border-zinc-800/50 flex justify-between items-center text-xs font-semibold">
+                          <span className="text-zinc-400 font-medium">{label}</span>
+                          <span className="text-zinc-900 dark:text-white font-bold">{String(val)}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Terms and Notes block */}
+              {(client.terms || client.notes) && (
+                <div className="grid md:grid-cols-2 gap-6 pt-2">
+                  {client.terms && (
+                    <div className="space-y-2">
+                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Special Terms & Conditions</span>
+                      <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed font-semibold whitespace-pre-wrap bg-zinc-50 dark:bg-zinc-950 p-4 rounded-2xl border border-zinc-200/50 dark:border-zinc-800/50 font-sans">{client.terms}</p>
+                    </div>
+                  )}
+                  {client.notes && (
+                    <div className="space-y-2">
+                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Internal Account Notes</span>
+                      <p className="text-xs text-zinc-650 dark:text-zinc-400 leading-relaxed font-semibold whitespace-pre-wrap bg-amber-50/20 dark:bg-amber-950/10 p-4 rounded-2xl border border-amber-100/20 dark:border-amber-900/10 font-sans">{client.notes}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
             </div>
 
-            {client.terms && (
-              <div className="bg-zinc-100 dark:bg-zinc-800 p-5 rounded-xl border border-zinc-200 dark:border-zinc-700">
-                <h4 className="font-semibold mb-2 text-zinc-900 dark:text-zinc-100">Terms & Conditions</h4>
-                <p className="text-sm text-zinc-600 dark:text-zinc-400 whitespace-pre-wrap leading-relaxed">{client.terms}</p>
-              </div>
-            )}
           </div>
+
+          {/* Footer Actions */}
+          <div className="px-8 py-5 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50/80 dark:bg-zinc-950/50 flex justify-end gap-3 shrink-0">
+            <button
+              onClick={onClose}
+              className="px-6 py-2.5 bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100 rounded-xl text-xs font-bold uppercase tracking-wide shadow-md transition-all duration-150"
+            >
+              Close Fact Sheet
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -769,7 +959,12 @@ export default function AdminClientInfo() {
                   return (
                   <tr key={client.id} className="transition hover:bg-zinc-50/70 dark:hover:bg-zinc-800/30">
                     <td className="px-6 py-5">
-                      <div className="text-sm font-semibold leading-tight text-zinc-950 dark:text-white">{client.companyName}</div>
+                      <div 
+                        onClick={() => setSelectedClient(client)}
+                        className="text-sm font-bold leading-tight text-zinc-950 dark:text-white hover:text-indigo-600 dark:hover:text-indigo-400 cursor-pointer transition-colors"
+                      >
+                        {client.companyName}
+                      </div>
                       <div className="mt-1 text-xs font-medium text-zinc-500">{client.clientId || "-"}</div>
                     </td>
                     <td className="px-6 py-5">

@@ -7,7 +7,7 @@ import {
   AlertTriangle, UserPlus, Search, Mail, Phone, TrendingUp,
   Download, Grid3X3, List, Edit, Trash2, UserX, UserCheck,
   Camera, Briefcase, MoreVertical, Users, Eye, EyeOff, ArrowUpDown, ShieldAlert,
-  Loader2
+  Loader2, Plus, ChevronDown
 } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
@@ -1035,7 +1035,7 @@ export default function AdminRecruiters() {
                   </div>
                   <input type="file" ref={fileInputRef} hidden accept="image/*" onChange={(e) => handleFileUpload(e, false)} />
                   <div className="space-y-1">
-                    <Button variant="outline" size="sm" className="rounded-xl h-8.5 text-xs font-semibold border-slate-200 dark:border-slate-800" onClick={() => fileInputRef.current?.click()}>Upload Avatar</Button>
+                    <Button variant="outline" size="sm" className="rounded-xl h-8.5 text-xs font-semibold border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-800 dark:bg-transparent dark:text-slate-300 dark:hover:bg-slate-800" onClick={() => fileInputRef.current?.click()}>Upload Avatar</Button>
                     <p className="text-[10px] text-slate-400">JPEG, PNG formats. Max 2MB.</p>
                   </div>
                 </div>
@@ -1050,45 +1050,47 @@ export default function AdminRecruiters() {
                   </div>
                   <div>
                     <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 block mb-1 font-semibold">System Role <span className="text-red-500">*</span></label>
-                    <div className="mt-1">
-                      <Select value={newRecruiter.role} onValueChange={(val) => handleInputChange('role', val, false)}>
-                        <SelectTrigger className="border-slate-200 dark:border-slate-800 dark:bg-slate-950 rounded-xl">
-                          <SelectValue placeholder="Select Role" />
-                        </SelectTrigger>
-                        <SelectContent className="rounded-xl border border-slate-200 dark:border-slate-800">
-                          <SelectItem value="recruiter">Recruiter</SelectItem>
-                          <SelectItem value="admin">System Admin</SelectItem>
-                        </SelectContent>
-                      </Select>
+                    <div className="relative">
+                      <select
+                        value={newRecruiter.role || 'recruiter'}
+                        onChange={(e) => handleInputChange('role', e.target.value, false)}
+                        className="w-full pl-4 pr-10 py-2 text-xs font-semibold border border-slate-200 dark:border-slate-800 dark:bg-slate-950 rounded-xl text-slate-700 dark:text-slate-300 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white appearance-none cursor-pointer shadow-sm h-10"
+                      >
+                        <option value="recruiter">Recruiter</option>
+                        <option value="admin">System Admin</option>
+                      </select>
+                      <div className="absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                        <ChevronDown size={14} />
+                      </div>
                     </div>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 block mb-1">First Name <span className="text-red-500">*</span></label>
+                    <label className={`text-[10px] font-bold uppercase tracking-wider block mb-1 transition-colors ${errors.firstName ? "text-red-500 dark:text-red-400" : "text-slate-500 dark:text-slate-400"}`}>First Name <span className="text-red-500">*</span></label>
                     <Input value={newRecruiter.firstName}
                       onChange={(e) => handleInputChange('firstName', e.target.value, false)}
                       placeholder="Letters only"
-                      className={`mt-1 border-slate-200 focus-visible:ring-indigo-500 dark:border-slate-800 dark:bg-slate-950 rounded-xl ${errors.firstName ? "border-red-500 focus-visible:ring-red-500" : ""}`} />
+                      className={`mt-1 border-slate-200 focus-visible:ring-indigo-500 dark:border-slate-800 dark:bg-slate-950 rounded-xl ${errors.firstName ? "border-red-500 focus-visible:ring-red-500 ring-2 ring-red-500/20" : ""}`} />
                     {errors.firstName && <p className="text-[10px] text-red-500 mt-1 font-semibold">{errors.firstName}</p>}
                   </div>
                   <div>
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 block mb-1">Last Name <span className="text-red-500">*</span></label>
+                    <label className={`text-[10px] font-bold uppercase tracking-wider block mb-1 transition-colors ${errors.lastName ? "text-red-500 dark:text-red-400" : "text-slate-500 dark:text-slate-400"}`}>Last Name <span className="text-red-500">*</span></label>
                     <Input value={newRecruiter.lastName}
                       onChange={(e) => handleInputChange('lastName', e.target.value, false)}
                       placeholder="Letters only"
-                      className={`mt-1 border-slate-200 focus-visible:ring-indigo-500 dark:border-slate-800 dark:bg-slate-950 rounded-xl ${errors.lastName ? "border-red-500" : ""}`} />
+                      className={`mt-1 border-slate-200 focus-visible:ring-indigo-500 dark:border-slate-800 dark:bg-slate-950 rounded-xl ${errors.lastName ? "border-red-500 focus-visible:ring-red-500 ring-2 ring-red-500/20" : ""}`} />
                     {errors.lastName && <p className="text-[10px] text-red-500 mt-1 font-semibold">{errors.lastName}</p>}
                   </div>
                 </div>
 
                 <div>
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 block mb-1">Email Address <span className="text-red-500">*</span></label>
+                  <label className={`text-[10px] font-bold uppercase tracking-wider block mb-1 transition-colors ${errors.email ? "text-red-500 dark:text-red-400" : "text-slate-500 dark:text-slate-400"}`}>Email Address <span className="text-red-500">*</span></label>
                   <Input type="email" value={newRecruiter.email}
                     onChange={(e) => handleInputChange('email', e.target.value, false)}
                     placeholder="name@agency.com"
-                    className={`mt-1 border-slate-200 focus-visible:ring-indigo-500 dark:border-slate-800 dark:bg-slate-950 rounded-xl ${errors.email ? "border-red-500" : ""}`} />
+                    className={`mt-1 border-slate-200 focus-visible:ring-indigo-500 dark:border-slate-800 dark:bg-slate-950 rounded-xl ${errors.email ? "border-red-500 focus-visible:ring-red-500 ring-2 ring-red-500/20" : ""}`} />
                   {errors.email && <p className="text-[10px] text-red-500 mt-1 font-semibold">{errors.email}</p>}
                 </div>
 
@@ -1112,12 +1114,12 @@ export default function AdminRecruiters() {
                 </div>
 
                 <div>
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 block mb-1">Security Password <span className="text-red-500">*</span></label>
+                  <label className={`text-[10px] font-bold uppercase tracking-wider block mb-1 transition-colors ${errors.password ? "text-red-500 dark:text-red-400" : "text-slate-500 dark:text-slate-400"}`}>Security Password <span className="text-red-500">*</span></label>
                   <div className="relative mt-1">
                     <Input type={showPassword ? "text" : "password"}
                       value={newRecruiter.password}
                       onChange={(e) => handleInputChange('password', e.target.value, false)}
-                      className={`pr-10 border-slate-200 focus-visible:ring-indigo-500 dark:border-slate-800 dark:bg-slate-950 rounded-xl ${errors.password ? "border-red-500" : ""}`}
+                      className={`pr-10 border-slate-200 focus-visible:ring-indigo-500 dark:border-slate-800 dark:bg-slate-950 rounded-xl ${errors.password ? "border-red-500 focus-visible:ring-red-500 ring-2 ring-red-500/20" : ""}`}
                       placeholder="Min 6 characters" />
                     <button type="button"
                       onClick={() => setShowPassword((p) => !p)}
@@ -1129,7 +1131,7 @@ export default function AdminRecruiters() {
                 </div>
 
                 <div className="flex justify-end gap-2.5 pt-5 border-t border-slate-100 dark:border-slate-800/80">
-                  <Button variant="outline" className="rounded-xl px-5 h-10 border-slate-200 text-slate-700 dark:border-slate-800 dark:text-slate-300 hover:bg-slate-100 hover:text-slate-950 dark:hover:bg-slate-800 dark:hover:text-white" onClick={() => setShowModal(false)}>Cancel</Button>
+                  <Button variant="outline" className="rounded-xl px-5 h-10 border border-slate-200 text-slate-700 bg-white dark:bg-transparent dark:border-slate-800 dark:text-slate-300 hover:bg-slate-100 hover:text-slate-950 dark:hover:bg-slate-800 dark:hover:text-white" onClick={() => setShowModal(false)}>Cancel</Button>
                   <Button onClick={handleAddRecruiter} className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold px-5 h-10 shadow-md">Create User</Button>
                 </div>
               </div>
@@ -1159,7 +1161,7 @@ export default function AdminRecruiters() {
                   </div>
                   <input type="file" ref={editFileInputRef} hidden accept="image/*" onChange={(e) => handleFileUpload(e, true)} />
                   <div className="space-y-1">
-                    <Button variant="outline" size="sm" className="rounded-xl h-8.5 text-xs font-semibold border-slate-200 dark:border-slate-800" onClick={() => editFileInputRef.current?.click()}>Change Photo</Button>
+                    <Button variant="outline" size="sm" className="rounded-xl h-8.5 text-xs font-semibold border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-800 dark:bg-transparent dark:text-slate-300 dark:hover:bg-slate-800" onClick={() => editFileInputRef.current?.click()}>Change Photo</Button>
                     <p className="text-[10px] text-slate-400">JPEG, PNG formats. Max 2MB.</p>
                   </div>
                 </div>
@@ -1173,44 +1175,46 @@ export default function AdminRecruiters() {
                   </div>
                   <div>
                     <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 block mb-1">System Role <span className="text-red-500">*</span></label>
-                    <div className="mt-1">
-                      <Select value={editRecruiter.role} onValueChange={(val) => handleInputChange('role', val, true)}>
-                        <SelectTrigger className="border-slate-200 dark:border-slate-800 dark:bg-slate-950 rounded-xl">
-                          <SelectValue placeholder="Select Role" />
-                        </SelectTrigger>
-                        <SelectContent className="rounded-xl border border-slate-200 dark:border-slate-800">
-                          <SelectItem value="recruiter">Recruiter</SelectItem>
-                          <SelectItem value="admin">System Admin</SelectItem>
-                        </SelectContent>
-                      </Select>
+                    <div className="relative">
+                      <select
+                        value={editRecruiter.role || 'recruiter'}
+                        onChange={(e) => handleInputChange('role', e.target.value, true)}
+                        className="w-full pl-4 pr-10 py-2 text-xs font-semibold border border-slate-200 dark:border-slate-800 dark:bg-slate-950 rounded-xl text-slate-700 dark:text-slate-300 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white appearance-none cursor-pointer shadow-sm h-10"
+                      >
+                        <option value="recruiter">Recruiter</option>
+                        <option value="admin">System Admin</option>
+                      </select>
+                      <div className="absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                        <ChevronDown size={14} />
+                      </div>
                     </div>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 block mb-1">First Name <span className="text-red-500">*</span></label>
+                    <label className={`text-[10px] font-bold uppercase tracking-wider block mb-1 transition-colors ${errors.firstName ? "text-red-500 dark:text-red-400" : "text-slate-500 dark:text-slate-400"}`}>First Name <span className="text-red-500">*</span></label>
                     <Input value={editRecruiter.firstName}
                       onChange={(e) => handleInputChange('firstName', e.target.value, true)}
                       placeholder="Letters only"
-                      className={`mt-1 border-slate-200 focus-visible:ring-indigo-500 dark:border-slate-800 dark:bg-slate-950 rounded-xl ${errors.firstName ? "border-red-500" : ""}`} />
+                      className={`mt-1 border-slate-200 focus-visible:ring-indigo-500 dark:border-slate-800 dark:bg-slate-950 rounded-xl ${errors.firstName ? "border-red-500 focus-visible:ring-red-500 ring-2 ring-red-500/20" : ""}`} />
                     {errors.firstName && <p className="text-[10px] text-red-500 mt-1 font-semibold">{errors.firstName}</p>}
                   </div>
                   <div>
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 block mb-1">Last Name <span className="text-red-500">*</span></label>
+                    <label className={`text-[10px] font-bold uppercase tracking-wider block mb-1 transition-colors ${errors.lastName ? "text-red-500 dark:text-red-400" : "text-slate-500 dark:text-slate-400"}`}>Last Name <span className="text-red-500">*</span></label>
                     <Input value={editRecruiter.lastName}
                       onChange={(e) => handleInputChange('lastName', e.target.value, true)}
                       placeholder="Letters only"
-                      className={`mt-1 border-slate-200 focus-visible:ring-indigo-500 dark:border-slate-800 dark:bg-slate-950 rounded-xl ${errors.lastName ? "border-red-500" : ""}`} />
+                      className={`mt-1 border-slate-200 focus-visible:ring-indigo-500 dark:border-slate-800 dark:bg-slate-950 rounded-xl ${errors.lastName ? "border-red-500 focus-visible:ring-red-500 ring-2 ring-red-500/20" : ""}`} />
                     {errors.lastName && <p className="text-[10px] text-red-500 mt-1 font-semibold">{errors.lastName}</p>}
                   </div>
                 </div>
 
                 <div>
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 block mb-1">Email Address <span className="text-red-500">*</span></label>
+                  <label className={`text-[10px] font-bold uppercase tracking-wider block mb-1 transition-colors ${errors.email ? "text-red-500 dark:text-red-400" : "text-slate-500 dark:text-slate-400"}`}>Email Address <span className="text-red-500">*</span></label>
                   <Input type="email" value={editRecruiter.email}
                     onChange={(e) => handleInputChange('email', e.target.value, true)}
-                    className={`mt-1 border-slate-200 focus-visible:ring-indigo-500 dark:border-slate-800 dark:bg-slate-950 rounded-xl ${errors.email ? "border-red-500" : ""}`} />
+                    className={`mt-1 border-slate-200 focus-visible:ring-indigo-500 dark:border-slate-800 dark:bg-slate-950 rounded-xl ${errors.email ? "border-red-500 focus-visible:ring-red-500 ring-2 ring-red-500/20" : ""}`} />
                   {errors.email && <p className="text-[10px] text-red-500 mt-1 font-semibold">{errors.email}</p>}
                 </div>
 
@@ -1240,7 +1244,7 @@ export default function AdminRecruiters() {
                     <Input type={showEditPassword ? "text" : "password"}
                       value={editRecruiter.password}
                       onChange={(e) => handleInputChange('password', e.target.value, true)}
-                      className={`pr-10 border-slate-200 focus-visible:ring-indigo-500 dark:border-slate-800 dark:bg-slate-950 rounded-xl ${errors.password ? "border-red-500" : ""}`}
+                      className={`pr-10 border-slate-200 focus-visible:ring-indigo-500 dark:border-slate-800 dark:bg-slate-950 rounded-xl ${errors.password ? "border-red-500 focus-visible:ring-red-500 ring-2 ring-red-500/20" : ""}`}
                       placeholder="Leave blank to keep current password" />
                     <button type="button"
                       onClick={() => setShowEditPassword((p) => !p)}
@@ -1252,7 +1256,7 @@ export default function AdminRecruiters() {
                 </div>
 
                 <div className="flex justify-end gap-2.5 pt-5 border-t border-slate-100 dark:border-slate-800/80">
-                  <Button variant="outline" className="rounded-xl px-5 h-10 border-slate-200 text-slate-700 dark:border-slate-800 dark:text-slate-300 hover:bg-slate-100 hover:text-slate-950 dark:hover:bg-slate-800 dark:hover:text-white" onClick={() => setShowEditModal(false)}>Cancel</Button>
+                  <Button variant="outline" className="rounded-xl px-5 h-10 border border-slate-200 text-slate-700 bg-white dark:bg-transparent dark:border-slate-800 dark:text-slate-300 hover:bg-slate-100 hover:text-slate-950 dark:hover:bg-slate-800 dark:hover:text-white" onClick={() => setShowEditModal(false)}>Cancel</Button>
                   <Button onClick={handleEditRecruiter} className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold px-5 h-10 shadow-md">Update Profile</Button>
                 </div>
               </div>
@@ -1282,7 +1286,7 @@ export default function AdminRecruiters() {
                 </p>
               </div>
               <div className="flex gap-3 mt-6">
-                <Button className="flex-1 rounded-xl h-10 hover:bg-slate-100 hover:text-slate-950 dark:hover:bg-slate-800 dark:hover:text-white" variant="outline"
+                <Button variant="outline" className="flex-1 rounded-xl h-10 border border-slate-200 text-slate-700 bg-white dark:bg-transparent dark:border-slate-800 dark:text-slate-300 hover:bg-slate-100 hover:text-slate-950 dark:hover:bg-slate-800 dark:hover:text-white"
                   onClick={() => { setShowDeleteModal(false); setRecruiterToDelete(null); }}>
                   Cancel
                 </Button>
@@ -1329,7 +1333,7 @@ export default function AdminRecruiters() {
                 </p>
               </div>
               <div className="flex gap-3 mt-6">
-                <Button className="flex-1 rounded-xl h-10 hover:bg-slate-100 hover:text-slate-950 dark:hover:bg-slate-800 dark:hover:text-white" variant="outline"
+                <Button variant="outline" className="flex-1 rounded-xl h-10 border border-slate-200 text-slate-700 bg-white dark:bg-transparent dark:border-slate-800 dark:text-slate-300 hover:bg-slate-100 hover:text-slate-950 dark:hover:bg-slate-800 dark:hover:text-white"
                   onClick={() => { setShowDeactivateModal(false); setRecruiterToToggle(null); }}>
                   Cancel
                 </Button>

@@ -83,6 +83,7 @@ export const getJobApplications = async (req, res) => {
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(Number(limit))
+      .populate({ path: 'promotedCandidateId', select: '_id' })
       .lean();
 
     res.json({
@@ -167,10 +168,16 @@ export const promoteToCandidate = async (req, res) => {
 
     // ── Guard: already promoted? ─────────────────────────────────────────────
     if (application.promotedCandidateId) {
-      return res.status(409).json({
-        message: 'This application has already been promoted to a Candidate.',
-        candidateId: application.promotedCandidateId,
-      });
+      const candidateExists = await Candidate.exists({ _id: application.promotedCandidateId });
+      if (candidateExists) {
+        return res.status(409).json({
+          message: 'This application has already been promoted to a Candidate.',
+          candidateId: application.promotedCandidateId,
+        });
+      } else {
+        await JobApplication.findByIdAndUpdate(req.params.id, { promotedCandidateId: null });
+        application.promotedCandidateId = null;
+      }
     }
 
     // ── Duplicate email guard ─────────────────────────────────────────────────

@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ClipboardList, Loader2, Search, UserRound, X } from 'lucide-react';
+import { ClipboardList, Loader2, Search, UserRound, X, FileSpreadsheet } from 'lucide-react';
+import * as XLSX from 'xlsx';
+import { useToast } from '@/hooks/use-toast';
 import CandidateProfileLink from '@/components/CandidateProfileLink';
 
 const API_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:5000')
@@ -187,6 +189,7 @@ const CountButton = ({ value, onClick, disabled = false }) => {
 };
 
 const CandidateRecordsModal = ({ detail, onClose }) => {
+  const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
   if (!detail) return null;
 
@@ -205,6 +208,110 @@ const CandidateRecordsModal = ({ detail, onClose }) => {
     return haystack.includes(searchTerm.toLowerCase());
   });
 
+  const handleExportExcel = () => {
+    if (filteredRows.length === 0) return;
+
+    try {
+      const exportData = filteredRows.map((candidate, index) => {
+        const submission = getMatchingSubmission(candidate, detail.column?.label);
+        const statusText = detail.column?.key === 'total'
+          ? getStatusList(candidate).join(', ')
+          : detail.column?.label;
+
+        return {
+          "S.No": String(index + 1),
+          "Candidate Name": getCandidateName(candidate),
+          "Email": candidate.email || '-',
+          "Contact": candidate.contact || candidate.phone || '-',
+          "Client": submission?.clientName || candidate.client || '-',
+          "Job Code": submission?.jobCode || candidate.jobCode || '-',
+          "Position": submission?.position || candidate.position || '-',
+          "Status": statusText ? String(statusText).toUpperCase() : '-',
+          "Source": candidate.source || '-',
+          "Date": formatDate(submission?.submittedAt || candidate.dateAdded || candidate.createdAt || candidate.updatedAt)
+        };
+      });
+
+      const worksheet = XLSX.utils.json_to_sheet(exportData);
+
+      // Auto-fit column widths
+      const headers = Object.keys(exportData[0] || {});
+      worksheet["!cols"] = headers.map((header) => {
+        const maxLength = Math.max(
+          String(header).length,
+          ...exportData.map((row) => String(row[header] ?? "").length)
+        );
+        return { wch: Math.min(Math.max(maxLength + 3, 10), 40) };
+      });
+
+      // Row heights
+      worksheet["!rows"] = [
+        { hpt: 26 }, // Header row
+        ...exportData.map(() => ({ hpt: 20 })) // Data rows
+      ];
+
+      // Format cells (types, number formats, alignments/styles)
+      Object.keys(worksheet).forEach((key) => {
+        if (key.startsWith('!')) return;
+        const cell = worksheet[key];
+        if (!cell) return;
+
+        const rowNum = parseInt(key.replace(/^[A-Z]+/, ''), 10);
+        const colLetter = key.replace(/[0-9]+$/, '');
+
+        cell.s = cell.s || {};
+        cell.s.font = cell.s.font || {};
+        cell.s.alignment = cell.s.alignment || {};
+
+        if (rowNum === 1) {
+          // Header styling
+          cell.s.font.bold = true;
+          cell.s.font.name = 'Segoe UI';
+          cell.s.font.sz = 11;
+          cell.s.fill = {
+            fgColor: { rgb: "F1F5F9" }
+          };
+          cell.s.alignment.horizontal = "center";
+          cell.s.alignment.vertical = "center";
+        } else {
+          // Data styling
+          cell.s.font.name = 'Segoe UI';
+          cell.s.font.sz = 10;
+          cell.s.alignment.vertical = "center";
+
+          if (colLetter === 'A') { // S.No
+            cell.t = 's';
+            cell.z = '@';
+            cell.s.alignment.horizontal = "left";
+          } else if (colLetter === 'D') { // Contact
+            cell.t = 's';
+            cell.z = '@';
+            cell.s.alignment.horizontal = "center";
+          } else if (colLetter === 'H') { // Status
+            cell.s.alignment.horizontal = "center";
+          } else if (colLetter === 'J') { // Date
+            cell.s.alignment.horizontal = "center";
+          } else {
+            cell.s.alignment.horizontal = "left";
+          }
+        }
+      });
+
+      const workbook = XLSX.utils.book_new();
+      const sheetName = (detail.title || 'Candidates').replace(/[:\\/?*[\]]/g, '').slice(0, 31);
+      XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+
+      const safeTitle = (detail.title || 'Candidates_Export').replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '');
+      const dateStr = new Date().toISOString().split('T')[0];
+      XLSX.writeFile(workbook, `${safeTitle}_${dateStr}.xlsx`);
+
+      toast({ title: 'Exported!', description: `${filteredRows.length} candidates exported to Excel.` });
+    } catch (error) {
+      console.error("Failed to export excel:", error);
+      toast({ title: 'Export failed', description: 'Could not export file.', variant: 'destructive' });
+    }
+  };
+
   return (
     <ModalPortal>
       <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
@@ -220,7 +327,7 @@ const CandidateRecordsModal = ({ detail, onClose }) => {
                 Showing {filteredRows.length} of {rows.length} matching record(s)
               </p>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap sm:flex-nowrap">
               <div className="relative">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
                 <input
@@ -230,10 +337,20 @@ const CandidateRecordsModal = ({ detail, onClose }) => {
                   className="w-64 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 py-2 pl-9 pr-3 text-sm outline-none focus:border-blue-400 dark:focus:border-blue-600 focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900 text-slate-900 dark:text-white"
                 />
               </div>
+              {filteredRows.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleExportExcel}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold uppercase tracking-wider shadow-sm transition-all cursor-pointer whitespace-nowrap"
+                >
+                  <FileSpreadsheet className="w-4 h-4" />
+                  Export Excel
+                </button>
+              )}
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded-full bg-white dark:bg-slate-800 p-2 text-slate-500 dark:text-slate-400 shadow-sm transition hover:bg-red-50 dark:hover:bg-red-950/30 hover:text-red-500"
+                className="rounded-full bg-white dark:bg-slate-800 p-2 text-slate-500 dark:text-slate-400 shadow-sm transition hover:bg-red-50 dark:hover:bg-red-950/30 hover:text-red-500 cursor-pointer"
               >
                 <X className="h-5 w-5" />
               </button>

@@ -452,6 +452,7 @@ const ColumnTotalFooter = ({ columns, minWidth = "520px", template }) => (
 
 const DetailsModal = ({ detail, onClose, onCellDrilldown }) => {
   const [modalSearch, setModalSearch] = useState("");
+  const { toast } = useToast();
 
   useEffect(() => {
     setModalSearch("");
@@ -481,6 +482,123 @@ const DetailsModal = ({ detail, onClose, onCellDrilldown }) => {
     ))
     : rows;
 
+  // Extract plain-text value from a column/row pair for Excel export
+  const getCellTextValue = (row, column) => {
+    if (column.exportValue) return column.exportValue(row);
+    if (column.searchValue) {
+      const v = column.searchValue(row);
+      return v !== null && v !== undefined ? String(v) : "";
+    }
+    if (column.key) {
+      const v = row[column.key];
+      if (v === null || v === undefined) return "";
+      if (Array.isArray(v)) return v.join(", ");
+      if (typeof v === "boolean") return v ? "Yes" : "No";
+      if (typeof v === "object") {
+        if (v.firstName || v.lastName || v.name || v.fullName || v.email) {
+          const first = v.firstName || "";
+          const last = v.lastName || "";
+          return `${first} ${last}`.trim() || v.name || v.fullName || v.username || v.email || "";
+        }
+        return JSON.stringify(v);
+      }
+      return String(v);
+    }
+    if (column.render) {
+      const rendered = column.render(row);
+      if (rendered === null || rendered === undefined) return "";
+      if (typeof rendered === "string" || typeof rendered === "number") return String(rendered);
+      if (rendered?.props?.children !== undefined) {
+        const c = rendered.props.children;
+        return Array.isArray(c) ? c.filter(Boolean).join(" ") : String(c ?? "");
+      }
+      return "";
+    }
+    return "";
+  };
+
+  const handleExportExcel = () => {
+    if (visibleRows.length === 0) {
+      toast({ title: "No data", description: "Nothing to export.", variant: "destructive" });
+      return;
+    }
+    try {
+      const exportData = visibleRows.map((row, idx) => {
+        const obj = { "S.No": String(idx + 1) };
+        columns.forEach((col) => { obj[col.label] = getCellTextValue(row, col); });
+        return obj;
+      });
+
+      const worksheet = XLSX.utils.json_to_sheet(exportData);
+
+      // Auto-fit column widths
+      const headers = Object.keys(exportData[0] || {});
+      worksheet["!cols"] = headers.map((header) => {
+        const maxLen = Math.max(
+          String(header).length,
+          ...exportData.map((r) => String(r[header] ?? "").length)
+        );
+        return { wch: Math.min(Math.max(maxLen + 3, 10), 45) };
+      });
+
+      // Row heights
+      worksheet["!rows"] = [{ hpt: 28 }, ...exportData.map(() => ({ hpt: 20 }))];
+
+      // Cell-level formatting
+      Object.keys(worksheet).forEach((cellAddr) => {
+        if (cellAddr.startsWith("!")) return;
+        const cell = worksheet[cellAddr];
+        if (!cell) return;
+        const rowNum = parseInt(cellAddr.replace(/^[A-Z]+/, ""), 10);
+        const colLetter = cellAddr.replace(/[0-9]+$/, "");
+        cell.s = cell.s || {};
+        cell.s.font = cell.s.font || {};
+        cell.s.alignment = cell.s.alignment || {};
+
+        if (rowNum === 1) {
+          cell.s.font.bold = true;
+          cell.s.font.name = "Segoe UI";
+          cell.s.font.sz = 11;
+          cell.s.fill = { fgColor: { rgb: "EFF6FF" } };
+          cell.s.alignment.horizontal = "center";
+          cell.s.alignment.vertical = "center";
+        } else {
+          cell.s.font.name = "Segoe UI";
+          cell.s.font.sz = 10;
+          cell.s.alignment.vertical = "center";
+          if (colLetter === "A") {
+            cell.t = "s";
+            cell.z = "@";
+            cell.s.alignment.horizontal = "left";
+          } else {
+            const numVal = Number(cell.v);
+            if (!Number.isNaN(numVal) && String(cell.v).trim() !== "" && !/^0\d/.test(String(cell.v))) {
+              cell.t = "n";
+              cell.s.alignment.horizontal = "right";
+            } else {
+              cell.t = "s";
+              cell.z = "@";
+              cell.s.alignment.horizontal = "left";
+            }
+          }
+        }
+      });
+
+      const workbook = XLSX.utils.book_new();
+      const sheetName = (detail.title || "Report Details").replace(/[:\\/?*[\]]/g, "").slice(0, 31);
+      XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+
+      const safeTitle = (detail.title || "Report_Details").replace(/\s+/g, "_").replace(/[^a-zA-Z0-9_]/g, "");
+      const dateStr = new Date().toISOString().split("T")[0];
+      XLSX.writeFile(workbook, `${safeTitle}_${dateStr}.xlsx`);
+
+      toast({ title: "Exported!", description: `${visibleRows.length} records exported to Excel.` });
+    } catch (err) {
+      console.error("Excel export failed:", err);
+      toast({ title: "Export failed", description: "Could not export file.", variant: "destructive" });
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
@@ -495,14 +613,26 @@ const DetailsModal = ({ detail, onClose, onCellDrilldown }) => {
             </div>
             <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{detail.subtitle}</p>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-500 shadow-sm hover:bg-zinc-100 hover:text-zinc-900 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-white"
-            aria-label="Close details modal"
-          >
-            <X className="h-5 w-5" />
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            {visibleRows.length > 0 && (
+              <button
+                type="button"
+                onClick={handleExportExcel}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold uppercase tracking-wider text-white shadow-sm transition hover:bg-emerald-700 cursor-pointer whitespace-nowrap"
+              >
+                <FileSpreadsheet className="h-4 w-4" />
+                Export Excel
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-500 shadow-sm hover:bg-zinc-100 hover:text-zinc-900 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-white cursor-pointer"
+              aria-label="Close details modal"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
         </div>
         <div className="border-b border-zinc-200 bg-white px-5 py-3 dark:border-zinc-800 dark:bg-zinc-900 sm:px-6">
           <div className="relative max-w-md">
@@ -1874,7 +2004,6 @@ export function ReportsDashboard({ recruiterOnly = false }) {
                   />
                 </div>
               </div>
-
               {/* Start Date & End Date */}
               <div className="grid grid-cols-2 gap-3">
                 <div>

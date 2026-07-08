@@ -1,10 +1,6 @@
 import { Search, X } from 'lucide-react';
 import { parseSearchQuery } from '@/utils/candidateSearch';
 
-const normalizeKeyword = (value) => (
-  parseSearchQuery(value)[0] || ''
-);
-
 export default function CandidateKeywordSearch({
   input,
   keywords,
@@ -57,8 +53,9 @@ export default function CandidateKeywordSearch({
   };
 
   const handleBlur = () => {
-    const normalized = normalizeKeyword(input);
-    if (normalized) addKeywords(normalized);
+    if (input.trim()) {
+      addKeywords(input);
+    }
   };
 
   return (

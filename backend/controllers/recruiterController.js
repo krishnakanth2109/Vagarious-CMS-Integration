@@ -7,7 +7,7 @@ import { sendBrevoEmail } from '../services/email.js';
 
 cloudinary.config({
   cloud_name: process.env.CLOUD_NAME,
-  api_key:    process.env.CLOUD_API_KEY,
+  api_key: process.env.CLOUD_API_KEY,
   api_secret: process.env.CLOUD_API_SECRET,
 });
 
@@ -22,25 +22,25 @@ export const getUserProfile = async (req, res) => {
     if (!user) return res.status(404).json({ message: 'User not found' });
 
     res.json({
-      _id:            user._id,
-      firstName:      user.firstName,
-      lastName:       user.lastName,
-      email:          user.email,
-      username:       user.username,
-      phone:          user.phone          || '',
-      location:       user.location       || '',
+      _id: user._id,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      email: user.email,
+      username: user.username,
+      phone: user.phone || '',
+      location: user.location || '',
       specialization: user.specialization || '',
-      experience:     user.experience     || '',
-      bio:            user.bio            || '',
+      experience: user.experience || '',
+      bio: user.bio || '',
       profilePicture: user.profilePicture || '',
-      role:           user.role,
-      active:         user.active,
-      recruiterId:    user.recruiterId    || '',
+      role: user.role,
+      active: user.active,
+      recruiterId: user.recruiterId || '',
       socials: {
         linkedin: user.socials?.linkedin || '',
-        github:   user.socials?.github   || '',
-        twitter:  user.socials?.twitter  || '',
-        website:  user.socials?.website  || '',
+        github: user.socials?.github || '',
+        twitter: user.socials?.twitter || '',
+        website: user.socials?.website || '',
       },
       createdAt: user.createdAt,
     });
@@ -60,22 +60,22 @@ export const updateUserProfile = async (req, res) => {
     if (!user) return res.status(404).json({ message: 'User not found' });
 
     // ── Basic fields ──────────────────────────────────────────────────────
-    if (req.body.firstName !== undefined) user.firstName      = req.body.firstName.trim()  || user.firstName;
-    if (req.body.lastName  !== undefined) user.lastName       = req.body.lastName.trim()   || user.lastName;
-    if (req.body.email     !== undefined) user.email          = req.body.email.trim()      || user.email;
-    if (req.body.phone     !== undefined) user.phone          = req.body.phone;
-    if (req.body.location  !== undefined) user.location       = req.body.location;
+    if (req.body.firstName !== undefined) user.firstName = req.body.firstName.trim() || user.firstName;
+    if (req.body.lastName !== undefined) user.lastName = req.body.lastName.trim() || user.lastName;
+    if (req.body.email !== undefined) user.email = req.body.email.trim() || user.email;
+    if (req.body.phone !== undefined) user.phone = req.body.phone;
+    if (req.body.location !== undefined) user.location = req.body.location;
     if (req.body.specialization !== undefined) user.specialization = req.body.specialization;
-    if (req.body.experience     !== undefined) user.experience     = req.body.experience;
-    if (req.body.bio            !== undefined) user.bio            = req.body.bio;
+    if (req.body.experience !== undefined) user.experience = req.body.experience;
+    if (req.body.bio !== undefined) user.bio = req.body.bio;
 
     // ── Socials ───────────────────────────────────────────────────────────
     if (req.body.socials && typeof req.body.socials === 'object') {
       user.socials = {
         linkedin: req.body.socials.linkedin ?? user.socials?.linkedin ?? '',
-        github:   req.body.socials.github   ?? user.socials?.github   ?? '',
-        twitter:  req.body.socials.twitter  ?? user.socials?.twitter  ?? '',
-        website:  req.body.socials.website  ?? user.socials?.website  ?? '',
+        github: req.body.socials.github ?? user.socials?.github ?? '',
+        twitter: req.body.socials.twitter ?? user.socials?.twitter ?? '',
+        website: req.body.socials.website ?? user.socials?.website ?? '',
       };
     }
 
@@ -84,20 +84,20 @@ export const updateUserProfile = async (req, res) => {
       if (req.body.profilePicture === '') {
         // Option 1: User deleted the image
         if (user.profilePicture?.includes('cloudinary')) {
-          try { await cloudinary.uploader.destroy(`recruiters/recruiter_${user._id}`); } catch {}
+          try { await cloudinary.uploader.destroy(`recruiters/recruiter_${user._id}`); } catch { }
         }
         user.profilePicture = '';
-      } 
+      }
       else if (req.body.profilePicture.startsWith('data:image')) {
         // Option 2: User uploaded a new base64 image
         try {
           if (user.profilePicture?.includes('cloudinary')) {
-            try { await cloudinary.uploader.destroy(`recruiters/recruiter_${user._id}`); } catch {}
+            try { await cloudinary.uploader.destroy(`recruiters/recruiter_${user._id}`); } catch { }
           }
           const result = await cloudinary.uploader.upload(req.body.profilePicture, {
-            folder:        'recruiters',
-            public_id:     `recruiter_${user._id}`,
-            overwrite:     true,
+            folder: 'recruiters',
+            public_id: `recruiter_${user._id}`,
+            overwrite: true,
             resource_type: 'image',
             transformation: [
               { width: 500, height: 500, crop: 'limit' },
@@ -109,7 +109,7 @@ export const updateUserProfile = async (req, res) => {
         } catch (uploadError) {
           return res.status(500).json({ message: 'Image upload failed', error: uploadError.message });
         }
-      } 
+      }
       else {
         // Option 3: Image URL remains unchanged
         user.profilePicture = req.body.profilePicture;
@@ -120,7 +120,7 @@ export const updateUserProfile = async (req, res) => {
     if (user.firebaseUid) {
       const fbUpdates = {};
       const newFirst = req.body.firstName?.trim();
-      const newLast  = req.body.lastName?.trim();
+      const newLast = req.body.lastName?.trim();
       if (newFirst || newLast) {
         fbUpdates.displayName = `${newFirst || user.firstName} ${newLast || user.lastName}`.trim();
       }
@@ -139,24 +139,24 @@ export const updateUserProfile = async (req, res) => {
     const updatedUser = await user.save();
 
     res.json({
-      _id:            updatedUser._id,
-      firstName:      updatedUser.firstName,
-      lastName:       updatedUser.lastName,
-      email:          updatedUser.email,
-      username:       updatedUser.username,
-      phone:          updatedUser.phone          || '',
-      location:       updatedUser.location       || '',
+      _id: updatedUser._id,
+      firstName: updatedUser.firstName,
+      lastName: updatedUser.lastName,
+      email: updatedUser.email,
+      username: updatedUser.username,
+      phone: updatedUser.phone || '',
+      location: updatedUser.location || '',
       specialization: updatedUser.specialization || '',
-      experience:     updatedUser.experience     || '',
-      bio:            updatedUser.bio            || '',
+      experience: updatedUser.experience || '',
+      bio: updatedUser.bio || '',
       profilePicture: updatedUser.profilePicture || '',
-      role:           updatedUser.role,
-      active:         updatedUser.active,
+      role: updatedUser.role,
+      active: updatedUser.active,
       socials: {
         linkedin: updatedUser.socials?.linkedin || '',
-        github:   updatedUser.socials?.github   || '',
-        twitter:  updatedUser.socials?.twitter  || '',
-        website:  updatedUser.socials?.website  || '',
+        github: updatedUser.socials?.github || '',
+        twitter: updatedUser.socials?.twitter || '',
+        website: updatedUser.socials?.website || '',
       },
     });
   } catch (error) {
@@ -240,21 +240,21 @@ export const createRecruiter = async (req, res) => {
       firstName,
       lastName,
       email,
-      recruiterId,
+      recruiterId: recruiterId ? recruiterId.trim() : undefined,
       phone,
-      role:           role || 'recruiter',
-      username:       username || email.split('@')[0],
+      role: role || 'recruiter',
+      username: username || email.split('@')[0],
       profilePicture: profilePicture || '',
-      active:         true,
+      active: true,
     });
 
     res.status(201).json({
-      _id:         user._id,
-      firstName:   user.firstName,
-      lastName:    user.lastName,
-      email:       user.email,
+      _id: user._id,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      email: user.email,
       recruiterId: user.recruiterId,
-      role:        user.role,
+      role: user.role,
       firebaseUid: user.firebaseUid,
     });
 
@@ -290,10 +290,10 @@ export const createRecruiter = async (req, res) => {
   } catch (error) {
     console.error('Create Recruiter Error:', error);
     if (firebaseUid) {
-      try { await admin.auth().deleteUser(firebaseUid); } catch {}
+      try { await admin.auth().deleteUser(firebaseUid); } catch { }
     }
     if (error.code === 'auth/weak-password') return res.status(400).json({ message: 'Password must be at least 6 characters.' });
-    if (error.code === 'auth/invalid-email')  return res.status(400).json({ message: 'Invalid email address.' });
+    if (error.code === 'auth/invalid-email') return res.status(400).json({ message: 'Invalid email address.' });
     res.status(500).json({ message: error.message });
   }
 };
@@ -319,7 +319,7 @@ export const updateRecruiter = async (req, res) => {
 
     if (user.firebaseUid) {
       const fbUpdates = {};
-      if (req.body.password)                        fbUpdates.password    = req.body.password;
+      if (req.body.password) fbUpdates.password = req.body.password;
       if (req.body.email && req.body.email !== user.email) fbUpdates.email = req.body.email;
       if (req.body.firstName || req.body.lastName) {
         fbUpdates.displayName = `${req.body.firstName || user.firstName} ${req.body.lastName || user.lastName}`.trim();
@@ -330,14 +330,14 @@ export const updateRecruiter = async (req, res) => {
       }
     }
 
-    user.firstName      = req.body.firstName      || user.firstName;
-    user.lastName       = req.body.lastName       || user.lastName;
-    user.email          = req.body.email          || user.email;
-    user.phone          = req.body.phone          || user.phone;
-    user.role           = req.body.role           || user.role;
-    user.username       = req.body.username       || user.username;
-    user.recruiterId    = req.body.recruiterId    || user.recruiterId;
-    
+    user.firstName = req.body.firstName || user.firstName;
+    user.lastName = req.body.lastName || user.lastName;
+    user.email = req.body.email || user.email;
+    user.phone = req.body.phone || user.phone;
+    user.role = req.body.role || user.role;
+    user.username = req.body.username || user.username;
+    user.recruiterId = req.body.recruiterId ? req.body.recruiterId.trim() : undefined;
+
     // Explicitly allow picture deletion by admins too
     if (req.body.profilePicture !== undefined) {
       user.profilePicture = req.body.profilePicture;
@@ -345,11 +345,11 @@ export const updateRecruiter = async (req, res) => {
 
     const updatedUser = await user.save();
     res.json({
-      _id:         updatedUser._id,
-      firstName:   updatedUser.firstName,
-      lastName:    updatedUser.lastName,
-      email:       updatedUser.email,
-      role:        updatedUser.role,
+      _id: updatedUser._id,
+      firstName: updatedUser.firstName,
+      lastName: updatedUser.lastName,
+      email: updatedUser.email,
+      role: updatedUser.role,
       recruiterId: updatedUser.recruiterId,
       profilePicture: updatedUser.profilePicture
     });
@@ -374,7 +374,7 @@ export const deleteRecruiter = async (req, res) => {
     }
 
     if (user.profilePicture?.includes('cloudinary')) {
-      try { await cloudinary.uploader.destroy(`recruiters/recruiter_${user._id}`); } catch {}
+      try { await cloudinary.uploader.destroy(`recruiters/recruiter_${user._id}`); } catch { }
     }
 
     await user.deleteOne();
@@ -413,7 +413,7 @@ export const toggleRecruiterStatus = async (req, res) => {
 
     res.json({
       message: `${user.firstName} has been ${user.active ? 'activated' : 'deactivated'}`,
-      active:  user.active,
+      active: user.active,
     });
   } catch (error) {
     console.error('[toggleRecruiterStatus]', error.message);

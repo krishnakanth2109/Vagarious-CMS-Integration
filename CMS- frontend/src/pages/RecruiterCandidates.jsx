@@ -8,7 +8,8 @@ import {
   Building, Briefcase, Loader2, Ban, List, LayoutGrid,
   Calendar, GraduationCap, Award, UserCircle, Target,
   MessageCircle, Eye, IndianRupee, Upload, FileUp, X,
-  Trash2, AlertTriangle, FileSpreadsheet, Linkedin, SlidersHorizontal
+  Trash2, AlertTriangle, FileSpreadsheet, Linkedin, SlidersHorizontal,
+  ArrowUpDown, ArrowUp, ArrowDown
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import CandidateProfileLink from '@/components/CandidateProfileLink';
@@ -555,6 +556,7 @@ export default function RecruiterCandidates() {
   const [activeStatFilter, setActiveStatFilter] = useState(null);
   const [selectedCandidates, setSelectedCandidates] = useState([]);
   const [isJobInviteOpen, setIsJobInviteOpen] = useState(false);
+  const [sortConfig, setSortConfig] = useState({ key: 'candidateId', direction: 'desc' });
 
   // --- PAGINATION STATES ---
   const [currentPage, setCurrentPage] = useState(1);
@@ -962,9 +964,28 @@ export default function RecruiterCandidates() {
     };
   }, [candidates]);
 
+  const getCandidateId = (c) => c.candidateId || c._id.substring(c._id.length - 6).toUpperCase();
+
+  const handleSort = (key) => {
+    let direction = 'asc';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const SortIcon = ({ field }) => {
+    if (!sortConfig || sortConfig.key !== field) {
+      return <ArrowUpDown className="h-3 w-3 ml-1 opacity-40 inline-block" />;
+    }
+    return sortConfig.direction === 'asc'
+      ? <ArrowUp className="h-3 w-3 ml-1 text-blue-500 inline-block" />
+      : <ArrowDown className="h-3 w-3 ml-1 text-blue-500 inline-block" />;
+  };
+
   const getFilteredCandidates = useMemo(() => {
     const todayLocal = new Date().toLocaleDateString('en-CA');
-    return candidates.filter(c => {
+    const filtered = candidates.filter(c => {
       const searchMatch = candidateMatchesKeywordBadges(c, searchKeywords);
       const currentStatusArr = getCandidateStatuses(c);
 
@@ -979,7 +1000,33 @@ export default function RecruiterCandidates() {
       const statusDropdownMatch = statusFilter === 'all' || currentStatusArr.includes(statusFilter);
       return searchMatch && statusDropdownMatch && statCardMatch;
     });
-  }, [candidates, searchKeywords, statusFilter, activeStatFilter]);
+
+    if (sortConfig) {
+      filtered.sort((a, b) => {
+        let av = '';
+        let bv = '';
+        if (sortConfig.key === 'candidateId') {
+          av = getCandidateId(a);
+          bv = getCandidateId(b);
+        } else if (sortConfig.key === 'name') {
+          av = a.name || `${a.firstName || ''} ${a.lastName || ''}`.trim() || '';
+          bv = b.name || `${b.firstName || ''} ${b.lastName || ''}`.trim() || '';
+        } else {
+          av = a[sortConfig.key] || '';
+          bv = b[sortConfig.key] || '';
+        }
+
+        if (typeof av === 'string' && typeof bv === 'string') {
+          return sortConfig.direction === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
+        }
+        if (av < bv) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (av > bv) return sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+
+    return filtered;
+  }, [candidates, searchKeywords, statusFilter, activeStatFilter, sortConfig]);
 
   // --- PAGINATION LOGIC ---
   const totalPages = Math.ceil(getFilteredCandidates.length / ITEMS_PER_PAGE);
@@ -1021,7 +1068,6 @@ export default function RecruiterCandidates() {
     setIsExportDialogOpen(true);
   };
 
-  const getCandidateId = (c) => c.candidateId || c._id.substring(c._id.length - 6).toUpperCase();
   const formatSkills = (skills) => !skills ? 'N/A' : Array.isArray(skills) ? skills.slice(0, 3).join(', ') + (skills.length > 3 ? '...' : '') : skills.length > 50 ? skills.substring(0, 50) + '...' : skills;
   const formatDate = (dateString) => dateString ? new Date(dateString).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A';
 
@@ -1905,10 +1951,10 @@ export default function RecruiterCandidates() {
                 <table className="w-full text-sm text-left border-collapse min-w-[1500px]">
                   <thead className="bg-slate-50 text-slate-500 font-semibold border-b">
                     <tr>
-                      <th className="p-4 w-12 whitespace-nowrap"><input type="checkbox" checked={allVisibleCandidatesSelected} onChange={selectAllCandidates} className="h-4 w-4 rounded border-slate-300" title="Select all visible candidates" /></th>
-                      <th className="p-3 whitespace-nowrap">ID</th>
+                       <th className="p-4 w-12 whitespace-nowrap"><input type="checkbox" checked={allVisibleCandidatesSelected} onChange={selectAllCandidates} className="h-4 w-4 rounded border-slate-300" title="Select all visible candidates" /></th>
+                      <th className="p-3 whitespace-nowrap cursor-pointer select-none" onClick={() => handleSort('candidateId')}>ID <SortIcon field="candidateId" /></th>
                       <th className="p-3 whitespace-nowrap">Matching Jobs</th>
-                      <th className="p-3 whitespace-nowrap">Name</th>
+                      <th className="p-3 whitespace-nowrap cursor-pointer select-none" onClick={() => handleSort('name')}>Name <SortIcon field="name" /></th>
                       <th className="p-3 whitespace-nowrap">Phone</th>
                       <th className="p-3 whitespace-nowrap">Email</th>
                       <th className="p-3 whitespace-nowrap">Client</th>

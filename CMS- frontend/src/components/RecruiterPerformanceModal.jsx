@@ -1,5 +1,7 @@
 import React from 'react';
-import { ClipboardList, X } from 'lucide-react';
+import { ClipboardList, X, FileSpreadsheet } from 'lucide-react';
+import * as XLSX from 'xlsx';
+import { useToast } from '@/hooks/use-toast';
 import CandidateProfileLink from '@/components/CandidateProfileLink';
 import { RecruiterDetailsTrigger } from '@/components/RecruiterDetailsModal';
 
@@ -21,9 +23,105 @@ const getRecruiterDetails = (candidate) => (
 );
 
 export default function RecruiterPerformanceModal({ detail, onClose }) {
+  const { toast } = useToast();
   if (!detail) return null;
 
   const rows = Array.isArray(detail.rows) ? detail.rows : [];
+
+  const handleExportExcel = () => {
+    if (rows.length === 0) return;
+
+    try {
+      const formattedRows = rows.map((candidate, index) => {
+        const status = Array.isArray(candidate.status) ? candidate.status[0] : candidate.status;
+        return {
+          "S.No": String(index + 1),
+          "Candidate ID": candidate.candidateId ? String(candidate.candidateId) : 'N/A',
+          "Candidate Name": getCandidateName(candidate),
+          "Recruiter Name": getRecruiterName(candidate),
+          "Position": candidate.position || '-',
+          "Client": candidate.client || '-',
+          "Status": status ? String(status).toUpperCase() : 'SUBMITTED'
+        };
+      });
+
+      const worksheet = XLSX.utils.json_to_sheet(formattedRows);
+
+      // Auto-fit column widths
+      const headers = Object.keys(formattedRows[0] || {});
+      worksheet["!cols"] = headers.map((header) => {
+        const maxLength = Math.max(
+          String(header).length,
+          ...formattedRows.map((row) => String(row[header] ?? "").length)
+        );
+        return { wch: Math.min(Math.max(maxLength + 3, 10), 40) };
+      });
+
+      // Row heights
+      worksheet["!rows"] = [
+        { hpt: 26 }, // Header row
+        ...formattedRows.map(() => ({ hpt: 20 })) // Data rows
+      ];
+
+      // Format cells (types, number formats, alignments/styles)
+      Object.keys(worksheet).forEach((key) => {
+        if (key.startsWith('!')) return;
+        const cell = worksheet[key];
+        if (!cell) return;
+
+        const rowNum = parseInt(key.replace(/^[A-Z]+/, ''), 10);
+        const colLetter = key.replace(/[0-9]+$/, '');
+
+        cell.s = cell.s || {};
+        cell.s.font = cell.s.font || {};
+        cell.s.alignment = cell.s.alignment || {};
+
+        if (rowNum === 1) {
+          // Header styling
+          cell.s.font.bold = true;
+          cell.s.font.name = 'Segoe UI';
+          cell.s.font.sz = 11;
+          cell.s.fill = {
+            fgColor: { rgb: "F1F5F9" }
+          };
+          cell.s.alignment.horizontal = "center";
+          cell.s.alignment.vertical = "center";
+        } else {
+          // Data styling
+          cell.s.font.name = 'Segoe UI';
+          cell.s.font.sz = 10;
+          cell.s.alignment.vertical = "center";
+
+          if (colLetter === 'A') { // S.No
+            cell.t = 's';
+            cell.z = '@';
+            cell.s.alignment.horizontal = "left";
+          } else if (colLetter === 'B') { // Candidate ID
+            cell.t = 's';
+            cell.z = '@';
+            cell.s.alignment.horizontal = "center";
+          } else if (colLetter === 'G') { // Status
+            cell.s.alignment.horizontal = "center";
+          } else {
+            cell.s.alignment.horizontal = "left";
+          }
+        }
+      });
+
+      const workbook = XLSX.utils.book_new();
+      const sheetName = (detail.title || 'Recruiter Performance').replace(/[:\\/?*[\]]/g, '').slice(0, 31);
+      XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+
+      const safeTitle = (detail.title || 'Recruiter_Performance').replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '');
+      const dateStr = new Date().toISOString().split('T')[0];
+      XLSX.writeFile(workbook, `${safeTitle}_${dateStr}.xlsx`);
+
+      toast({ title: 'Exported!', description: `${rows.length} candidates exported to Excel.` });
+    } catch (error) {
+      console.error("Failed to export excel:", error);
+      toast({ title: 'Export failed', description: 'Could not export file.', variant: 'destructive' });
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4">
@@ -38,13 +136,25 @@ export default function RecruiterPerformanceModal({ detail, onClose }) {
               <p className="text-xs text-gray-500 dark:text-gray-400 font-medium mt-1">{detail.subtitle}</p>
             )}
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-2 bg-gray-100 dark:bg-slate-855 hover:bg-red-50 dark:hover:bg-red-950/30 hover:text-red-500 text-slate-500 dark:text-slate-400 rounded-full"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-3">
+            {rows.length > 0 && (
+              <button
+                type="button"
+                onClick={handleExportExcel}
+                className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold uppercase tracking-wider shadow-sm transition-all cursor-pointer whitespace-nowrap"
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+                Export Excel
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-2 bg-gray-100 dark:bg-slate-855 hover:bg-red-50 dark:hover:bg-red-950/30 hover:text-red-500 text-slate-500 dark:text-slate-400 rounded-full cursor-pointer transition-all"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto bg-white dark:bg-slate-900">
