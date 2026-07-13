@@ -43,7 +43,7 @@ export const updateCandidateStatus = async (req, res) => {
     // Update candidate
     const updatedCandidate = await Candidate.findByIdAndUpdate(
       req.params.id,
-      { $set: { status: newStatus, updatedBy: req.user._id } },
+      { $set: { status: newStatus, statusChangedAt: new Date(), updatedBy: req.user._id } },
       { new: true, runValidators: false } // Disable schema validation for custom status format
     );
 
@@ -133,8 +133,10 @@ export const inlineUpdateCandidate = async (req, res) => {
     // Add status if provided
     if (status) {
       updateData.status = status;
+      updateData.statusChangedAt = new Date();
     } else if (level && outcome) {
       updateData.status = `${level} - ${outcome}`;
+      updateData.statusChangedAt = new Date();
     }
 
     // Add remarks if provided (can be empty string)

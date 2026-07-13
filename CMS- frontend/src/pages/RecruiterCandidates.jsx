@@ -203,7 +203,16 @@ const ClientSubmissionsModal = ({ candidate, jobs = [], onClose }) => {
                         )}
                       </td>
                       <td className="px-4 py-3 text-slate-700">{submission.position || 'N/A'}</td>
-                      <td className="px-4 py-3"><StatusBadge status={getSubmissionStatus(submission)} /></td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-col gap-1">
+                          <StatusBadge status={getSubmissionStatus(submission)} />
+                          {submission.updatedAt && (
+                            <span className="text-[10px] text-slate-400 font-medium mt-0.5">
+                              Changed: {new Date(submission.updatedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                            </span>
+                          )}
+                        </div>
+                      </td>
                       <td className="px-4 py-3 text-slate-600">{formatSubmissionDate(submission)}</td>
                     </tr>
                   ))}
@@ -2004,13 +2013,13 @@ export default function RecruiterCandidates() {
                           <td className="p-3 text-sm text-slate-600 whitespace-nowrap">{formatDate(c.dateAdded || c.createdAt)}</td>
                           <td className="p-3 text-sm whitespace-nowrap">{c.totalExperience ? `${c.totalExperience} Yrs` : '-'}</td>
                           <td className="p-3 text-xs whitespace-nowrap"><div>{c.ctc || '-'}</div><div className="text-green-600">{c.ectc || '-'}</div></td>
-                          <td className="p-3 whitespace-nowrap">
-                            <div className="flex flex-wrap gap-1.5 min-w-[140px] max-w-[240px]">
-                              {getCandidateStatuses(c).map((status) => (
-                                <StatusBadge key={status} status={status} />
-                              ))}
-                            </div>
-                          </td>
+                      <td className="p-3 whitespace-nowrap">
+                        <div className="flex flex-wrap gap-1.5 min-w-[140px] max-w-[240px]">
+                          {getCandidateStatuses(c).map((status) => (
+                            <StatusBadge key={status} status={status} />
+                          ))}
+                        </div>
+                      </td>
                           <td className="p-3 text-right whitespace-nowrap">
                             <div className="flex justify-end gap-1">
                               <button className="p-1 hover:bg-slate-100 rounded" onClick={() => openViewDialog(c)}><Eye className="h-3.5 w-3.5 text-blue-600" /></button>

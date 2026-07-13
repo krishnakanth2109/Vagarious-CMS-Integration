@@ -18,12 +18,12 @@ import { processDetailedMatchingForCandidate } from '../services/groqMatchingSer
 const router = express.Router();
 
 const CANDIDATE_VIEWS = {
-  dashboard: 'candidateId name firstName lastName email position skills status recruiterId recruiterName client currentCompany dateAdded createdAt',
-  recruiters: 'candidateId name firstName lastName email contact position skills totalExperience status recruiterId recruiterName client currentCompany dateAdded createdAt active',
-  reports: 'candidateId name firstName lastName email contact position skills client source status recruiterId recruiterName dateAdded createdAt updatedAt remarks notes',
-  schedule: 'candidateId name firstName lastName email contact position skills status recruiterId recruiterName active',
-  invoice: 'candidateId name firstName lastName email position skills client ctc status recruiterId recruiterName dateAdded createdAt',
-  matching: 'candidateId name firstName lastName email contact alternateNumber currentLocation preferredLocation position skills totalExperience relevantExperience education ctc ectc noticePeriod linkedin source status recruiterId recruiterName client currentCompany remarks dateAdded createdAt active',
+  dashboard: 'candidateId name firstName lastName email position skills status statusChangedAt recruiterId recruiterName client currentCompany dateAdded createdAt',
+  recruiters: 'candidateId name firstName lastName email contact position skills totalExperience status statusChangedAt recruiterId recruiterName client currentCompany dateAdded createdAt active',
+  reports: 'candidateId name firstName lastName email contact position skills client source status statusChangedAt recruiterId recruiterName dateAdded createdAt updatedAt remarks notes',
+  schedule: 'candidateId name firstName lastName email contact position skills status statusChangedAt recruiterId recruiterName active',
+  invoice: 'candidateId name firstName lastName email position skills client ctc status statusChangedAt recruiterId recruiterName dateAdded createdAt',
+  matching: 'candidateId name firstName lastName email contact alternateNumber currentLocation preferredLocation position skills totalExperience relevantExperience education ctc ectc noticePeriod linkedin source status statusChangedAt recruiterId recruiterName client currentCompany remarks dateAdded createdAt active',
 };
 
 // ─── Shared helper — defined ONCE at module level ─────────────────────────────
@@ -228,6 +228,50 @@ router.get('/', async (req, res) => {
       .sort({ createdAt: -1 })
       .select(CANDIDATE_VIEWS[req.query.view] || '')
       .lean(); // FIX 2: plain objects — faster serialisation on large lists
+
+    // Normalize status: MongoDB may store it as a plain string when set via $set with
+    // runValidators:false on a [String] schema field. Coerce it to always be a string
+    // (taking the last element if it's an array) so frontend comparisons are reliable.
+    candidates.forEach((candidate) => {
+      if (Array.isArray(candidate.status)) {
+        candidate.status = candidate.status[candidate.status.length - 1] || 'Submitted';
+      } else if (typeof candidate.status !== 'string') {
+        candidate.status = 'Submitted';
+      }
+    });
+
+    // For dashboard view: load the most recent CandidateSubmission per candidate and
+    // use its pipelineStage as the effective status. The candidates page reads status from
+    // submissions (not candidate.status), so the dashboard must do the same to show
+    // consistent counts (Joined, Hold, Rejected, etc.).
+    if (req.query.view === 'dashboard' && candidates.length > 0) {
+      const candidateIds = candidates.map((c) => c._id);
+      // Get the latest submission per candidate (sorted newest first)
+      const latestSubmissions = await CandidateSubmission.find({ candidateId: { $in: candidateIds } })
+        .select('candidateId pipelineStage status updatedAt createdAt')
+        .sort({ updatedAt: -1, createdAt: -1 })
+        .lean();
+
+      // Build map: candidateId → latest pipelineStage
+      const latestStageMap = new Map();
+      for (const sub of latestSubmissions) {
+        const key = String(sub.candidateId);
+        if (!latestStageMap.has(key)) {
+          // First entry is the most recent (sorted above)
+          latestStageMap.set(key, sub.pipelineStage || sub.status || null);
+        }
+      }
+
+      // Inject effectiveStatus — prefer submission pipelineStage over candidate.status
+      candidates.forEach((candidate) => {
+        const submissionStage = latestStageMap.get(String(candidate._id));
+        candidate.effectiveStatus = submissionStage || candidate.status || 'Submitted';
+        // Overwrite status so existing frontend hasStatus() checks work transparently
+        if (submissionStage) {
+          candidate.status = submissionStage;
+        }
+      });
+    }
 
     if (candidates.length > 0) {
       const counts = await getMatchingJobsCountForCandidates(candidates, req.user);
@@ -712,6 +756,10 @@ router.put('/:id', upload.single('resume'), async (req, res) => {
 
     const existingCandidate = await Candidate.findById(req.params.id);
     if (!existingCandidate) return res.status(404).json({ message: 'Candidate not found' });
+
+    if (updateData.status && JSON.stringify(updateData.status) !== JSON.stringify(existingCandidate.status)) {
+      updateData.statusChangedAt = new Date();
+    }
 
     if (req.user.role !== 'admin' && req.user.role !== 'manager') {
       if (existingCandidate.recruiterId.toString() !== req.user._id.toString()) {

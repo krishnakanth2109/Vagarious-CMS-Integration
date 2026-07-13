@@ -96,12 +96,20 @@ export const generatePdfWithTemplate = async (htmlContent, templateUrl = '/Arah_
                 width: ${CONTAINER_W}px !important;
                 background: transparent !important;
                 padding: 0 8px !important;
+            }
+            .pdfgen, .pdfgen p, .pdfgen span, .pdfgen div, .pdfgen li, .pdfgen td, .pdfgen th {
                 font-size: ${fontSize} !important;
                 line-height: ${lineHeight} !important;
+                height: auto !important;
+                min-height: 0 !important;
+                max-height: none !important;
             }
             .pdfgen p {
-                margin-bottom: ${isDense ? '5px' : (isAgreement ? '6px' : '10px')} !important;
+                margin-top: 0 !important;
+                margin-bottom: ${isDense ? '6px' : (isAgreement ? '10px' : '14px')} !important;
                 text-align: justify !important;
+                display: block !important;
+                padding: 0 !important;
             }
             .pdfgen h1, .pdfgen h2, .pdfgen h3, .pdfgen h4,
             .pdfgen strong, .pdfgen b {
@@ -124,9 +132,12 @@ export const generatePdfWithTemplate = async (htmlContent, templateUrl = '/Arah_
                 font-size: ${isDense ? '10px' : '11px'} !important;
                 margin: 8px 0 !important;
             }
-            .pdfgen table:not(.signature-table) td, .pdfgen table:not(.signature-table) th { padding: 4px; }
-            .pdfgen table:not([style*="border: none"]) td,
-            .pdfgen table:not([style*="border: none"]) th {
+            .pdfgen table:not(.signature-table):not(.list-table) td, 
+            .pdfgen table:not(.signature-table):not(.list-table) th { 
+                padding: 4px; 
+            }
+            .pdfgen table:not(.list-table):not([style*="border: none"]) td,
+            .pdfgen table:not(.list-table):not([style*="border: none"]) th {
                 border: 1px solid #000 !important;
             }
             /* Lists are transformed to tables dynamically inside JS */
@@ -170,6 +181,7 @@ export const generatePdfWithTemplate = async (htmlContent, templateUrl = '/Arah_
             let align = li.style.textAlign || 'justify';
 
             const table = document.createElement('table');
+            table.className = 'list-table';
             table.style.width = '100%';
             table.style.border = 'none';
             table.style.margin = '0 0 6px 0';
@@ -177,8 +189,8 @@ export const generatePdfWithTemplate = async (htmlContent, templateUrl = '/Arah_
             table.style.borderCollapse = 'collapse';
             table.innerHTML = `
                 <tr>
-                    <td style="width: 25px; min-width: 25px; max-width: 25px; vertical-align: top; padding: 0 5px 0 5px; text-align: center; border: none; font-size: ${fontSize}; font-family: Arial, Helvetica, sans-serif;">&bull;</td>
-                    <td style="text-align: ${align}; vertical-align: top; padding: 0; border: none; line-height: 1.6;">${content}</td>
+                    <td class="list-td" style="width: 25px; min-width: 25px; max-width: 25px; vertical-align: top; padding: 0 5px 0 5px; text-align: center; border: none !important; font-size: ${fontSize} !important; font-family: Arial, Helvetica, sans-serif !important; line-height: ${lineHeight} !important; height: auto !important;">&bull;</td>
+                    <td class="list-td" style="text-align: ${align}; vertical-align: top; padding: 0; border: none !important; line-height: ${lineHeight} !important; font-size: ${fontSize} !important; height: auto !important;">${content}</td>
                 </tr>
             `;
             li.replaceWith(table);

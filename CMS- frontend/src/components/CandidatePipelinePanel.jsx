@@ -308,6 +308,21 @@ export default function CandidatePipelinePanel({ candidateId, apiUrl, authHeader
                       <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Submitted Date</p>
                       <p className="font-medium text-slate-800">{submittedDate}</p>
                     </div>
+                    {sub.updatedAt && (
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Status Changed Date</p>
+                        <p className="font-medium text-slate-800">
+                          {new Date(sub.updatedAt).toLocaleDateString('en-IN', {
+                            day: '2-digit',
+                            month: 'short',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            hour12: true
+                          })}
+                        </p>
+                      </div>
+                    )}
                     <div className="sm:col-span-2">
                       <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Recruiter / Submitted By</p>
                       <RecruiterDetailsTrigger recruiter={getSubmittedByDetails(sub)} className="font-medium text-slate-800">

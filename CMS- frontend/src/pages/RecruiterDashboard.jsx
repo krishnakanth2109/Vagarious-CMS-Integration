@@ -15,11 +15,11 @@ import CandidateProfileLink from '@/components/CandidateProfileLink';
 
 // ─── API base — module level, computed once ───────────────────────────────────
 const BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/$/, '');
-const API_URL  = `${BASE_URL}/api`;
+const API_URL = `${BASE_URL}/api`;
 
 // ─── Stat Card — outside parent component so React never unmounts/remounts ────
 const ProfessionalStatCard = React.memo(function ProfessionalStatCard({
-  title, value, icon: Icon, trend = 0,
+  title, value, icon: Icon, trend = 0, progress = 40,
   bgColor = 'bg-blue-50', textColor = 'text-blue-600',
   onClick,
 }) {
@@ -37,15 +37,20 @@ const ProfessionalStatCard = React.memo(function ProfessionalStatCard({
       <div className="mt-2">
         <h3 className="text-3xl font-bold text-blue-900 dark:text-blue-100">{value}</h3>
       </div>
-      <div className="mt-auto pt-2">
-        {trend !== 0 && (
+      <div className="mt-auto pt-2 flex items-center justify-between gap-4">
+        {trend !== 0 ? (
           <span className={clsx(
-            'inline-flex items-center px-2 py-0.5 rounded text-xs font-bold',
-            trend > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+            'inline-flex items-center px-2 py-0.5 rounded text-xs font-bold whitespace-nowrap',
+            trend >= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
           )}>
-            {trend > 0 ? '+' : ''}{trend}%
+            {trend >= 0 ? '+' : ''}{trend}%
           </span>
+        ) : (
+          <span className="text-xs text-gray-400 font-bold whitespace-nowrap">0%</span>
         )}
+        <div className="h-1.5 flex-1 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
+          <div className={clsx('h-full rounded-full transition-all duration-500', textColor.replace('text', 'bg'))} style={{ width: `${progress}%` }} />
+        </div>
       </div>
     </div>
   );
@@ -71,10 +76,10 @@ export default function RecruiterDashboard() {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  const [candidates,  setCandidates ] = useState([]);
-  const [jobs,        setJobs       ] = useState([]);
-  const [interviews,  setInterviews ] = useState([]);
-  const [loading,     setLoading    ] = useState(true);
+  const [candidates, setCandidates] = useState([]);
+  const [jobs, setJobs] = useState([]);
+  const [interviews, setInterviews] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   // FIX: getAuthHeader was recreated on every render because authHeaders (from
   //      useAuth) could change reference. Wrapped in useCallback for stability.
@@ -107,26 +112,26 @@ export default function RecruiterDashboard() {
         const [candRes, jobRes, intRes] = await Promise.allSettled([
           fetch(`${API_URL}/candidates?view=dashboard`, { headers }),
           fetch(`${API_URL}/jobs?view=dashboard`, { headers }),
-          fetch(`${API_URL}/interviews`,  { headers }),
+          fetch(`${API_URL}/interviews`, { headers }),
         ]);
 
         if (cancelled) return;
 
-        const currentUserId   = user._id || user.id;
+        const currentUserId = user._id || user.id;
         const currentUserName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email || '';
 
         // ── Candidates ──
         if (candRes.status === 'fulfilled' && candRes.value.ok) {
           const raw = await candRes.value.json();
           setCandidates(raw.map(c => ({
-            id:          c._id || c.id,
-            name:        c.name || 'Unknown',
-            email:       c.email || 'N/A',
-            position:    c.position || 'N/A',
-            status:      c.status || 'Submitted',
+            id: c._id || c.id,
+            name: c.name || 'Unknown',
+            email: c.email || 'N/A',
+            position: c.position || 'N/A',
+            status: c.status || 'Submitted',
             recruiterId: c.recruiterId?._id || c.recruiterId,
-            createdAt:   c.createdAt,
-            client:      c.client?.name || c.client?.companyName || (typeof c.client === 'string' ? c.client : c.currentCompany) || 'N/A',
+            createdAt: c.createdAt,
+            client: c.client?.name || c.client?.companyName || (typeof c.client === 'string' ? c.client : c.currentCompany) || 'N/A',
           })));
         }
 
@@ -136,22 +141,22 @@ export default function RecruiterDashboard() {
           setJobs(
             raw
               .filter(j =>
-                j.primaryRecruiter   === currentUserName ||
+                j.primaryRecruiter === currentUserName ||
                 j.secondaryRecruiter === currentUserName ||
-                j.assignedRecruiter  === currentUserId   ||
-                j.recruiterId        === currentUserId
+                j.assignedRecruiter === currentUserId ||
+                j.recruiterId === currentUserId
               )
               .map(j => ({
-                id:                 j._id || j.id || '',
-                title:              j.title || 'Untitled Job',
-                client:             j.client?.name || j.client?.companyName || (typeof j.client === 'string' ? j.client : 'Unknown Client'),
-                location:           j.location || 'Remote',
-                jobCode:            j.jobCode || 'N/A',
-                createdAt:          j.createdAt || new Date().toISOString(),
-                primaryRecruiter:   j.primaryRecruiter,
+                id: j._id || j.id || '',
+                title: j.title || 'Untitled Job',
+                client: j.client?.name || j.client?.companyName || (typeof j.client === 'string' ? j.client : 'Unknown Client'),
+                location: j.location || 'Remote',
+                jobCode: j.jobCode || 'N/A',
+                createdAt: j.createdAt || new Date().toISOString(),
+                primaryRecruiter: j.primaryRecruiter,
                 secondaryRecruiter: j.secondaryRecruiter,
-                assignedRecruiter:  j.assignedRecruiter,
-                recruiterId:        j.recruiterId,
+                assignedRecruiter: j.assignedRecruiter,
+                recruiterId: j.recruiterId,
               }))
           );
         }
@@ -162,20 +167,20 @@ export default function RecruiterDashboard() {
           setInterviews(raw.map(i => {
             const candidateIdObj = typeof i.candidateId === 'object' && i.candidateId !== null ? i.candidateId : null;
             return {
-              id:             i._id || i.id || '',
-              candidateId:    candidateIdObj ? (candidateIdObj._id || candidateIdObj.id || '') : i.candidateId || '',
-              candidateName:  candidateIdObj?.name   || i.candidateName  || 'Unknown Candidate',
-              candidateEmail: candidateIdObj?.email  || i.candidateEmail || 'N/A',
-              position:       i.position  || 'N/A',
-              status:         new Date(i.interviewDate || i.date) < new Date() ? 'completed' : 'scheduled',
-              interviewDate:  i.interviewDate || i.date || new Date().toISOString(),
-              interviewType:  i.type || i.interviewType || 'virtual',
-              duration:       i.duration || 60,
-              notes:          i.notes || '',
-              meetingLink:    i.meetingLink || '',
-              feedback:       i.feedback || '',
-              rating:         i.rating || 0,
-              createdAt:      i.createdAt || new Date().toISOString(),
+              id: i._id || i.id || '',
+              candidateId: candidateIdObj ? (candidateIdObj._id || candidateIdObj.id || '') : i.candidateId || '',
+              candidateName: candidateIdObj?.name || i.candidateName || 'Unknown Candidate',
+              candidateEmail: candidateIdObj?.email || i.candidateEmail || 'N/A',
+              position: i.position || 'N/A',
+              status: new Date(i.interviewDate || i.date) < new Date() ? 'completed' : 'scheduled',
+              interviewDate: i.interviewDate || i.date || new Date().toISOString(),
+              interviewType: i.type || i.interviewType || 'virtual',
+              duration: i.duration || 60,
+              notes: i.notes || '',
+              meetingLink: i.meetingLink || '',
+              feedback: i.feedback || '',
+              rating: i.rating || 0,
+              createdAt: i.createdAt || new Date().toISOString(),
             };
           }));
         }
@@ -201,16 +206,26 @@ export default function RecruiterDashboard() {
   const candidateStats = useMemo(() => {
     const total = candidates.length;
 
+    // status is normalised to a plain string by the backend GET route
+    const getStatusStr = (statusVal) => Array.isArray(statusVal)
+      ? String(statusVal[statusVal.length - 1] || '').trim().toLowerCase()
+      : String(statusVal || '').trim().toLowerCase();
+
     const hasStatus = (statusVal, targets) => {
-      const arr = Array.isArray(statusVal) ? statusVal : [statusVal || ''];
-      return targets.some(t => arr.includes(t));
+      const s = getStatusStr(statusVal);
+      const lowerTargets = Array.isArray(targets)
+        ? targets.map(t => String(t || '').trim().toLowerCase())
+        : [String(targets || '').trim().toLowerCase()];
+      return lowerTargets.includes(s);
     };
     const hasPartialStatus = (statusVal, targetStr) => {
-      const s = Array.isArray(statusVal) ? statusVal.join(' ') : (statusVal || '');
-      return s.includes(targetStr);
+      const s = getStatusStr(statusVal);
+      return s.includes(String(targetStr || '').trim().toLowerCase());
     };
 
-    const submitted = candidates.filter(c => hasStatus(c.status, ['Submitted', 'Pending'])).length;
+    const getSafeStatus = (s) => getStatusStr(s);
+
+    const submitted = candidates.filter(c => hasStatus(c.status, ['Submitted', 'Pending', 'Pipeline'])).length;
     const interview = candidates.filter(c => hasPartialStatus(c.status, 'Interview')).length;
     const offer     = candidates.filter(c => hasStatus(c.status, ['Offer'])).length;
     const joined    = candidates.filter(c => hasStatus(c.status, ['Joined'])).length;
@@ -223,18 +238,116 @@ export default function RecruiterDashboard() {
     const todaySubmissions = candidates.filter(c => c.createdAt && new Date(c.createdAt).toDateString() === todayStr).length;
     const successRate     = total > 0 ? ((joined / total) * 100).toFixed(1) : '0.0';
 
-    return { total, submitted, interview, offer, joined, rejected, selected, hold, backout, todaySubmissions, successRate };
+    // Time to hire (average days from dateAdded to statusChangedAt for Joined candidates)
+    const joinedCandidates = candidates.filter(c => getSafeStatus(c.status) === 'joined');
+    let avgTimeToHireDays = 0;
+    if (joinedCandidates.length > 0) {
+      const totalDays = joinedCandidates.reduce((sum, c) => {
+        const start = new Date(c.dateAdded || c.createdAt);
+        const end = new Date(c.statusChangedAt || new Date());
+        const diffTime = Math.max(0, end - start);
+        const diffDays = diffTime / (1000 * 60 * 60 * 24);
+        return sum + diffDays;
+      }, 0);
+      avgTimeToHireDays = parseFloat((totalDays / joinedCandidates.length).toFixed(1));
+    }
+
+    // Active candidates ratio
+    const activeCandidates = candidates.filter(c => !['rejected', 'backout', 'no show'].includes(getSafeStatus(c.status))).length;
+    const activePipelineRatio = total > 0 ? Math.round((activeCandidates / total) * 100) : 0;
+
+    // Monthly trends
+    const now = new Date();
+    const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const prevMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+
+    const getMonthlyTrend = (items, filterFn) => {
+      const targetItems = filterFn ? items.filter(filterFn) : items;
+      const currentMonth = targetItems.filter(c => new Date(c.createdAt) >= currentMonthStart).length;
+      const prevMonth = targetItems.filter(c => {
+        const d = new Date(c.createdAt);
+        return d >= prevMonthStart && d <= prevMonthEnd;
+      }).length;
+      if (prevMonth > 0) return Math.round(((currentMonth - prevMonth) / prevMonth) * 100);
+      if (currentMonth > 0) return 100;
+      return 0;
+    };
+
+    const trends = {
+      total: getMonthlyTrend(candidates),
+      todaySubmissions: getMonthlyTrend(candidates, c => c.createdAt && new Date(c.createdAt).toDateString() === todayStr),
+      selected: getMonthlyTrend(candidates, c => hasStatus(c.status, ['Selected'])),
+      rejected: getMonthlyTrend(candidates, c => hasStatus(c.status, ['Rejected'])),
+      hold: getMonthlyTrend(candidates, c => hasStatus(c.status, ['Hold'])),
+      backout: getMonthlyTrend(candidates, c => hasStatus(c.status, ['Backout'])),
+      joined: getMonthlyTrend(candidates, c => hasStatus(c.status, ['Joined']))
+    };
+
+    return { 
+      total, 
+      submitted, 
+      interview, 
+      offer, 
+      joined, 
+      rejected, 
+      selected, 
+      hold, 
+      backout, 
+      todaySubmissions, 
+      successRate,
+      avgTimeToHireDays,
+      activePipelineRatio,
+      trends
+    };
   }, [candidates]);
 
-  const interviewStats = useMemo(() => ({ totalInterviews: interviews.length }), [interviews]);
-  const jobStats       = useMemo(() => ({ totalAssignedJobs: jobs.length }), [jobs]);
+  const interviewStats = useMemo(() => {
+    const totalInterviews = interviews.length;
+    const now = new Date();
+    const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const prevMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+
+    const currentMonth = interviews.filter(i => new Date(i.interviewDate || i.createdAt) >= currentMonthStart).length;
+    const prevMonth = interviews.filter(i => {
+      const d = new Date(i.interviewDate || i.createdAt);
+      return d >= prevMonthStart && d <= prevMonthEnd;
+    }).length;
+    const trend = prevMonth > 0 ? Math.round(((currentMonth - prevMonth) / prevMonth) * 100) : (currentMonth > 0 ? 100 : 0);
+
+    const completed = interviews.filter(i => i.status === 'completed' || new Date(i.interviewDate) < new Date()).length;
+    const progress = totalInterviews > 0 ? Math.round((completed / totalInterviews) * 100) : 0;
+
+    return { totalInterviews, trend, progress };
+  }, [interviews]);
+
+  const jobStats = useMemo(() => {
+    const totalAssignedJobs = jobs.length;
+    const now = new Date();
+    const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const prevMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+
+    const currentMonth = jobs.filter(j => new Date(j.createdAt) >= currentMonthStart).length;
+    const prevMonth = jobs.filter(j => {
+      const d = new Date(j.createdAt);
+      return d >= prevMonthStart && d <= prevMonthEnd;
+    }).length;
+    const trend = prevMonth > 0 ? Math.round(((currentMonth - prevMonth) / prevMonth) * 100) : (currentMonth > 0 ? 100 : 0);
+
+    const active = jobs.filter(j => j.active !== false).length;
+    const progress = totalAssignedJobs > 0 ? Math.round((active / totalAssignedJobs) * 100) : 0;
+
+    return { totalAssignedJobs, trend, progress };
+  }, [jobs]);
 
   const chartData = useMemo(() => [
     { name: 'Submitted', value: candidateStats.submitted, fill: '#3B82F6' },
     { name: 'Interview', value: candidateStats.interview, fill: '#F59E0B' },
-    { name: 'Offer',     value: candidateStats.offer,     fill: '#8B5CF6' },
-    { name: 'Rejected',  value: candidateStats.rejected,  fill: '#EF4444' },
-    { name: 'Joined',    value: candidateStats.joined,    fill: '#10B981' },
+    { name: 'Offer', value: candidateStats.offer, fill: '#8B5CF6' },
+    { name: 'Rejected', value: candidateStats.rejected, fill: '#EF4444' },
+    { name: 'Joined', value: candidateStats.joined, fill: '#10B981' },
   ], [candidateStats]);
 
   // ── Navigation helpers ────────────────────────────────────────────────────
@@ -242,8 +355,8 @@ export default function RecruiterDashboard() {
     navigate(status ? `/recruiter/candidates?status=${status}` : '/recruiter/candidates');
   }, [navigate]);
   const handleNavigateToAssignments = useCallback(() => navigate('/recruiter/assignments'), [navigate]);
-  const handleNavigateToSchedules   = useCallback(() => navigate('/recruiter/schedules'),   [navigate]);
-  const handleNavigateToMessages    = useCallback(() => navigate('/recruiter/messages'),     [navigate]);
+  const handleNavigateToSchedules = useCallback(() => navigate('/recruiter/schedules'), [navigate]);
+  const handleNavigateToMessages = useCallback(() => navigate('/recruiter/messages'), [navigate]);
 
   // ─── Render ───────────────────────────────────────────────────────────────
   const formattedDate = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }).toUpperCase();
@@ -273,18 +386,18 @@ export default function RecruiterDashboard() {
 
         {/* ── Stat Cards ── */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-          <ProfessionalStatCard title="TOTAL CANDIDATES"   value={candidateStats.total}            icon={Users}        trend={5}  bgColor="bg-teal-100"    textColor="text-teal-600"    onClick={() => handleNavigateToCandidates()} />
-          <ProfessionalStatCard title="TODAY SUBMISSIONS"  value={candidateStats.todaySubmissions} icon={UserPlus}     trend={2}  bgColor="bg-blue-100"    textColor="text-blue-600"    onClick={() => handleNavigateToCandidates('Today')} />
-          <ProfessionalStatCard title="ASSIGNED JOBS"      value={jobStats.totalAssignedJobs}      icon={Briefcase}    trend={8}  bgColor="bg-cyan-100"    textColor="text-cyan-600"    onClick={handleNavigateToAssignments} />
-          <ProfessionalStatCard title="INTERVIEWS"         value={interviewStats.totalInterviews}  icon={ClipboardList} trend={3} bgColor="bg-indigo-100"  textColor="text-indigo-600"  onClick={handleNavigateToSchedules} />
-          <ProfessionalStatCard title="AVG. TIME TO HIRE"  value={`${candidateStats.successRate}%`} icon={TrendingUp}  trend={0}  bgColor="bg-fuchsia-100" textColor="text-fuchsia-600" />
+          <ProfessionalStatCard title="TOTAL CANDIDATES" value={candidateStats.total} icon={Users} trend={candidateStats.trends?.total || 0} progress={candidateStats.activePipelineRatio} bgColor="bg-teal-100" textColor="text-teal-600" onClick={() => handleNavigateToCandidates()} />
+          <ProfessionalStatCard title="TODAY SUBMISSIONS" value={candidateStats.todaySubmissions} icon={UserPlus} trend={candidateStats.trends?.todaySubmissions || 0} progress={Math.min(100, Math.round((candidateStats.todaySubmissions / 5) * 100))} bgColor="bg-blue-100" textColor="text-blue-600" onClick={() => handleNavigateToCandidates('Today')} />
+          <ProfessionalStatCard title="ASSIGNED JOBS" value={jobStats.totalAssignedJobs} icon={Briefcase} trend={jobStats.trend} progress={jobStats.progress} bgColor="bg-cyan-100" textColor="text-cyan-600" onClick={handleNavigateToAssignments} />
+          <ProfessionalStatCard title="INTERVIEWS" value={interviewStats.totalInterviews} icon={ClipboardList} trend={interviewStats.trend} progress={interviewStats.progress} bgColor="bg-indigo-100" textColor="text-indigo-600" onClick={handleNavigateToSchedules} />
+          <ProfessionalStatCard title="AVG. TIME TO HIRE" value={candidateStats.avgTimeToHireDays > 0 ? `${candidateStats.avgTimeToHireDays} Days` : '0.0 Days'} icon={TrendingUp} trend={0} progress={candidateStats.avgTimeToHireDays > 0 ? Math.max(10, Math.min(100, Math.round((1 - candidateStats.avgTimeToHireDays / 45) * 100))) : 0} bgColor="bg-fuchsia-100" textColor="text-fuchsia-600" />
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-          <ProfessionalStatCard title="SELECTED" value={candidateStats.selected} icon={UserCheck} trend={12} bgColor="bg-purple-100" textColor="text-purple-600" onClick={() => handleNavigateToCandidates('Selected')} />
-          <ProfessionalStatCard title="REJECTED" value={candidateStats.rejected} icon={XCircle}   trend={5}  bgColor="bg-red-100"    textColor="text-red-600"    onClick={() => handleNavigateToCandidates('Rejected')} />
-          <ProfessionalStatCard title="HOLD"     value={candidateStats.hold}     icon={Clock}     trend={4}  bgColor="bg-orange-100" textColor="text-orange-600" onClick={() => handleNavigateToCandidates('Hold')} />
-          <ProfessionalStatCard title="BACKOUTS" value={candidateStats.backout}  icon={UserMinus} trend={-1} bgColor="bg-rose-100"   textColor="text-rose-600"   onClick={() => handleNavigateToCandidates('Backout')} />
-          <ProfessionalStatCard title="JOINED"   value={candidateStats.joined}   icon={Users}     trend={7}  bgColor="bg-green-100"  textColor="text-green-600"  onClick={() => handleNavigateToCandidates('Joined')} />
+          <ProfessionalStatCard title="SELECTED" value={candidateStats.selected} icon={UserCheck} trend={candidateStats.trends?.selected || 0} progress={candidateStats.total > 0 ? Math.round((candidateStats.selected / candidateStats.total) * 100) : 0} bgColor="bg-purple-100" textColor="text-purple-600" onClick={() => handleNavigateToCandidates('Selected')} />
+          <ProfessionalStatCard title="REJECTED" value={candidateStats.rejected} icon={XCircle} trend={candidateStats.trends?.rejected || 0} progress={candidateStats.total > 0 ? Math.round((candidateStats.rejected / candidateStats.total) * 100) : 0} bgColor="bg-red-100" textColor="text-red-600" onClick={() => handleNavigateToCandidates('Rejected')} />
+          <ProfessionalStatCard title="HOLD" value={candidateStats.hold} icon={Clock} trend={candidateStats.trends?.hold || 0} progress={candidateStats.total > 0 ? Math.round((candidateStats.hold / candidateStats.total) * 100) : 0} bgColor="bg-orange-100" textColor="text-orange-600" onClick={() => handleNavigateToCandidates('Hold')} />
+          <ProfessionalStatCard title="BACKOUTS" value={candidateStats.backout} icon={UserMinus} trend={candidateStats.trends?.backout || 0} progress={candidateStats.total > 0 ? Math.round((candidateStats.backout / candidateStats.total) * 100) : 0} bgColor="bg-rose-100" textColor="text-rose-600" onClick={() => handleNavigateToCandidates('Backout')} />
+          <ProfessionalStatCard title="JOINED" value={candidateStats.joined} icon={Users} trend={candidateStats.trends?.joined || 0} progress={candidateStats.total > 0 ? Math.round((candidateStats.joined / candidateStats.total) * 100) : 0} bgColor="bg-green-100" textColor="text-green-600" onClick={() => handleNavigateToCandidates('Joined')} />
         </div>
 
         {/* ── Chart ── */}

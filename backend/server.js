@@ -29,6 +29,8 @@ import scoreMatchRoutes from './routes/scoreMatch.routes.js';
 import externalContactRoutes from './routes/externalContactRoutes.js';
 import externalClientRoutes from './routes/externalClientRoutes.js';
 import contactRoutes from './routes/contactRoutes.js';
+import invoiceRoutes from './routes/invoiceRoutes.js';
+import companyBankRoutes from './routes/companyBankRoutes.js';
 
 // ── Agreement Module Routes ───────────────────────────────────────────────────
 import { connectAgreementDB } from './config/agreementDatabase.js';
@@ -242,6 +244,8 @@ app.use('/api/score-match', scoreMatchRoutes);
 app.use('/api/externalcontacts', externalContactRoutes);
 app.use('/api/externalclients', externalClientRoutes);
 app.use('/api/contact', contactRoutes);
+app.use('/api/invoices', invoiceRoutes);
+app.use('/api/company-banks', companyBankRoutes);
 
 // ── Agreement Module Routes ────────────────────────────────────────────────────
 app.use('/agreement-companies', agreementCompanyRoutes);
@@ -264,6 +268,7 @@ app.use('/score-match', scoreMatchRoutes);
 app.use('/externalcontacts', externalContactRoutes);
 app.use('/externalclients', externalClientRoutes);
 app.use('/contact', contactRoutes);
+app.use('/invoices', invoiceRoutes);
 
 // Mount AI mock routes at root so index.html can call /start-session-interview etc. directly
 app.use('/', aiMockRoutes);

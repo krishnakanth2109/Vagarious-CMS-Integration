@@ -554,7 +554,16 @@ const ClientSubmissionsModal = ({ candidate, jobs = [], onClose }) => {
                       )}
                     </td>
                     <td className="px-4 py-3 text-slate-700">{submission.position || 'N/A'}</td>
-                    <td className="px-4 py-3"><StatusBadge status={getSubmissionStatus(submission)} /></td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-col gap-1">
+                        <StatusBadge status={getSubmissionStatus(submission)} />
+                        {submission.updatedAt && (
+                          <span className="text-[10px] text-slate-400 font-medium mt-0.5">
+                            Changed: {new Date(submission.updatedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                          </span>
+                        )}
+                      </div>
+                    </td>
                     <td className="px-4 py-3 text-slate-600">{formatSubmissionDate(submission)}</td>
                   </tr>
                 ))}

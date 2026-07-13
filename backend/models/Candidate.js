@@ -59,6 +59,7 @@ const candidateSchema = mongoose.Schema({
     ],
     default: ['Submitted']
   },
+  statusChangedAt: { type: Date, default: () => new Date() },
 
   // --- System ---
   active:             { type: Boolean, default: true },

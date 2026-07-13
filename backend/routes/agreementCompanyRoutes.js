@@ -101,7 +101,7 @@ router.get('/', async (req, res) => {
         const skip = parseInt(req.query.skip) || 0;
         const limit = parseInt(req.query.limit) || 100;
 
-        const cursor = db.collection('companies').find().skip(skip).limit(limit);
+        const cursor = db.collection('companies').find().sort({ _id: -1 }).skip(skip).limit(limit);
         const companies = [];
         for await (const doc of cursor) {
             companies.push(sanitizeDoc(fixId(doc)));

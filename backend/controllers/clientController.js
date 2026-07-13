@@ -20,7 +20,7 @@ export const getClients = async (req, res) => {
 export const createClient = async (req, res) => {
   try {
     const { clientId } = req.body;
-    
+
     // Auto-generate ID if not provided
     let finalClientId = clientId;
     if (!finalClientId) {

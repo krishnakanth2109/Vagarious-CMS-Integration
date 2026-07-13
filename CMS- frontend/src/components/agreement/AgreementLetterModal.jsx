@@ -145,10 +145,27 @@ const AgreementLetterModal = ({ employee, onClose, onSuccess, apiUrl }) => {
 
     const [selectedTemplate, setSelectedTemplate] = useState('/Vagerious.pdf');
     const [companyName, setCompanyName] = useState('VAGARIOUS SOLUTIONS PRIVATE LIMITED');
+    const [templates, setTemplates] = useState([]);
 
     const prevTemplateRef = React.useRef(selectedTemplate);
     const prevCompanyNameRef = React.useRef(companyName);
     const contentRef = React.useRef(generatedContent);
+
+    // Fetch custom templates
+    useEffect(() => {
+        const fetchTemplates = async () => {
+            try {
+                const res = await fetch(`${API_URL}/upload/templates`);
+                if (res.ok) {
+                    const data = await res.json();
+                    setTemplates(data || []);
+                }
+            } catch (err) {
+                console.error("Error fetching templates:", err);
+            }
+        };
+        fetchTemplates();
+    }, [API_URL]);
 
     useEffect(() => {
         contentRef.current = generatedContent;
@@ -165,25 +182,36 @@ const AgreementLetterModal = ({ employee, onClose, onSuccess, apiUrl }) => {
         if (!file) return;
         const formData = new FormData();
         formData.append('file', file);
+        const baseName = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
+        formData.append('name', baseName);
+        
         try {
             setLoading(true);
-            const res = await fetch(`${API_URL}/upload/template-pdf`, {
+            const res = await fetch(`${API_URL}/upload/templates`, {
                 method: 'POST',
                 body: formData
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.detail || "Upload failed");
-            setSelectedTemplate(data.url);
+            
+            // Re-fetch templates list
+            const listRes = await fetch(`${API_URL}/upload/templates`);
+            if (listRes.ok) {
+                const listData = await listRes.json();
+                setTemplates(listData || []);
+            }
+            
+            setSelectedTemplate(data.template.url);
+            setLetterType(data.template.name);
 
-            let parsedName = data.filename.replace(/\.pdf\.jpg$|\.jpg$|\.png$/i, '');
+            let parsedName = data.template.name;
             parsedName = parsedName.replace(/_Offer_Letter_Background|_Offer_Letter|_Agreement|_Template|_Background/gi, '');
             parsedName = parsedName.replace(/_/g, ' ').trim();
-            // Do not override company name implicitly if they uploaded custom template unless it's empty
             if (parsedName && !companyName) {
                 setCompanyName(parsedName);
             }
 
-            alert(`Custom Template Uploaded! \n${data.filename}`);
+            alert(`Custom Template Uploaded! \n${data.template.name}`);
         } catch (err) {
             console.error(err);
             alert("Upload failed: " + err.message);
@@ -424,24 +452,30 @@ const AgreementLetterModal = ({ employee, onClose, onSuccess, apiUrl }) => {
                     />
 
                     <select
-                        value={letterType}
-                        onChange={(e) => setLetterType(e.target.value)}
+                        value={selectedTemplate}
+                        onChange={(e) => {
+                            const val = e.target.value;
+                            setSelectedTemplate(val);
+                            if (val === '/Vagerious.pdf') {
+                                setLetterType('Agreement');
+                            } else {
+                                const t = templates.find(temp => temp.url === val);
+                                if (t) {
+                                    setLetterType(t.name);
+                                }
+                            }
+                        }}
                         style={{
                             padding: '10px 14px', borderRadius: '8px', background: '#f8fafc',
-                            color: '#0f172a', border: '1px solid #e2e8f0', flex: '1 1 120px', fontSize: '0.9rem', outline: 'none'
+                            color: '#0f172a', border: '1px solid #e2e8f0', flex: '1 1 220px', fontSize: '0.9rem', outline: 'none',
+                            fontWeight: '600'
                         }}
                     >
-                        <option>Agreement</option>
+                        <option value="/Vagerious.pdf">Vagarious Template</option>
+                        {templates.map(tpl => (
+                            <option key={tpl.id} value={tpl.url}>{tpl.name}</option>
+                        ))}
                     </select>
-
-                    {/* Template selection replaced with fixed Vagerious implicitly */}
-                    <div style={{
-                        padding: '10px 14px', borderRadius: '8px', background: '#eef2ff',
-                        color: '#283086', border: '1px solid #c7d2fe', fontWeight: 'bold', fontSize: '0.9rem',
-                        display: 'flex', alignItems: 'center'
-                    }}>
-                        Vagarious Template
-                    </div>
 
                     <input type="file" accept="application/pdf" ref={fileInputRef} style={{ display: 'none' }} onChange={handleCustomTemplateUpload} />
                     <button

@@ -20,7 +20,7 @@ import RecruiterCandidateGrowthChart from '@/components/RecruiterCandidateGrowth
 // ─── API Helpers ──────────────────────────────────────────────────────────────
 // Module-level constants — computed once, never re-derived on re-render.
 const BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/$/, '');
-const API_URL  = BASE_URL.endsWith('/api') ? BASE_URL : `${BASE_URL}/api`;
+const API_URL = BASE_URL.endsWith('/api') ? BASE_URL : `${BASE_URL}/api`;
 
 function getFirebaseToken() {
   try {
@@ -42,8 +42,8 @@ async function apiFetch(path) {
 
 // ─── Status helper — module level so it's never re-created ───────────────────
 const getSafeStatus = (s) => {
-  if (Array.isArray(s)) return String(s[0] || '').toLowerCase();
-  return String(s || '').toLowerCase();
+  if (Array.isArray(s)) return String(s[0] || '').trim().toLowerCase();
+  return String(s || '').trim().toLowerCase();
 };
 
 const getCandidateRecruiterId = (candidate) => {
@@ -54,10 +54,15 @@ const getCandidateRecruiterId = (candidate) => {
 };
 
 const statusMatchesMetric = (candidate, metric) => {
-  const status = getSafeStatus(candidate.status);
+  // status may be a plain string or [String] array — normalise to string
+  const statusVal = candidate.status;
+  const statusStr = Array.isArray(statusVal)
+    ? String(statusVal[statusVal.length - 1] || '').trim().toLowerCase()
+    : String(statusVal || '').trim().toLowerCase();
+
   if (metric === 'submissions') return true;
-  if (metric === 'pending') return ['submitted', 'pending'].includes(status);
-  return status === metric;
+  if (metric === 'pending') return ['submitted', 'pending', 'pipeline'].includes(statusStr);
+  return statusStr === metric.toLowerCase();
 };
 
 const RECRUITER_PERFORMANCE_COLUMNS = [
@@ -70,17 +75,17 @@ const RECRUITER_PERFORMANCE_COLUMNS = [
 
 // ─── Theme map — module level constant, not recreated per render ──────────────
 const BUBBLE_THEMES = {
-  green:  { bubble: 'bg-[#e8f5e9]', iconBg: 'bg-[#e8f5e9]', iconText: 'text-green-600',  badge: 'bg-green-500',  bar: 'bg-green-500'  },
-  blue:   { bubble: 'bg-[#e3f2fd]', iconBg: 'bg-[#e3f2fd]', iconText: 'text-blue-600',   badge: 'bg-blue-500',   bar: 'bg-blue-500'   },
+  green: { bubble: 'bg-[#e8f5e9]', iconBg: 'bg-[#e8f5e9]', iconText: 'text-green-600', badge: 'bg-green-500', bar: 'bg-green-500' },
+  blue: { bubble: 'bg-[#e3f2fd]', iconBg: 'bg-[#e3f2fd]', iconText: 'text-blue-600', badge: 'bg-blue-500', bar: 'bg-blue-500' },
   purple: { bubble: 'bg-[#f3e5f5]', iconBg: 'bg-[#f3e5f5]', iconText: 'text-purple-600', badge: 'bg-purple-500', bar: 'bg-purple-500' },
   orange: { bubble: 'bg-[#fff3e0]', iconBg: 'bg-[#fff3e0]', iconText: 'text-orange-500', badge: 'bg-orange-400', bar: 'bg-orange-400' },
-  red:    { bubble: 'bg-[#ffebee]', iconBg: 'bg-[#ffebee]', iconText: 'text-red-500',    badge: 'bg-red-500',    bar: 'bg-red-500'    },
+  red: { bubble: 'bg-[#ffebee]', iconBg: 'bg-[#ffebee]', iconText: 'text-red-500', badge: 'bg-red-500', bar: 'bg-red-500' },
 };
 
 // ─── Card components — defined OUTSIDE parent so React doesn't unmount/remount
 //     them on every parent re-render. Wrapped in React.memo for extra safety. ──
 
-const PrimaryStatCard = React.memo(({ title, value, trend, icon: Icon, onClick }) => (
+const PrimaryStatCard = React.memo(({ title, value, trend = 0, progress = 0, icon: Icon, onClick }) => (
   <div
     onClick={onClick}
     className="relative overflow-hidden bg-[#3530a0] rounded-[1.5rem] p-6 text-white shadow-lg h-44 flex flex-col justify-between cursor-pointer"
@@ -95,19 +100,27 @@ const PrimaryStatCard = React.memo(({ title, value, trend, icon: Icon, onClick }
       </div>
     </div>
     <div className="relative z-10 mt-auto">
-      <div className="flex items-center gap-2 mb-2">
-        <span className="bg-green-500 text-white px-2 py-0.5 rounded text-[10px] font-bold">+{trend}%</span>
-        <span className="text-[10px] opacity-70">vs last month</span>
+      <div className="flex items-center justify-between mb-1.5">
+        <div className="flex items-center gap-2">
+          <span className={clsx(
+            'px-2 py-0.5 rounded text-[10px] font-bold text-white',
+            trend >= 0 ? 'bg-green-500' : 'bg-red-500'
+          )}>
+            {trend >= 0 ? '+' : ''}{trend}%
+          </span>
+          <span className="text-[10px] opacity-70">vs last month</span>
+        </div>
+        <span className="text-[10px] font-bold text-white/80">{progress}%</span>
       </div>
       <div className="h-1.5 w-full bg-black/20 rounded-full overflow-hidden">
-        <div className="h-full bg-blue-400 rounded-full w-2/5" />
+        <div className="h-full bg-blue-400 rounded-full transition-all duration-500" style={{ width: `${progress}%` }} />
       </div>
     </div>
     <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -mr-10 -mt-10 pointer-events-none" />
   </div>
 ));
 
-const BubbleStatCard = React.memo(({ title, value, trend, icon: Icon, theme = 'blue', onClick }) => {
+const BubbleStatCard = React.memo(({ title, value, trend = 0, progress = 0, icon: Icon, theme = 'blue', onClick }) => {
   const t = BUBBLE_THEMES[theme] || BUBBLE_THEMES.blue;
   return (
     <div
@@ -125,12 +138,20 @@ const BubbleStatCard = React.memo(({ title, value, trend, icon: Icon, theme = 'b
         </div>
       </div>
       <div className="relative z-10 mt-auto">
-        <div className="flex items-center gap-2 mb-2">
-          <span className={clsx('px-2 py-0.5 rounded text-[10px] font-bold text-white', t.badge)}>+{trend}%</span>
-          <span className="text-[10px] text-gray-400">vs last month</span>
+        <div className="flex items-center justify-between mb-1.5">
+          <div className="flex items-center gap-2">
+            <span className={clsx(
+              'px-2 py-0.5 rounded text-[10px] font-bold text-white',
+              trend >= 0 ? t.badge : 'bg-red-500'
+            )}>
+              {trend >= 0 ? '+' : ''}{trend}%
+            </span>
+            <span className="text-[10px] text-gray-400">vs last month</span>
+          </div>
+          <span className="text-[10px] font-bold text-gray-500">{progress}%</span>
         </div>
         <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
-          <div className={clsx('h-full rounded-full w-2/5', t.bar)} />
+          <div className={clsx('h-full rounded-full transition-all duration-500', t.bar)} style={{ width: `${progress}%` }} />
         </div>
       </div>
     </div>
@@ -159,15 +180,15 @@ export default function AdminDashboard() {
 
   const [candidates, setCandidates] = useState([]);
   const [recruiters, setRecruiters] = useState([]);
-  const [clients,    setClients   ] = useState([]);
-  const [jobs,       setJobs      ] = useState([]);
-  const [loading,    setLoading   ] = useState(true);
+  const [clients, setClients] = useState([]);
+  const [jobs, setJobs] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [performanceModal, setPerformanceModal] = useState(null);
-  const [sortField,        setSortField      ] = useState('submissions');
-  const [sortOrder,        setSortOrder      ] = useState('desc');
-  const [searchQuery,      setSearchQuery    ] = useState('');
-  const [tableStartDate,   setTableStartDate ] = useState('');
-  const [tableEndDate,     setTableEndDate   ] = useState('');
+  const [sortField, setSortField] = useState('submissions');
+  const [sortOrder, setSortOrder] = useState('desc');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [tableStartDate, setTableStartDate] = useState('');
+  const [tableEndDate, setTableEndDate] = useState('');
 
   // FIX: Added cleanup flag to prevent setState on unmounted component.
   // FIX: Promise.allSettled so a slow /jobs or /clients endpoint never blocks
@@ -184,9 +205,9 @@ export default function AdminDashboard() {
           apiFetch('/clients?view=lookup'),
         ]);
         if (cancelled) return;
-        if (candR.status   === 'fulfilled') setCandidates(candR.value);
-        if (recR.status    === 'fulfilled') setRecruiters(recR.value);
-        if (jobsR.status   === 'fulfilled') setJobs(jobsR.value);
+        if (candR.status === 'fulfilled') setCandidates(candR.value);
+        if (recR.status === 'fulfilled') setRecruiters(recR.value);
+        if (jobsR.status === 'fulfilled') setJobs(jobsR.value);
         if (clientR.status === 'fulfilled') setClients(clientR.value);
       } catch {
         if (!cancelled) toast({ title: 'Sync Error', description: 'Check server connection', variant: 'destructive' });
@@ -201,20 +222,107 @@ export default function AdminDashboard() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Memoized computed values ──────────────────────────────────────────────
+  const hasStatus = useCallback((c, targetStatus) => {
+    const statusVal = c.status;
+    const arr = Array.isArray(statusVal) ? statusVal : [statusVal || ''];
+    const lowerTargets = Array.isArray(targetStatus) ? targetStatus.map(t => t.toLowerCase()) : [targetStatus.toLowerCase()];
+    return arr.some(s => lowerTargets.includes(String(s || '').toLowerCase()));
+  }, []);
+
   const stats = useMemo(() => {
-    const total     = candidates.length;
-    const submitted = candidates.filter(c => { const s = getSafeStatus(c.status); return s === 'submitted' || s === 'pending'; }).length;
-    const joined    = candidates.filter(c => getSafeStatus(c.status) === 'joined').length;
-    const hold      = candidates.filter(c => getSafeStatus(c.status) === 'hold').length;
-    const rejected  = candidates.filter(c => getSafeStatus(c.status) === 'rejected').length;
+    const total = candidates.length;
+    const submitted = candidates.filter(c => hasStatus(c, ['Submitted', 'Pending', 'Pipeline'])).length;
+    const joined = candidates.filter(c => hasStatus(c, 'Joined')).length;
+    const hold = candidates.filter(c => hasStatus(c, 'Hold')).length;
+    const rejected = candidates.filter(c => hasStatus(c, 'Rejected')).length;
     return { total, submitted, joined, hold, rejected };
-  }, [candidates]);
+  }, [candidates, hasStatus]);
+
+  const avgTimeToHireDays = useMemo(() => {
+    const joinedCandidates = candidates.filter(c => hasStatus(c, 'Joined'));
+    if (joinedCandidates.length === 0) return 0;
+    const totalDays = joinedCandidates.reduce((sum, c) => {
+      const start = new Date(c.dateAdded || c.createdAt);
+      const end = new Date(c.statusChangedAt || new Date());
+      const diffTime = Math.max(0, end - start);
+      return sum + (diffTime / (1000 * 60 * 60 * 24));
+    }, 0);
+    return parseFloat((totalDays / joinedCandidates.length).toFixed(1));
+  }, [candidates, hasStatus]);
+
+  // Trends calculation
+  const getTrendForItems = useCallback((items, dateField = 'createdAt') => {
+    const now = new Date();
+    const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const prevMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+
+    const currentMonth = items.filter(item => new Date(item[dateField]) >= currentMonthStart).length;
+    const prevMonth = items.filter(item => {
+      const d = new Date(item[dateField]);
+      return d >= prevMonthStart && d <= prevMonthEnd;
+    }).length;
+
+    if (prevMonth > 0) return Math.round(((currentMonth - prevMonth) / prevMonth) * 100);
+    if (currentMonth > 0) return 100;
+    return 0;
+  }, []);
+
+  const trends = useMemo(() => {
+    return {
+      candidates: getTrendForItems(candidates, 'createdAt'),
+      recruiters: getTrendForItems(recruiters.filter(r => r.role === 'recruiter'), 'createdAt'),
+      jobs: getTrendForItems(jobs, 'createdAt'),
+      clients: getTrendForItems(clients, 'createdAt'),
+      submitted: getTrendForItems(candidates.filter(c => hasStatus(c, ['Submitted', 'Pending', 'Pipeline'])), 'createdAt'),
+      joined: getTrendForItems(candidates.filter(c => hasStatus(c, 'Joined')), 'createdAt'),
+      hold: getTrendForItems(candidates.filter(c => hasStatus(c, 'Hold')), 'createdAt'),
+      rejected: getTrendForItems(candidates.filter(c => hasStatus(c, 'Rejected')), 'createdAt'),
+    };
+  }, [candidates, recruiters, jobs, clients, getTrendForItems, hasStatus]);
+
+  // Ratios for progress bar fill — each is a meaningful percentage of its context
+  const ratios = useMemo(() => {
+    const total = stats.total;
+
+    // Candidate pipeline health: active (non-rejected/backout) / total
+    const active = candidates.filter(c => {
+      const s = String(c.status || '').trim().toLowerCase();
+      return !['rejected', 'backout', 'no show'].includes(s);
+    }).length;
+
+    // Recruiters: active / total
+    const rTotal = recruiters.filter(r => r.role === 'recruiter').length;
+    const rActive = recruiters.filter(r => r.role === 'recruiter' && r.active !== false).length;
+
+    // Jobs: active / total
+    const jTotal = jobs.length;
+    const jActive = jobs.filter(j => j.active !== false).length;
+
+    // Clients: active / total
+    const clTotal = clients.length;
+    const clActive = clients.filter(cl => cl.active !== false).length;
+
+    // Status cards: each as % of total candidates
+    const pct = (count) => total > 0 ? Math.round((count / total) * 100) : 0;
+
+    return {
+      candidates: total > 0 ? Math.round((active / total) * 100) : 0,
+      recruiters:  rTotal > 0 ? Math.round((rActive / rTotal) * 100) : 0,
+      jobs:        jTotal > 0 ? Math.round((jActive / jTotal) * 100) : 0,
+      clients:     clTotal > 0 ? Math.round((clActive / clTotal) * 100) : 0,
+      submitted:   pct(stats.submitted),
+      joined:      pct(stats.joined),
+      hold:        pct(stats.hold),
+      rejected:    pct(stats.rejected),
+    };
+  }, [stats, candidates, recruiters, jobs, clients]);
 
   const recruiterStats = useMemo(() => {
     let stats = recruiters
       .filter(r => r._id || r.id)
       .map(r => {
-        const rid   = r._id || r.id;
+        const rid = r._id || r.id;
         let cands = candidates.filter(c => getCandidateRecruiterId(c) === String(rid));
 
         if (tableStartDate) {
@@ -228,16 +336,16 @@ export default function AdminDashboard() {
           cands = cands.filter(c => new Date(c.dateAdded || c.createdAt) <= end);
         }
 
-        const name  = r.name || `${r.firstName || ''} ${r.lastName || ''}`.trim();
+        const name = r.name || `${r.firstName || ''} ${r.lastName || ''}`.trim();
         return {
-          id:          String(rid),
-          recruiter:   r,
-          fullName:    name,
+          id: String(rid),
+          recruiter: r,
+          fullName: name,
           submissions: cands.length,
-          joined:      cands.filter(c => getSafeStatus(c.status) === 'joined').length,
-          pending:     cands.filter(c => ['submitted', 'pending'].includes(getSafeStatus(c.status))).length,
-          hold:        cands.filter(c => getSafeStatus(c.status) === 'hold').length,
-          rejected:    cands.filter(c => getSafeStatus(c.status) === 'rejected').length,
+          joined: cands.filter(c => statusMatchesMetric(c, 'joined')).length,
+          pending: cands.filter(c => statusMatchesMetric(c, 'pending')).length,
+          hold: cands.filter(c => statusMatchesMetric(c, 'hold')).length,
+          rejected: cands.filter(c => statusMatchesMetric(c, 'rejected')).length,
           avgTimeToHire: 0,
         };
       })
@@ -355,21 +463,22 @@ export default function AdminDashboard() {
         <PrimaryStatCard
           title="Total Candidates"
           value={stats.total}
-          trend={12}
+          trend={trends.candidates}
+          progress={ratios.candidates}
           icon={Users}
           onClick={() => navigate('/admin/add-candidate', { state: { filter: 'All' } })}
         />
-        <BubbleStatCard title="Recruiters"    value={recruiters.length} trend={5} icon={UserCheck} theme="green"  onClick={() => navigate('/admin/recruiters')} />
-        <BubbleStatCard title="Total Jobs"    value={jobs.length}       trend={8} icon={Briefcase}  theme="blue"   onClick={() => navigate('/admin/requirements')} />
-        <BubbleStatCard title="Total Clients" value={clients.length}    trend={3} icon={FileText}   theme="purple" onClick={() => navigate('/admin/clients')} />
+        <BubbleStatCard title="Recruiters" value={recruiters.filter(r => r.role === 'recruiter').length} trend={trends.recruiters} progress={ratios.recruiters} icon={UserCheck} theme="green" onClick={() => navigate('/admin/recruiters')} />
+        <BubbleStatCard title="Total Jobs" value={jobs.length} trend={trends.jobs} progress={ratios.jobs} icon={Briefcase} theme="blue" onClick={() => navigate('/admin/requirements')} />
+        <BubbleStatCard title="Total Clients" value={clients.length} trend={trends.clients} progress={ratios.clients} icon={FileText} theme="purple" onClick={() => navigate('/admin/clients')} />
       </div>
 
       {/* ── Row 2: Status Cards ── */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <BubbleStatCard title="Submitted" value={stats.submitted} trend={12} icon={User}       theme="purple" onClick={() => navigate('/admin/add-candidate', { state: { filter: 'Submitted' } })} />
-        <BubbleStatCard title="Joined"    value={stats.joined}   trend={7}  icon={UserCheck}   theme="green"  onClick={() => navigate('/admin/add-candidate', { state: { filter: 'Joined' } })} />
-        <BubbleStatCard title="Hold"      value={stats.hold}     trend={4}  icon={PauseCircle} theme="orange" onClick={() => navigate('/admin/add-candidate', { state: { filter: 'Hold' } })} />
-        <BubbleStatCard title="Rejected"  value={stats.rejected} trend={5}  icon={UserX}       theme="red"    onClick={() => navigate('/admin/add-candidate', { state: { filter: 'Rejected' } })} />
+        <BubbleStatCard title="Submitted" value={stats.submitted} trend={trends.submitted} progress={ratios.submitted} icon={User} theme="purple" onClick={() => navigate('/admin/add-candidate', { state: { filter: 'Submitted' } })} />
+        <BubbleStatCard title="Joined" value={stats.joined} trend={trends.joined} progress={ratios.joined} icon={UserCheck} theme="green" onClick={() => navigate('/admin/add-candidate', { state: { filter: 'Joined' } })} />
+        <BubbleStatCard title="Hold" value={stats.hold} trend={trends.hold} progress={ratios.hold} icon={PauseCircle} theme="orange" onClick={() => navigate('/admin/add-candidate', { state: { filter: 'Hold' } })} />
+        <BubbleStatCard title="Rejected" value={stats.rejected} trend={trends.rejected} progress={ratios.rejected} icon={UserX} theme="red" onClick={() => navigate('/admin/add-candidate', { state: { filter: 'Rejected' } })} />
       </div>
 
       {/* ── Row 3: Middle Cards ── */}
@@ -377,11 +486,9 @@ export default function AdminDashboard() {
         <div className="bg-white p-8 rounded-[1.5rem] shadow-sm border border-gray-100 flex items-center justify-between">
           <div className="flex-1">
             <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Avg. Time of Hire</p>
-
-
-            <h3 className="text-4xl font-bold text-slate-800 mt-2">0.0%</h3>
+            <h3 className="text-4xl font-bold text-slate-800 mt-2">{avgTimeToHireDays > 0 ? `${avgTimeToHireDays} Days` : '0.0 Days'}</h3>
             <div className="w-full h-2 bg-gray-100 rounded-full mt-6">
-              <div className="h-full bg-[#283086] rounded-full w-[30%]" />
+              <div className="h-full bg-[#283086] rounded-full transition-all duration-500" style={{ width: `${avgTimeToHireDays > 0 ? Math.max(10, Math.min(100, Math.round((1 - avgTimeToHireDays / 45) * 100))) : 0}%` }} />
             </div>
           </div>
           <div className="bg-blue-50 p-4 rounded-xl"><TrendingUp size={32} className="text-blue-600" /></div>
@@ -400,23 +507,23 @@ export default function AdminDashboard() {
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         <div className="bg-white p-8 rounded-[1.5rem] shadow-sm border border-gray-100 h-full min-h-[460px] dark:border-white/10 dark:bg-slate-900">
           <div className="flex justify-between items-center mb-6">
-          <h3 className="text-base font-bold text-slate-800 dark:text-white">Top Recruiters (Upload Report)</h3>
-          <span className="text-xs text-gray-400">showing {Math.min(6, recruiters.length)} of {recruiters.length}</span>
+            <h3 className="text-base font-bold text-slate-800 dark:text-white">Top Recruiters (Upload Report)</h3>
+            <span className="text-xs text-gray-400">showing {Math.min(6, recruiters.length)} of {recruiters.length}</span>
+          </div>
+          <div className="h-72">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={barData} barSize={40}>
+                <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12, fontWeight: 500 }} dy={10} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 12 }} />
+                <Tooltip cursor={{ fill: 'transparent' }} />
+                <Bar dataKey="value" radius={[6, 6, 0, 0]}>
+                  {barData.map((_, i) => <Cell key={`cell-${i}`} fill="#5664d2" />)}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         </div>
-        <div className="h-72">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={barData} barSize={40}>
-              <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12, fontWeight: 500 }} dy={10} />
-              <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 12 }} />
-              <Tooltip cursor={{ fill: 'transparent' }} />
-              <Bar dataKey="value" radius={[6, 6, 0, 0]}>
-                {barData.map((_, i) => <Cell key={`cell-${i}`} fill="#5664d2" />)}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
 
         <RecruiterCandidateGrowthChart
           candidates={candidates}
