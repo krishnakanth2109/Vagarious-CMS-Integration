@@ -138,13 +138,13 @@ const EditableContent = ({ initialContent, onChange }) => {
 
 const AgreementLetterModal = ({ employee, onClose, onSuccess, apiUrl }) => {
     const API_URL = apiUrl;
-    const [letterType, setLetterType] = useState('Agreement');
+    const [letterType, setLetterType] = useState(employee.templateName || 'Agreement');
     const [generatedContent, setGeneratedContent] = useState('');
     const [loading, setLoading] = useState(false);
     const [viewMode, setViewMode] = useState('pdf');
 
-    const [selectedTemplate, setSelectedTemplate] = useState('/Vagerious.pdf');
-    const [companyName, setCompanyName] = useState('VAGARIOUS SOLUTIONS PRIVATE LIMITED');
+    const [selectedTemplate, setSelectedTemplate] = useState(employee.templateUrl || '/Vagerious.pdf');
+    const [companyName, setCompanyName] = useState(employee.name?.toUpperCase() || 'VAGARIOUS SOLUTIONS PRIVATE LIMITED');
     const [templates, setTemplates] = useState([]);
 
     const prevTemplateRef = React.useRef(selectedTemplate);
@@ -458,6 +458,8 @@ const AgreementLetterModal = ({ employee, onClose, onSuccess, apiUrl }) => {
                             setSelectedTemplate(val);
                             if (val === '/Vagerious.pdf') {
                                 setLetterType('Agreement');
+                            } else if (employee.templateUrl && val === employee.templateUrl) {
+                                setLetterType(employee.templateName || 'Agreement');
                             } else {
                                 const t = templates.find(temp => temp.url === val);
                                 if (t) {
@@ -471,6 +473,9 @@ const AgreementLetterModal = ({ employee, onClose, onSuccess, apiUrl }) => {
                             fontWeight: '600'
                         }}
                     >
+                        {employee.templateUrl && (
+                            <option value={employee.templateUrl}>{employee.templateName || "Client Template"}</option>
+                        )}
                         <option value="/Vagerious.pdf">Vagarious Template</option>
                         {templates.map(tpl => (
                             <option key={tpl.id} value={tpl.url}>{tpl.name}</option>

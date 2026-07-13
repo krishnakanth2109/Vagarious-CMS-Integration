@@ -240,11 +240,9 @@ router.get('/', async (req, res) => {
       }
     });
 
-    // For dashboard view: load the most recent CandidateSubmission per candidate and
-    // use its pipelineStage as the effective status. The candidates page reads status from
-    // submissions (not candidate.status), so the dashboard must do the same to show
-    // consistent counts (Joined, Hold, Rejected, etc.).
-    if (req.query.view === 'dashboard' && candidates.length > 0) {
+    // For dashboard and invoice views: load the most recent CandidateSubmission per candidate and
+    // use its pipelineStage as the effective status.
+    if ((req.query.view === 'dashboard' || req.query.view === 'invoice') && candidates.length > 0) {
       const candidateIds = candidates.map((c) => c._id);
       // Get the latest submission per candidate (sorted newest first)
       const latestSubmissions = await CandidateSubmission.find({ candidateId: { $in: candidateIds } })

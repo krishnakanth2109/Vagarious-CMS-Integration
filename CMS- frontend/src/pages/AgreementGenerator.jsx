@@ -343,16 +343,31 @@ export default function AgreementGenerator() {
           </button>
         )}
 
+        {/* Template Manager */}
+        <button 
+          onClick={() => { fetchTemplates(); setIsManageTemplatesOpen(true); }} 
+          style={{ 
+            background: 'transparent', 
+            color: 'var(--ag-accent-color)', 
+            border: '1px solid var(--ag-accent-color)', 
+            padding: '8px 14px', 
+            borderRadius: '10px', 
+            fontWeight: 700, 
+            fontSize: '0.8rem', 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '6px', 
+            cursor: 'pointer',
+            transition: 'all 0.2s'
+          }}
+          onMouseOver={e => { e.currentTarget.style.background = 'var(--ag-accent-soft)'; }}
+          onMouseOut={e => { e.currentTarget.style.background = 'transparent'; }}
+        >
+          <FileText size={14} /> Templates
+        </button>
+
         {/* New Company */}
         <button onClick={() => { setSelectedCompanyForEdit(null); setIsViewOnly(false); setIsCompanyModalOpen(true); }} style={{ background: 'var(--ag-accent-color)', color: 'white', border: 'none', padding: '8px 14px', borderRadius: '10px', fontWeight: 700, fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', boxShadow: '0 4px 12px rgba(40, 48, 134, 0.3)' }}><Plus size={14} /> New Company</button>
-
-        {/* Template Manager */}
-        <button
-          onClick={() => { setIsManageTemplatesOpen(true); fetchTemplates(); }}
-          style={{ background: 'var(--ag-accent-color)', color: 'white', border: 'none', padding: '8px 14px', borderRadius: '10px', fontWeight: 700, fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', boxShadow: '0 4px 12px rgba(40, 48, 134, 0.2)' }}
-        >
-          <Handshake size={14} /> Template Manager
-        </button>
       </div>
 
       {/* CONTENT AREA */}
@@ -457,7 +472,9 @@ export default function AgreementGenerator() {
                       <div style={{ fontWeight: 750, color: 'var(--ag-text-primary)', fontSize: '0.95rem' }}>{co.name || "Unnamed"}</div>
                     </td>
                     <td style={{ padding: '1rem', fontSize: '0.9rem', color: 'var(--ag-text-secondary)', fontWeight: 500 }}>{co.email || "N/A"}</td>
-                    <td style={{ padding: '1rem', fontSize: '0.85rem', color: 'var(--ag-text-muted)', fontWeight: 500 }}>{co.joining_date ? new Date(co.joining_date).toLocaleDateString() : 'N/A'}</td>
+                    <td style={{ padding: '1rem' }}>
+                      <div style={{ fontSize: '0.85rem', color: 'var(--ag-text-muted)', fontWeight: 600 }}>{co.joining_date ? new Date(co.joining_date).toLocaleDateString() : 'N/A'}</div>
+                    </td>
                     <td style={{ padding: '1rem' }}>
                       <span style={{
                         fontSize: '0.65rem', fontWeight: 800, textTransform: 'uppercase', padding: '4px 10px', borderRadius: '8px',

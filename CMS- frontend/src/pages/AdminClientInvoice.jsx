@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
@@ -90,6 +90,64 @@ const SectionCard = ({ title, icon: Icon, children }) => (
   </div>
 );
 
+const PlacementCountdown = ({ placement, ready, onComplete }) => {
+  const [timeLeft, setTimeLeft] = useState('');
+  const [isOverdue, setIsOverdue] = useState(false);
+  // Guard: fire onComplete AT MOST ONCE per component lifetime.
+  // This ref persists across effect re-runs so re-renders caused by
+  // fetchHistory / activePlacements recompute cannot re-trigger billing.
+  const hasTriggered = useRef(false);
+  // Keep the latest onComplete reference without adding it to effect deps
+  const latestOnComplete = useRef(onComplete);
+  useEffect(() => { latestOnComplete.current = onComplete; });
+
+  // Depend on the TIMESTAMP (stable primitive), not the placement object.
+  // This prevents the effect from re-running every time activePlacements
+  // recomputes a new object reference after fetchHistory updates history.
+  const targetMs = placement.targetDate.getTime();
+
+  useEffect(() => {
+    const calculateTime = () => {
+      const now = new Date();
+      const diff = targetMs - now.getTime();
+
+      if (diff <= 0) {
+        setIsOverdue(true);
+        setTimeLeft('Ready for Billing');
+        // Only fire once — never re-fire on subsequent interval ticks or effect re-runs
+        if (ready && !hasTriggered.current && latestOnComplete.current) {
+          hasTriggered.current = true;
+          latestOnComplete.current();
+        }
+        return;
+      }
+
+      setIsOverdue(false);
+      const totalSec = Math.floor(diff / 1000);
+      const m = Math.floor((totalSec / 60) % 60);
+      const h = Math.floor((totalSec / 3600) % 24);
+      const d = Math.floor(totalSec / 86400);
+      setTimeLeft(`${d}d ${h}h ${m}m remaining`);
+    };
+
+    calculateTime();
+    const interval = setInterval(calculateTime, 15000);
+    return () => clearInterval(interval);
+  }, [targetMs, ready]); // stable primitive — only changes if a different candidate or ready status changes
+
+  return (
+    <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${
+      placement.hasInvoice 
+        ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20' 
+        : isOverdue 
+          ? 'bg-amber-50 text-amber-600 dark:bg-amber-900/20 animate-pulse' 
+          : 'bg-blue-50 text-blue-600 dark:bg-blue-900/20'
+    }`}>
+      {placement.hasInvoice ? 'Billed (Auto)' : timeLeft}
+    </span>
+  );
+};
+
 const defaultAccountDetails = {
   accountNumber: "6000805022576",
   name: "Vagarious Solutions Pvt Ltd.",
@@ -104,6 +162,210 @@ const AdminClientInvoice = () => {
   const { toast } = useToast();
   const { authHeaders } = useAuth();
   const [isGenerating, setIsGenerating] = useState(false);
+  const [editingInvoiceId, setEditingInvoiceId] = useState(null);
+
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editForm, setEditForm] = useState(null);
+  const [editInvoiceId, setEditInvoiceId] = useState(null);
+
+  const handleEditInvoice = async (invoice) => {
+    toast({ title: "Loading invoice details..." });
+    try {
+      const headers = await getAuthHeader();
+      const res = await fetch(`${API_URL}/invoices/${invoice._id}`, { headers });
+      if (res.ok) {
+        const fullInvoice = await res.json();
+        
+        setEditInvoiceId(fullInvoice._id);
+        
+        let resolvedClientId = "";
+        if (fullInvoice.clientId) {
+          resolvedClientId = typeof fullInvoice.clientId === 'object' 
+            ? (fullInvoice.clientId._id || fullInvoice.clientId.id) 
+            : fullInvoice.clientId;
+        }
+
+        // Try to match against the fetched clients list by ID or companyName
+        const matchedClient = clients.find(c => {
+          const idMatch = String(c.id || c._id || "").toLowerCase().trim() === String(resolvedClientId).toLowerCase().trim();
+          const nameMatch = String(c.companyName || "").toLowerCase().trim() === String(fullInvoice.clientName || "").toLowerCase().trim();
+          return idMatch || nameMatch;
+        });
+
+        if (matchedClient) {
+          resolvedClientId = String(matchedClient.id || matchedClient._id);
+        } else {
+          resolvedClientId = String(resolvedClientId || "");
+        }
+
+        setEditForm({
+          invoiceNumber: fullInvoice.invoiceNumber,
+          invoiceDate: fullInvoice.invoiceDate ? fullInvoice.invoiceDate.split('T')[0] : new Date().toISOString().split("T")[0],
+          clientId: resolvedClientId,
+          clientName: fullInvoice.clientName || "",
+          cgstPercentage: String(fullInvoice.cgstPercentage ?? "9"),
+          sgstPercentage: String(fullInvoice.sgstPercentage ?? "9"),
+          accountType: fullInvoice.accountType || "default",
+          accountDetails: fullInvoice.accountDetails || defaultAccountDetails,
+          selectedCandidates: (fullInvoice.candidates || []).map(c => ({
+            id: c._id || c.candidateProfileId || Date.now() + Math.random(),
+            candidateProfileId: c.candidateProfileId,
+            name: c.name,
+            role: c.role,
+            joiningDate: c.joiningDate ? c.joiningDate.split('T')[0] : "",
+            actualSalary: c.actualSalary,
+            percentage: c.percentage,
+            payment: c.payment
+          }))
+        });
+        
+        setIsEditModalOpen(true);
+      } else {
+        toast({ title: "Failed to load complete invoice details", variant: "destructive" });
+      }
+    } catch (err) {
+      console.error(err);
+      toast({ title: "Error loading invoice details", variant: "destructive" });
+    }
+  };
+
+  const handleEditCandidateField = (candId, field, value) => {
+    if (!editForm) return;
+    setEditForm(prev => {
+      const updatedCandidates = prev.selectedCandidates.map(c => {
+        if (c.id === candId) {
+          const updated = { ...c, [field]: value };
+          if (field === 'actualSalary' || field === 'percentage') {
+            const salary = parseFloat(field === 'actualSalary' ? value : updated.actualSalary) || 0;
+            const percentage = parseFloat(field === 'percentage' ? value : updated.percentage) || 0;
+            updated.payment = Math.round((salary * percentage) / 100);
+          }
+          return updated;
+        }
+        return c;
+      });
+      return { ...prev, selectedCandidates: updatedCandidates };
+    });
+  };
+
+  const getEditFormTotals = () => {
+    if (!editForm) return { subtotal: 0, cgst: 0, sgst: 0, grandTotal: 0 };
+    const subtotal = editForm.selectedCandidates.reduce((sum, c) => sum + (parseFloat(c.payment) || 0), 0);
+    const cgst = Math.round((subtotal * (parseFloat(editForm.cgstPercentage) || 0)) / 100);
+    const sgst = Math.round((subtotal * (parseFloat(editForm.sgstPercentage) || 0)) / 100);
+    const grandTotal = subtotal + cgst + sgst;
+    return { subtotal, cgst, sgst, grandTotal };
+  };
+
+  const handleEditBankSelect = (val) => {
+    if (!editForm) return;
+    if (val === 'manual') {
+      setEditForm(prev => ({ ...prev, accountType: val, accountDetails: { accountNumber: '', name: '', bank: '', branch: '', ifsc: '', pan: '', gst: '' } }));
+    } else if (val === 'no') {
+      setEditForm(prev => ({ ...prev, accountType: val, accountDetails: { accountNumber: '', name: '', bank: '', branch: '', ifsc: '', pan: '', gst: '' } }));
+    } else {
+      const selectedBank = companyBanks.find(b => b._id === val);
+      if (selectedBank) {
+        setEditForm(prev => ({
+          ...prev,
+          accountType: val,
+          accountDetails: {
+            accountNumber: selectedBank.accountNumber,
+            name: selectedBank.name,
+            bank: selectedBank.bank,
+            branch: selectedBank.branch,
+            ifsc: selectedBank.ifsc,
+            pan: selectedBank.pan || '',
+            gst: selectedBank.gst || ''
+          }
+        }));
+      }
+    }
+  };
+
+  const handleSaveEditedInvoice = async (e) => {
+    e.preventDefault();
+    if (!editForm || !editInvoiceId) return;
+
+    setIsSaving(true);
+    try {
+      const editClient = clients.find(c => c.id === editForm.clientId);
+      const matchedCompany = agreementCompanies.find(co => 
+        String(co.name || '').toLowerCase() === String(editClient?.companyName || '').toLowerCase()
+      );
+      const templateToUse = matchedCompany?.templateUrl || '/New_Template.pdf';
+
+      const blob = await generateFilledPdf(editForm, templateToUse);
+      if (!blob) {
+        throw new Error("Could not regenerate PDF for the invoice.");
+      }
+
+      const headers = await getAuthHeader();
+      delete headers['Content-Type']; // Let browser set boundary automatically
+
+      const cands = editForm.selectedCandidates;
+      let totalPay = 0;
+      cands.forEach((c) => { totalPay += (parseFloat(c.payment) || 0); });
+      const totalCgstAmt = Math.round((totalPay * parseFloat(editForm.cgstPercentage || 0)) / 100);
+      const totalSgstAmt = Math.round((totalPay * parseFloat(editForm.sgstPercentage || 0)) / 100);
+      const grandTotalAmt = totalPay + totalCgstAmt + totalSgstAmt;
+
+      const metadata = {
+        invoiceNumber: editForm.invoiceNumber,
+        invoiceDate: editForm.invoiceDate,
+        clientId: editForm.clientId,
+        clientName: editClient?.companyName || "Unknown Client",
+        candidates: cands.map(c => ({
+          candidateProfileId: c.candidateProfileId || null,
+          name: c.name,
+          role: c.role || "",
+          joiningDate: c.joiningDate || null,
+          actualSalary: parseFloat(c.actualSalary) || 0,
+          percentage: parseFloat(c.percentage) || 0,
+          payment: parseFloat(c.payment) || 0
+        })),
+        candidateCount: cands.length,
+        subtotal: totalPay,
+        cgstPercentage: parseFloat(editForm.cgstPercentage) || 0,
+        cgstAmount: totalCgstAmt,
+        sgstPercentage: parseFloat(editForm.sgstPercentage) || 0,
+        sgstAmount: totalSgstAmt,
+        grandTotal: grandTotalAmt,
+        accountType: editForm.accountType,
+        accountDetails: editForm.accountDetails,
+        format: 'pdf',
+        isAutogenerated: true
+      };
+
+      const formData = new FormData();
+      formData.append('file', blob, `Invoice_${editForm.invoiceNumber}.pdf`);
+      formData.append('metadata', JSON.stringify(metadata));
+
+      const res = await fetch(`${API_URL}/invoices/${editInvoiceId}`, {
+        method: 'PUT',
+        headers,
+        body: formData
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.message || 'Invoice file could not be saved.');
+      }
+
+      toast({ title: "Invoice updated successfully. 🎉" });
+      setIsEditModalOpen(false);
+      setEditForm(null);
+      setEditInvoiceId(null);
+
+      fetchBilledCandidates();
+      fetchHistory(historyPage);
+    } catch (err) {
+      console.error(err);
+      toast({ title: err.message || "Failed to update invoice", variant: "destructive" });
+    } finally {
+      setIsSaving(false);
+    }
+  };
   const [loading, setLoading] = useState(true);
   const [clients, setClients] = useState([]);
   const [candidates, setCandidates] = useState([]);
@@ -161,6 +423,416 @@ const AdminClientInvoice = () => {
   const [templatesLoading, setTemplatesLoading] = useState(false);
   const [isUploadingTemplate, setIsUploadingTemplate] = useState(false);
   const [previewTemplate, setPreviewTemplate] = useState(null);
+  const [newTemplateName, setNewTemplateName] = useState("");
+  const [agreementCompanies, setAgreementCompanies] = useState([]);
+  const [autoGeneratingIds] = useState(() => new Set());
+  // Session-level permanent record of candidates auto-billed this session.
+  // Unlike autoGeneratingIds (which is cleared after generation), this Set
+  // NEVER removes entries, so stale re-triggers after fetchHistory are blocked.
+  const sessionBilledCandidates = useRef(new Set());
+  // Guard: block auto-generation until history has been fetched at LEAST ONCE.
+  // On page load, history starts empty ([]) so hasInvoice is always false.
+  // Without this flag, PlacementCountdown fires onComplete before fetchHistory
+  // completes and creates a duplicate invoice every single time the page loads.
+  const [historyFirstLoaded, setHistoryFirstLoaded] = useState(false);
+  const [billedCandidateIds, setBilledCandidateIds] = useState(new Set());
+
+  const parseDuration = (val) => {
+    if (!val) return { days: 0, hours: 0, minutes: 0 };
+    const parts = String(val).split(':');
+    if (parts.length === 3) {
+      return {
+        days: parseInt(parts[0]) || 0,
+        hours: parseInt(parts[1]) || 0,
+        minutes: parseInt(parts[2]) || 0
+      };
+    }
+    return {
+      days: parseInt(val) || 0,
+      hours: 0,
+      minutes: 0
+    };
+  };
+
+  const activePlacements = useMemo(() => {
+    const list = [];
+    candidates.forEach(cand => {
+      const isJoinedDirect = String(cand.status || '').toLowerCase() === 'joined';
+      const joinedSubmission = cand.submissions?.find(sub => 
+        String(sub.pipelineStage || sub.status || '').toLowerCase() === 'joined'
+      );
+
+      if (isJoinedDirect || joinedSubmission) {
+        const clientName = joinedSubmission ? joinedSubmission.clientName : cand.client;
+        if (!clientName) return;
+
+        const matchingCompany = agreementCompanies.find(co => 
+          String(co.name || '').toLowerCase() === String(clientName).toLowerCase()
+        );
+
+        const hasInvoice = billedCandidateIds.has(String(cand._id || cand.id));
+
+        const durationVal = matchingCompany?.invoice_post_joining || '0:0:0';
+        const duration = parseDuration(durationVal);
+
+        const rawJoinDate = joinedSubmission 
+          ? (joinedSubmission.updatedAt || joinedSubmission.createdAt) 
+          : (cand.statusChangedAt || cand.createdAt);
+
+        const joinDate = new Date(rawJoinDate || new Date());
+        const targetDate = new Date(joinDate.getTime());
+        targetDate.setDate(targetDate.getDate() + duration.days);
+        targetDate.setHours(targetDate.getHours() + duration.hours);
+        targetDate.setMinutes(targetDate.getMinutes() + duration.minutes);
+
+        const ctcValue = parseFloat(cand.ctc ? cand.ctc.replace(/[^0-9.]/g, "") : "0") * 100000 || 0;
+        // Read commission from agreement's compensation.percentage (not a top-level field)
+        const percentage = matchingCompany
+          ? (parseFloat(matchingCompany.compensation?.percentage) || parseFloat(matchingCompany.percentage) || 8.33)
+          : 8.33;
+
+        list.push({
+          candidate: {
+            ...cand,
+            client: clientName,
+            status: 'Joined',
+            // Embed the exact join date so autoGenerateInvoice can use it
+            _resolvedJoinDate: joinDate.toISOString()
+          },
+          company: matchingCompany,
+          joinDate,
+          targetDate,
+          hasInvoice,
+          durationVal,
+          ctcValue,
+          percentage,
+          billingAmount: Math.round(ctcValue * (percentage / 100))
+        });
+      }
+    });
+    return list;
+  }, [candidates, agreementCompanies, billedCandidateIds]);
+
+  // Accept full placement object so join date / locking period / commission all come from agreement
+  const autoGenerateInvoice = async (candidate, company, placementOverride = null) => {
+    if (autoGeneratingIds.has(candidate._id)) return;
+    autoGeneratingIds.add(candidate._id);
+    
+    toast({ title: `Auto-billing: ${candidate.name}...`, description: "Generating placement invoice." });
+    
+    try {
+      const ctcValue = placementOverride?.ctcValue ?? (parseFloat(candidate.ctc ? candidate.ctc.replace(/[^0-9.]/g, "") : "0") * 100000 || 0);
+      // Commission: prefer placement-resolved value (from agreement compensation.percentage)
+      const percentage = placementOverride?.percentage
+        ?? parseFloat(company?.compensation?.percentage)
+        ?? parseFloat(company?.percentage)
+        ?? 8.33;
+      // Actual join date from placement (status-changed date from submission)
+      const resolvedJoinDate = placementOverride?.joinDate || (candidate._resolvedJoinDate ? new Date(candidate._resolvedJoinDate) : null) || new Date();
+      // Locking period label for notes
+      const lockingPeriod = placementOverride?.durationVal || company?.invoice_post_joining || 'N/A';
+      const payment = Math.round(ctcValue * (percentage / 100));
+      
+      const cgstPercentage = 9;
+      const sgstPercentage = 9;
+      const cgstAmount = Math.round(payment * 0.09);
+      const sgstAmount = Math.round(payment * 0.09);
+      const grandTotal = payment + cgstAmount + sgstAmount;
+      
+      const defaultBank = companyBanks.find(b => b.isDefault) || companyBanks[0];
+      const accountDetails = defaultBank ? {
+        accountNumber: defaultBank.accountNumber,
+        name: defaultBank.name,
+        bank: defaultBank.bank,
+        branch: defaultBank.branch,
+        ifsc: defaultBank.ifsc,
+        pan: defaultBank.pan || '',
+        gst: defaultBank.gst || ''
+      } : defaultAccountDetails;
+      
+      const templateToUse = company.templateUrl || '/New_Template.pdf';
+      const response = await fetch(`${templateToUse}?v=${new Date().getTime()}`);
+      const existingPdfBytes = await response.arrayBuffer();
+      
+      const pdfDoc = await PDFDocument.load(existingPdfBytes);
+      const pages = pdfDoc.getPages();
+      const firstPage = pages[0];
+      const { width, height } = firstPage.getSize();
+      
+      const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica);
+      const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+      
+      const drawText = (text, x, y, size = 9.5, isBold = false) => {
+        if (!text) return;
+        firstPage.drawText(String(text).trim(), {
+          x,
+          y: height - y - (size / 3),
+          size,
+          color: rgb(0, 0, 0),
+          font: isBold ? helveticaBold : helvetica,
+        });
+      };
+      
+      const drawTextCentered = (text, centerX, y, maxW, isBold = false, size = 9.5) => {
+        if (!text) return;
+        const font = isBold ? helveticaBold : helvetica;
+        let sz = size;
+        let t = String(text).trim();
+        let w = font.widthOfTextAtSize(t, sz);
+        while (w > maxW && sz > 5) {
+          sz -= 0.5;
+          w = font.widthOfTextAtSize(t, sz);
+        }
+        const x = centerX - (w / 2);
+        firstPage.drawText(t, {
+          x,
+          y: height - y - (sz / 3),
+          size: sz,
+          color: rgb(0, 0, 0),
+          font,
+        });
+      };
+      
+      const invNumber = `INV-${Math.floor(1000 + Math.random() * 9000)}`;
+      const invDateStr = new Date().toISOString().split("T")[0];
+      
+      // 1. Draw "To," and Company details
+      drawText("To,", 68, 140, 10, true);
+      drawText(company.name || "", 68, 155, 11, true);
+      
+      const rawParts = (company.address || "").split(",").map(p => p.trim()).filter(Boolean);
+      let addressLines = [];
+      if (rawParts.length <= 2) {
+        addressLines = rawParts;
+      } else {
+        const city = rawParts[rawParts.length - 2];
+        const state = rawParts[rawParts.length - 1];
+        const middleParts = rawParts.slice(0, rawParts.length - 2);
+        const buildingPattern = /\d|floor|f\.no|no\.|h\.no|plot|flat|door|d\.no|beside|above|below|near|opp|block|wing|phase|sector|tower|unit|suite|rd\s|street|building|complex|nagar/i;
+        const buildingParts = middleParts.filter(p => buildingPattern.test(p));
+        const areaParts = middleParts.filter(p => !buildingPattern.test(p));
+        const lines = [];
+        if (buildingParts.length > 0) lines.push(buildingParts.join(", "));
+        areaParts.forEach(a => lines.push(a));
+        lines.push(city, state);
+        addressLines = lines;
+      }
+      
+      const invoiceDateFormatted = getOrdinalDate(invDateStr);
+      let addressEndY = 170;
+      const contactPerson = company.sig_name || company.signature || '';
+      if (contactPerson) {
+        drawText(contactPerson, 68, 170, 10, true);
+        addressLines.forEach((line, i) => drawText(line, 68, 185 + i * 13, 10, true));
+        const gstY = 185 + addressLines.length * 13;
+        if (company.gstNumber || company.gst_number || company.gst) {
+          drawText(`GST : ${company.gstNumber || company.gst_number || company.gst}`, 68, gstY, 10, true);
+          addressEndY = gstY + 13;
+        } else {
+          addressEndY = gstY;
+        }
+      } else {
+        addressLines.forEach((line, i) => drawText(line, 68, 170 + i * 13, 10, true));
+        const gstY = 170 + addressLines.length * 13;
+        if (company.gstNumber || company.gst_number || company.gst) {
+          drawText(`GST : ${company.gstNumber || company.gst_number || company.gst}`, 68, gstY, 10, true);
+          addressEndY = gstY + 13;
+        } else {
+          addressEndY = gstY;
+        }
+      }
+      
+      drawText(invoiceDateFormatted, 468, addressEndY + 15, 10, true);
+      const afterAddressY = addressEndY + 35;
+      
+      // 2. Invoice ID and Title
+      drawText(`No: ${invNumber}`, 68, Math.max(280, afterAddressY), 10, true);
+      drawText("SUB: Final Invoice", 68, Math.max(298, afterAddressY + 18), 10, true);
+      drawTextCentered("TAX INVOICE", width / 2, Math.max(320, afterAddressY + 40), 200, true, 14);
+      
+      // 3. Table setup
+      const candidateCount = 1;
+      const isLargeList = false;
+      
+      let rowHR = 18;
+      let rowDR = 18;
+      let currentY = 345;
+      const headerFs = 8.5;
+      const dataFs = 8;
+      const accFs = 9;
+      const accSpacing = 13;
+      
+      const colStarts = [68, 96, 201, 281, 356, 426, 476];
+      const colWidths = [28, 105, 80, 75, 70, 50, 70];
+      const colCenters = colStarts.map((s, i) => s + colWidths[i] / 2);
+      const headersList = ["S.No", "Candidate Name", "Role", "Joining Date", "Actual Salary", "Percentage", "Payment"];
+      
+      const drawCell = (text, x, w, y, h, align = 'center', isBold = false, fs = dataFs) => {
+        firstPage.drawRectangle({
+          x, y: height - (y + h / 2), width: w, height: h,
+          borderColor: rgb(0, 0, 0), borderWidth: 0.7
+        });
+        if (text) {
+          if (align === 'center') drawTextCentered(text, x + w / 2, y, w - 4, isBold, fs);
+          else if (align === 'left') drawText(text, x + 4, y, fs, isBold);
+          else drawTextCentered(text, x + w / 2, y, w - 4, isBold, fs);
+        }
+      };
+      
+      headersList.forEach((h, i) => {
+        drawCell(h, colStarts[i], colWidths[i], currentY, rowHR, 'center', true, headerFs);
+      });
+      currentY += (rowHR / 2 + rowDR / 2);
+      
+      // Draw Row 1: Candidate details
+      drawCell("1", colStarts[0], colWidths[0], currentY, rowDR);
+      
+      const candidateFullName = `${candidate.firstName || ''} ${candidate.lastName || ''}`.trim();
+      firstPage.drawRectangle({
+        x: colStarts[1], y: height - (currentY + rowDR / 2), width: colWidths[1], height: rowDR,
+        borderColor: rgb(0, 0, 0), borderWidth: 0.7
+      });
+      if (candidateFullName.length > 18) {
+        const splitIdx = candidateFullName.lastIndexOf(" ", 18) || 18;
+        const line1 = candidateFullName.substring(0, splitIdx).trim();
+        const line2 = candidateFullName.substring(splitIdx).trim();
+        drawTextCentered(line1, colCenters[1], currentY - 4, colWidths[1] - 4, false, dataFs - 1);
+        drawTextCentered(line2, colCenters[1], currentY + 4, colWidths[1] - 4, false, dataFs - 1);
+      } else {
+        drawTextCentered(candidateFullName, colCenters[1], currentY, colWidths[1] - 4, false, dataFs);
+      }
+      
+      drawCell(candidate.position || candidate.role || "Developer", colStarts[2], colWidths[2], currentY, rowDR);
+      // Use the resolved join date from placement (agreement-sourced)
+      const candJoinDateFormatted = getOrdinalDate(resolvedJoinDate);
+      drawCell(candJoinDateFormatted, colStarts[3], colWidths[3], currentY, rowDR, 'center', false);
+      drawCell(Number(ctcValue).toLocaleString("en-IN"), colStarts[4], colWidths[4], currentY, rowDR);
+      drawCell(`${percentage}%`, colStarts[5], colWidths[5], currentY, rowDR);
+      drawCell(Number(payment).toLocaleString("en-IN"), colStarts[6], colWidths[6], currentY, rowDR);
+      
+      currentY += rowDR;
+      
+      // 4. Totals Rows
+      const tH = 18;
+      
+      const drawSummaryRow = (label, amount, yOffset, isBold = true) => {
+        const y = currentY + yOffset;
+        firstPage.drawRectangle({
+          x: colStarts[0], y: height - (y + tH / 2), width: colStarts[6] - colStarts[0], height: tH,
+          borderColor: rgb(0, 0, 0), borderWidth: 0.7
+        });
+        firstPage.drawRectangle({
+          x: colStarts[6], y: height - (y + tH / 2), width: colWidths[6], height: tH,
+          borderColor: rgb(0, 0, 0), borderWidth: 0.7
+        });
+        const w = (isBold ? helveticaBold : helvetica).widthOfTextAtSize(label, 10);
+        firstPage.drawText(label, {
+          x: colStarts[6] - 15 - w,
+          y: height - y - 3.33,
+          size: 10,
+          font: isBold ? helveticaBold : helvetica,
+          color: rgb(0, 0, 0)
+        });
+        drawTextCentered(amount.toLocaleString("en-IN"), colCenters[6], y, colWidths[6] - 4, isBold, 10);
+      };
+      
+      drawSummaryRow(`CGST (9%)`, cgstAmount, 0, false);
+      drawSummaryRow(`SGST (9%)`, sgstAmount, tH, false);
+      drawSummaryRow("Grand Total", grandTotal, tH * 2, true);
+      
+      currentY += tH * 2;
+      
+      // 5. In Words
+      const footerY = currentY + 40;
+      drawText("In Words : ", 68, footerY, 10, true);
+      drawText(numberToWords(grandTotal).toUpperCase(), 125, footerY, 9.5);
+      
+      // 6. Account Details
+      const accY = footerY + 50;
+      if (company.accountType !== "no") {
+        drawText("Account Details: -", 68, accY - 18, 11, true);
+        const detailsLines = [
+          `Account No. : ${accountDetails.accountNumber}`,
+          `Name : ${accountDetails.name}`,
+          `Bank : ${accountDetails.bank}`,
+          `Branch : ${accountDetails.branch}`,
+          `IFSC Code : ${accountDetails.ifsc}`,
+          `PAN No. : ${accountDetails.pan}`,
+          `GST : ${accountDetails.gst}`
+        ];
+        detailsLines.forEach((line, idx) => {
+          drawText(line, 68, accY + (idx * accSpacing), accFs, true);
+        });
+      }
+      
+      // 7. Signatures
+      const sigOffset = (accSpacing * 10) + 80;
+      const sigY = accY + sigOffset;
+      drawText("Navya S", 68, sigY, 11, true);
+      drawText("Vagarious Solutions Pvt Ltd", 68, sigY + 16, 11, true);
+      
+      const finalPdfBytes = await pdfDoc.save();
+      const pdfBlob = new Blob([finalPdfBytes], { type: "application/pdf" });
+      
+      const formData = new FormData();
+      formData.append("file", pdfBlob, `Invoice_${invNumber}.pdf`);
+      
+      const invoiceMetadata = {
+        invoiceNumber: invNumber,
+        invoiceDate: invDateStr,
+        clientId: company.id || company._id,
+        clientName: company.name,
+        candidates: [{
+          candidateProfileId: candidate._id || candidate.id,
+          name: `${candidate.firstName || ''} ${candidate.lastName || ''}`.trim(),
+          role: candidate.position || candidate.role || "",
+          // Use agreement-sourced join date
+          joiningDate: resolvedJoinDate.toISOString(),
+          actualSalary: ctcValue,
+          percentage: percentage,
+          payment: payment
+        }],
+        candidateCount: 1,
+        subtotal: payment,
+        cgstPercentage,
+        cgstAmount,
+        sgstPercentage,
+        sgstAmount,
+        grandTotal,
+        accountType: defaultBank ? defaultBank._id : 'manual',
+        accountDetails,
+        isAutogenerated: true,
+        // Store agreement metadata for reference
+        agreementData: {
+          lockingPeriod,
+          commissionPercentage: percentage,
+          agreementCompanyId: company.id || company._id
+        }
+      };
+      
+      formData.append("metadata", JSON.stringify(invoiceMetadata));
+      
+      const headers = await authHeaders();
+      const uploadRes = await fetch(`${API_URL}/invoices`, {
+        method: "POST",
+        headers,
+        body: formData
+      });
+      
+      if (uploadRes.ok) {
+        toast({ title: "Invoice Auto-Generated! 🎉", description: `Created INV ${invNumber} for ${candidate.name}.` });
+        fetchBilledCandidates();
+        fetchHistory(1);
+      } else {
+        const err = await uploadRes.json();
+        console.error("Auto-generate upload failed:", err);
+      }
+    } catch (err) {
+      console.error("Auto-generate invoice error:", err);
+    } finally {
+      autoGeneratingIds.delete(candidate._id);
+    }
+  };
 
   // Managed Company Bank accounts
   const [companyBanks, setCompanyBanks] = useState([]);
@@ -198,14 +870,50 @@ const AdminClientInvoice = () => {
       const res = await fetch(queryUrl, { headers });
       if (res.ok) {
         const data = await res.json();
-        setHistory(data.invoices || []);
+        const sanitizedInvoices = (data.invoices || []).map(item => {
+          if (item.invoiceNumber && String(item.invoiceNumber).toUpperCase().includes('-AUTO-')) {
+            return {
+              ...item,
+              isAutogenerated: true,
+              invoiceNumber: String(item.invoiceNumber).replace(/-AUTO-/i, '-')
+            };
+          }
+          return item;
+        });
+        setHistory(sanitizedInvoices);
         setHistoryPage(data.pagination.page);
         setHistoryTotalPages(data.pagination.totalPages);
+        // Mark history as loaded so auto-generation is allowed from this point.
+        // This prevents PlacementCountdown from firing before we know which
+        // candidates already have invoices (hasInvoice check depends on history).
+        setHistoryFirstLoaded(true);
       }
     } catch (err) {
       console.error("Error loading history:", err);
     } finally {
       setHistoryLoading(false);
+    }
+  };
+
+  const fetchBilledCandidates = async () => {
+    try {
+      const headers = await getAuthHeader();
+      const res = await fetch(`${API_URL}/invoices?all=true`, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        const ids = new Set();
+        (data.invoices || []).forEach(inv => {
+          inv.candidates?.forEach(c => {
+            if (c.candidateProfileId) {
+              ids.add(String(c.candidateProfileId));
+            }
+          });
+        });
+        setBilledCandidateIds(ids);
+        setHistoryFirstLoaded(true);
+      }
+    } catch (err) {
+      console.error("Error loading billed candidates:", err);
     }
   };
 
@@ -355,6 +1063,19 @@ const AdminClientInvoice = () => {
     }
   };
 
+  const fetchAgreementCompanies = async () => {
+    try {
+      const u = API_URL.replace(/\/api$/, "") + "/agreement-companies";
+      const res = await fetch(u);
+      if (res.ok) {
+        const data = await res.json();
+        setAgreementCompanies(data || []);
+      }
+    } catch (err) {
+      console.error("Error loading agreement companies:", err);
+    }
+  };
+
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
@@ -377,15 +1098,26 @@ const AdminClientInvoice = () => {
     try {
       const saved = localStorage.getItem("invoice_history");
       if (saved) {
-        setLegacyHistory(JSON.parse(saved).map(item => ({ ...item, isLegacy: true })));
+        const parsed = JSON.parse(saved).map(item => {
+          const isAuto = item.isAutogenerated || String(item.invoiceNumber || '').toUpperCase().includes('-AUTO-');
+          return {
+            ...item,
+            isLegacy: true,
+            isAutogenerated: isAuto,
+            invoiceNumber: String(item.invoiceNumber || '').replace(/-AUTO-/i, '-')
+          };
+        });
+        setLegacyHistory(parsed);
       }
     } catch (e) {
       console.error("Error loading legacy history:", e);
     }
-
+ 
     fetchData();
     fetchTemplates();
     fetchCompanyBanks();
+    fetchAgreementCompanies();
+    fetchBilledCandidates();
   }, []);
 
   useEffect(() => {
@@ -394,17 +1126,41 @@ const AdminClientInvoice = () => {
 
   const handleAddCandidate = (candidate) => {
     const ctc = parseFloat(candidate.ctc ? candidate.ctc.replace(/[^0-9.]/g, "") : "0") * 100000 || 0;
-    setForm(p => ({
-      ...p,
-      candidateProfileId: candidate._id || candidate.id || "",
-      candidateName: candidate.name || "",
-      role: candidate.position || "",
-      joiningDate: candidate.joiningDate ? candidate.joiningDate.split('T')[0] : new Date().toISOString().split("T")[0],
-      actualSalary: ctc,
-      percentage: p.percentage || "",
-      cgstPercentage: "9",
-      sgstPercentage: "9"
-    }));
+    setForm(p => {
+      // If percentage is already set (from client auto-fill), keep it.
+      // Otherwise try to resolve it now from the agreement companies.
+      let resolvedPct = p.percentage || "";
+      if (!resolvedPct && p.clientId) {
+        const client = clients.find(c => c.id === p.clientId);
+        if (client) {
+          // Try Client record first
+          const clientPct = String(client.percentage || '').replace(/[^0-9.]/g, '');
+          if (clientPct) {
+            resolvedPct = clientPct;
+          } else {
+            // Fallback: agreement company
+            const clientNameLower = (client.companyName || '').toLowerCase().trim();
+            const matchedAC = agreementCompanies.find(ac => {
+              const acName = (ac.company_name || ac.name || '').toLowerCase().trim();
+              return acName && (acName === clientNameLower || acName.includes(clientNameLower) || clientNameLower.includes(acName));
+            });
+            const acPct = parseFloat(matchedAC?.compensation?.percentage);
+            if (!isNaN(acPct) && acPct > 0) resolvedPct = String(acPct);
+          }
+        }
+      }
+      return {
+        ...p,
+        candidateProfileId: candidate._id || candidate.id || "",
+        candidateName: candidate.name || "",
+        role: candidate.position || "",
+        joiningDate: candidate.joiningDate ? candidate.joiningDate.split('T')[0] : new Date().toISOString().split("T")[0],
+        actualSalary: ctc,
+        percentage: resolvedPct,
+        cgstPercentage: "9",
+        sgstPercentage: "9"
+      };
+    });
     setIsCustomCandidate(false);
     toast({ title: `Auto-filled details for ${candidate.name}` });
   };
@@ -497,24 +1253,42 @@ const AdminClientInvoice = () => {
     setForm(prev => ({ ...prev, payment }));
   }, [form.actualSalary, form.percentage]);
 
-  // Auto-fill commission percentage when client is selected
+  // Auto-fill commission percentage when client is selected.
+  // Priority: Client record percentage → Agreement company percentage → leave blank
   useEffect(() => {
-    if (form.clientId) {
-      const client = clients.find(c => c.id === form.clientId);
-      if (client && client.percentage) {
-        const cleanPercentage = String(client.percentage).replace(/[^0-9.]/g, "");
-        if (cleanPercentage) {
-          setForm(prev => ({ ...prev, percentage: cleanPercentage }));
-        }
-      }
+    if (!form.clientId) return;
+    const client = clients.find(c => c.id === form.clientId);
+    if (!client) return;
+
+    // 1. Try the Client model's own percentage field
+    const rawClientPct = String(client.percentage || '').replace(/[^0-9.]/g, '');
+    if (rawClientPct) {
+      setForm(prev => ({ ...prev, percentage: rawClientPct }));
+      return;
     }
-  }, [form.clientId, clients]);
+
+    // 2. Fallback: match by company name against agreement companies
+    //    and use compensation.percentage from the agreement
+    const clientNameLower = (client.companyName || '').toLowerCase().trim();
+    const matchedAgreement = agreementCompanies.find(ac => {
+      const acName = (ac.company_name || ac.name || '').toLowerCase().trim();
+      return acName && (acName === clientNameLower || acName.includes(clientNameLower) || clientNameLower.includes(acName));
+    });
+    const agreementPct = parseFloat(matchedAgreement?.compensation?.percentage);
+    if (!isNaN(agreementPct) && agreementPct > 0) {
+      setForm(prev => ({ ...prev, percentage: String(agreementPct) }));
+    }
+  }, [form.clientId, clients, agreementCompanies]);
 
 
   /* PDF Generation Logic Using Exact Provided PDF as Background Template */
-  const generateFilledPdf = async () => {
+  const generateFilledPdf = async (overrideForm = null, overrideTemplate = null) => {
+    const f = overrideForm || form;
+    const templateToUse = overrideTemplate || selectedInvoiceTemplate;
+    const resolvedClient = clients.find(c => c.id === f.clientId);
+
     const isDocx = invoiceTemplates.some(t => 
-      t.url === selectedInvoiceTemplate && 
+      t.url === templateToUse && 
       (t.mimeType?.includes('word') || t.mimeType?.includes('officedocument') || t.fileName?.endsWith('.docx'))
     );
     if (isDocx) {
@@ -524,7 +1298,7 @@ const AdminClientInvoice = () => {
     }
     setIsGenerating(true);
     try {
-      const response = await fetch(`${selectedInvoiceTemplate}?v=${new Date().getTime()}`);
+      const response = await fetch(`${templateToUse}?v=${new Date().getTime()}`);
       const existingPdfBytes = await response.arrayBuffer();
 
       const pdfDoc = await PDFDocument.load(existingPdfBytes);
@@ -568,9 +1342,9 @@ const AdminClientInvoice = () => {
       };
 
       drawText("To,", 68, 140, 10, true);
-      drawText(selectedClient?.companyName || "", 68, 155, 11, true);
+      drawText(resolvedClient?.companyName || "", 68, 155, 11, true);
 
-      const rawParts = (selectedClient?.address || "").split(",").map(p => p.trim()).filter(Boolean);
+      const rawParts = (resolvedClient?.address || "").split(",").map(p => p.trim()).filter(Boolean);
       let addressLines = [];
       if (rawParts.length <= 2) {
         addressLines = rawParts;
@@ -588,14 +1362,14 @@ const AdminClientInvoice = () => {
         addressLines = lines;
       }
 
-      const invoiceDateStr = getOrdinalDate(form.invoiceDate);
+      const invoiceDateStr = getOrdinalDate(f.invoiceDate);
       let addressEndY = 170;
-      if (selectedClient?.contactPerson) {
-        drawText(selectedClient.contactPerson, 68, 170, 10, true);
+      if (resolvedClient?.contactPerson) {
+        drawText(resolvedClient.contactPerson, 68, 170, 10, true);
         addressLines.forEach((line, i) => drawText(line, 68, 185 + i * 13, 10, true));
         const gstY = 185 + addressLines.length * 13;
-        if (selectedClient?.gstNumber) {
-          drawText(`GST : ${selectedClient.gstNumber}`, 68, gstY, 10, true);
+        if (resolvedClient?.gstNumber) {
+          drawText(`GST : ${resolvedClient.gstNumber}`, 68, gstY, 10, true);
           addressEndY = gstY + 13;
         } else {
           addressEndY = gstY;
@@ -603,8 +1377,8 @@ const AdminClientInvoice = () => {
       } else {
         addressLines.forEach((line, i) => drawText(line, 68, 170 + i * 13, 10, true));
         const gstY = 170 + addressLines.length * 13;
-        if (selectedClient?.gstNumber) {
-          drawText(`GST : ${selectedClient.gstNumber}`, 68, gstY, 10, true);
+        if (resolvedClient?.gstNumber) {
+          drawText(`GST : ${resolvedClient.gstNumber}`, 68, gstY, 10, true);
           addressEndY = gstY + 13;
         } else {
           addressEndY = gstY;
@@ -614,11 +1388,11 @@ const AdminClientInvoice = () => {
       drawText(invoiceDateStr, 468, addressEndY + 15, 10, true);
       const afterAddressY = addressEndY + 35;
 
-      drawText(`No: ${form.invoiceNumber}`, 68, Math.max(280, afterAddressY), 10, true);
+      drawText(`No: ${f.invoiceNumber}`, 68, Math.max(280, afterAddressY), 10, true);
       drawText("SUB: Final Invoice", 68, Math.max(298, afterAddressY + 18), 10, true);
       drawTextCentered("TAX INVOICE", width / 2, Math.max(320, afterAddressY + 40), 200, true, 14);
 
-      const cands = form.selectedCandidates.length > 0 ? form.selectedCandidates : (form.candidateName ? [{ name: form.candidateName, role: form.role, joiningDate: form.joiningDate, actualSalary: form.actualSalary, percentage: form.percentage, payment: form.payment }] : []);
+      const cands = f.selectedCandidates.length > 0 ? f.selectedCandidates : (f.candidateName ? [{ name: f.candidateName, role: f.role, joiningDate: f.joiningDate, actualSalary: f.actualSalary, percentage: f.percentage, payment: f.payment }] : []);
 
       const candidateCount = cands.length;
       const isLargeList = candidateCount > 5;
@@ -679,8 +1453,8 @@ const AdminClientInvoice = () => {
         currentY += rowDR;
       });
 
-      const totalCgstAmt = Math.round((totalPay * parseFloat(form.cgstPercentage || 0)) / 100);
-      const totalSgstAmt = Math.round((totalPay * parseFloat(form.sgstPercentage || 0)) / 100);
+      const totalCgstAmt = Math.round((totalPay * parseFloat(f.cgstPercentage || 0)) / 100);
+      const totalSgstAmt = Math.round((totalPay * parseFloat(f.sgstPercentage || 0)) / 100);
       const grandTotalAmt = totalPay + totalCgstAmt + totalSgstAmt;
 
       const tH = isLargeList ? 16 : 18;
@@ -706,8 +1480,8 @@ const AdminClientInvoice = () => {
         drawTextCentered(amount.toLocaleString("en-IN"), colCenters[6], y, colWidths[6] - 4, isBold, 10);
       };
 
-      drawSummaryRow(`CGST (${form.cgstPercentage || 0}%)`, totalCgstAmt, 0, false);
-      drawSummaryRow(`SGST (${form.sgstPercentage || 0}%)`, totalSgstAmt, tH, false);
+      drawSummaryRow(`CGST (${f.cgstPercentage || 0}%)`, totalCgstAmt, 0, false);
+      drawSummaryRow(`SGST (${f.sgstPercentage || 0}%)`, totalSgstAmt, tH, false);
       drawSummaryRow("Grand Total", grandTotalAmt, tH * 2, true);
 
       currentY += tH * 2;
@@ -717,23 +1491,23 @@ const AdminClientInvoice = () => {
       drawText(numberToWords(grandTotalAmt).toUpperCase(), 125, footerY, isLargeList ? 8.5 : 9.5);
 
       const accY = footerY + (isLargeList ? 35 : 50);
-      if (form.accountType !== "no") {
+      if (f.accountType !== "no") {
         drawText("Account Details: -", 68, accY - (isLargeList ? 14 : 18), isLargeList ? 10 : 11, true);
         const details = [
-          `Account No. : ${form.accountDetails.accountNumber}`,
-          `Name : ${form.accountDetails.name}`,
-          `Bank : ${form.accountDetails.bank}`,
-          `Branch : ${form.accountDetails.branch}`,
-          `IFSC Code : ${form.accountDetails.ifsc}`,
-          `PAN No. : ${form.accountDetails.pan}`,
-          `GST : ${form.accountDetails.gst}`
+          `Account No. : ${f.accountDetails.accountNumber}`,
+          `Name : ${f.accountDetails.name}`,
+          `Bank : ${f.accountDetails.bank}`,
+          `Branch : ${f.accountDetails.branch}`,
+          `IFSC Code : ${f.accountDetails.ifsc}`,
+          `PAN No. : ${f.accountDetails.pan}`,
+          `GST : ${f.accountDetails.gst}`
         ];
         details.forEach((line, idx) => {
           drawText(line, 68, accY + (idx * accSpacing), accFs, true);
         });
       }
 
-      const sigOffset = form.accountType !== "no" ? (accSpacing * 10) + 80 : 110;
+      const sigOffset = f.accountType !== "no" ? (accSpacing * 10) + 80 : 110;
       const sigY = accY + sigOffset;
       drawText("Navya S", 68, sigY, 11, true);
       drawText("Vagarious Solutions Pvt Ltd", 68, sigY + 16, 11, true);
@@ -744,7 +1518,7 @@ const AdminClientInvoice = () => {
 
     } catch (error) {
       console.error("PDF Generation error:", error);
-      toast({ title: `PDF Error: ${error?.message || error}`, variant: "destructive", duration: 7000 });
+      toast({ title: `PDF Error: ${error?.message || error}`, variant: "destructive" });
       return null;
     } finally {
       setIsGenerating(false);
@@ -778,6 +1552,7 @@ const AdminClientInvoice = () => {
         selectedCandidates: [],
       });
       setIsCustomCandidate(false);
+      setEditingInvoiceId(null);
       return;
     }
     
@@ -825,15 +1600,20 @@ const AdminClientInvoice = () => {
         grandTotal: grandTotalAmt,
         accountType: form.accountType,
         accountDetails: form.accountDetails,
-        format: 'pdf'
+        format: 'pdf',
+        isAutogenerated: !!editingInvoiceId // Keep isAutogenerated flag if editing
       };
 
       const formData = new FormData();
       formData.append('file', blob, `Invoice_${form.invoiceNumber}.pdf`);
       formData.append('metadata', JSON.stringify(metadata));
 
-      const res = await fetch(`${API_URL}/invoices`, {
-        method: 'POST',
+      const isEdit = !!editingInvoiceId;
+      const url = isEdit ? `${API_URL}/invoices/${editingInvoiceId}` : `${API_URL}/invoices`;
+      const method = isEdit ? 'PUT' : 'POST';
+
+      const res = await fetch(url, {
+        method,
         headers,
         body: formData
       });
@@ -844,16 +1624,18 @@ const AdminClientInvoice = () => {
       }
 
       const savedInvoice = await res.json();
-      toast({ title: "Invoice generated and saved successfully." });
+      toast({ title: isEdit ? "Invoice updated successfully." : "Invoice generated and saved successfully." });
+      setEditingInvoiceId(null);
 
       setCurrentPdfBlob(blob);
-      const url = URL.createObjectURL(blob);
-      setPdfPreviewUrl(url);
+      const urlBlob = URL.createObjectURL(blob);
+      setPdfPreviewUrl(urlBlob);
       setShowPreview(true);
 
       // Refresh invoice history and navigate to tab
       setActiveTab('server');
       setHistoryPage(1);
+      fetchBilledCandidates();
       fetchHistory(1);
     } catch (err) {
       console.error(err);
@@ -988,6 +1770,7 @@ const AdminClientInvoice = () => {
       });
       if (res.ok) {
         toast({ title: "Invoice deleted successfully" });
+        fetchBilledCandidates();
         fetchHistory(historyPage);
       } else {
         const err = await res.json();
@@ -1392,7 +2175,15 @@ const AdminClientInvoice = () => {
   const previewCands = form.selectedCandidates.length > 0
     ? form.selectedCandidates
     : (form.candidateName
-        ? [{ name: form.candidateName, role: form.role, joiningDate: form.joiningDate, actualSalary: form.actualSalary, percentage: form.percentage, payment: form.payment }]
+        ? [{
+            name: form.candidateName,
+            role: form.role,
+            joiningDate: form.joiningDate,
+            actualSalary: form.actualSalary,
+            percentage: form.percentage,
+            // Compute payment live from current inputs (don't rely on lagged form.payment)
+            payment: Math.round((parseFloat(form.actualSalary) || 0) * (parseFloat(form.percentage) || 0) / 100)
+          }]
         : []);
   const previewSubtotal = previewCands.reduce((s, c) => s + (parseFloat(c.payment) || 0), 0);
   const previewCgst = Math.round((previewSubtotal * (parseFloat(form.cgstPercentage) || 0)) / 100);
@@ -1445,6 +2236,48 @@ const AdminClientInvoice = () => {
 
             {/* LEFT: FORM COLUMN */}
             <div className="flex-1 min-w-0 space-y-5">
+              {editingInvoiceId && (
+                <div className="bg-violet-50 dark:bg-violet-950/40 border border-violet-200 dark:border-violet-800 rounded-2xl p-4 flex items-center justify-between shadow-sm">
+                  <div className="flex items-center gap-3">
+                    <span className="w-8 h-8 rounded-lg bg-violet-100 dark:bg-violet-900/50 flex items-center justify-center flex-shrink-0 animate-pulse">
+                      <svg className="h-4 w-4 text-violet-600 dark:text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                    </span>
+                    <div>
+                      <h3 className="text-xs font-bold text-violet-800 dark:text-violet-300">Editing Auto-generated Invoice Mode</h3>
+                      <p className="text-[10px] text-violet-600 dark:text-violet-400 mt-0.5 font-semibold">You are adjusting the details of <strong>{form.invoiceNumber}</strong>. Saving will update the existing invoice.</p>
+                    </div>
+                  </div>
+                  <button 
+                    type="button" 
+                    onClick={() => {
+                      setEditingInvoiceId(null);
+                      setForm({
+                        invoiceNumber: `INV-${Math.floor(1000 + Math.random() * 9000)}`,
+                        invoiceDate: new Date().toISOString().split("T")[0],
+                        clientId: "",
+                        candidateProfileId: "",
+                        candidateName: "",
+                        joiningDate: "",
+                        role: "",
+                        actualSalary: "",
+                        percentage: "",
+                        payment: 0,
+                        cgstPercentage: "9",
+                        sgstPercentage: "9",
+                        accountType: "default",
+                        accountDetails: defaultAccountDetails,
+                        selectedCandidates: [],
+                      });
+                      toast({ title: "Exited edit mode", description: "Form reset to new invoice mode." });
+                    }} 
+                    className="px-3 py-1.5 bg-violet-600 hover:bg-violet-750 text-white rounded-lg text-[10px] font-bold uppercase transition-all shadow-sm cursor-pointer"
+                  >
+                    Cancel Edit
+                  </button>
+                </div>
+              )}
 
               {/* SECTION 1: Client & Invoice Info */}
               <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
@@ -1786,6 +2619,95 @@ const AdminClientInvoice = () => {
                 </div>
               </div>
 
+              {/* SECTION: Active Placement Countdown */}
+              <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden mb-6">
+                <div className="px-6 py-4 flex items-center gap-3 border-b border-gray-100 dark:border-gray-800">
+                  <span className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center flex-shrink-0">
+                    <svg className="h-4 w-4 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                  </span>
+                  <div>
+                    <h2 className="text-sm font-bold text-gray-800 dark:text-white">Active Placement Countdown</h2>
+                    <p className="text-[11px] text-gray-400 mt-0.5">Track locking periods and automatic billing status for placed candidates</p>
+                  </div>
+                </div>
+
+                <div className="p-6">
+                  {activePlacements.length === 0 ? (
+                    <p className="text-xs text-gray-500 italic text-center py-4">No active placements with 'Joined' status found.</p>
+                  ) : (
+                    <div className="overflow-x-auto rounded-xl border border-gray-100 dark:border-gray-800">
+                      <table className="w-full text-left text-xs">
+                        <thead className="bg-gray-50 dark:bg-gray-800/60">
+                          <tr>
+                            {['Candidate Name', 'Client/Company', 'Joined Date', 'Locking Period', 'Billing Details', 'Billing Countdown', 'Action'].map(h => (
+                              <th key={h} className="px-4 py-3 text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest whitespace-nowrap border-b border-gray-100 dark:border-gray-800">{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100 dark:divide-gray-800 bg-white dark:bg-gray-900">
+                          {activePlacements.map((placement) => {
+                            const { candidate, company, joinDate, targetDate, hasInvoice, durationVal, ctcValue, percentage, billingAmount } = placement;
+                            return (
+                              <tr key={candidate._id} className="hover:bg-blue-50/10 dark:hover:bg-blue-900/5 transition-colors">
+                                <td className="px-4 py-3.5 font-semibold text-gray-800 dark:text-gray-200">
+                                  {candidate.name || `${candidate.firstName} ${candidate.lastName}`}
+                                </td>
+                                <td className="px-4 py-3.5 text-gray-600 dark:text-gray-400 font-medium">
+                                  {candidate.client || '—'}
+                                </td>
+                                <td className="px-4 py-3.5 text-gray-500">
+                                  {getOrdinalDate(joinDate)}
+                                </td>
+                                <td className="px-4 py-3.5 text-gray-500 font-mono">
+                                  {durationVal || 'N/A'}
+                                </td>
+                                <td className="px-4 py-3.5 text-gray-700 dark:text-gray-300">
+                                  <div className="flex flex-col gap-0.5">
+                                    <span className="font-semibold text-[11px]">₹{(ctcValue / 100000).toFixed(2)} LPA @ {percentage}%</span>
+                                    <span className="text-[10px] text-gray-400 font-mono">Total: ₹{billingAmount.toLocaleString('en-IN')}</span>
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3.5">
+                                  <PlacementCountdown 
+                                    placement={placement} 
+                                    ready={historyFirstLoaded}
+                                    onComplete={() => {
+                                      const candKey = String(candidate._id || candidate.id);
+                                      if (
+                                        historyFirstLoaded &&
+                                        !hasInvoice &&
+                                        company &&
+                                        !sessionBilledCandidates.current.has(candKey)
+                                      ) {
+                                        sessionBilledCandidates.current.add(candKey);
+                                        autoGenerateInvoice(candidate, company, placement);
+                                      }
+                                    }}
+                                  />
+                                </td>
+                                <td className="px-4 py-3.5">
+                                  {!hasInvoice && company ? (
+                                    <button 
+                                      type="button"
+                                      onClick={() => autoGenerateInvoice(candidate, company, placement)}
+                                      className="px-2.5 py-1 bg-violet-600 hover:bg-violet-750 text-white rounded text-[10px] font-bold uppercase cursor-pointer whitespace-nowrap shadow-sm hover:shadow-violet-500/10 transition-all"
+                                    >
+                                      Force Bill
+                                    </button>
+                                  ) : (
+                                    <span className="text-gray-400 text-[10px]">—</span>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </div>
+
               {/* SECTION 4: Invoice History */}
               <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
                 <div className="px-6 py-4 flex items-center gap-3 border-b border-gray-100 dark:border-gray-800">
@@ -1851,7 +2773,12 @@ const AdminClientInvoice = () => {
                               {history.map((item) => (
                                 <tr key={item._id} className="hover:bg-blue-50/30 dark:hover:bg-blue-900/10 transition-colors group">
                                   <td className="px-4 py-3.5">
-                                    <button onClick={() => handleOpenInvoiceModal(item)} className="font-mono font-bold text-blue-600 dark:text-blue-400 hover:underline text-xs">{item.invoiceNumber}</button>
+                                    <div className="flex flex-col gap-1">
+                                      <button onClick={() => handleOpenInvoiceModal(item)} className="font-mono font-bold text-blue-600 dark:text-blue-400 hover:underline text-xs text-left">{item.invoiceNumber}</button>
+                                      {(item.isAutogenerated || String(item.invoiceNumber || '').toUpperCase().includes('AUTO')) && (
+                                        <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-900/30 px-1.5 py-0.5 rounded w-fit uppercase tracking-wider">Auto-generated</span>
+                                      )}
+                                    </div>
                                   </td>
                                   <td className="px-4 py-3.5">
                                     <div className="flex items-center gap-2">
@@ -1881,6 +2808,11 @@ const AdminClientInvoice = () => {
                                       <button onClick={() => handleOpenInvoiceModal(item)} className="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-all" title="Preview">
                                         <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
                                       </button>
+                                      {(item.isAutogenerated || String(item.invoiceNumber || '').toUpperCase().includes('AUTO')) && (
+                                        <button onClick={() => handleEditInvoice(item)} className="p-1.5 rounded-lg text-gray-400 hover:text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-900/30 transition-all cursor-pointer" title="Edit">
+                                          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                                        </button>
+                                      )}
                                       <a href={item.file?.url} download={`Invoice_${item.invoiceNumber}.pdf`} target="_blank" rel="noreferrer" className="p-1.5 rounded-lg text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 transition-all" title="Download">
                                         <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
                                       </a>
@@ -1922,7 +2854,14 @@ const AdminClientInvoice = () => {
                             <tbody className="divide-y divide-gray-100 dark:divide-gray-800 bg-white dark:bg-gray-900">
                               {legacyHistory.map((item) => (
                                 <tr key={item.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors group">
-                                  <td className="px-4 py-3.5 font-mono text-gray-500 dark:text-gray-400 font-semibold">{item.invoiceNumber}</td>
+                                  <td className="px-4 py-3.5">
+                                    <div className="flex flex-col gap-1">
+                                      <span className="font-mono text-gray-500 dark:text-gray-400 font-semibold">{item.invoiceNumber}</span>
+                                      {(item.isAutogenerated || String(item.invoiceNumber || '').toUpperCase().includes('AUTO')) && (
+                                        <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-900/30 px-1.5 py-0.5 rounded w-fit uppercase tracking-wider">Auto-generated</span>
+                                      )}
+                                    </div>
+                                  </td>
                                   <td className="px-4 py-3.5 font-semibold text-gray-700 dark:text-gray-300">{item.clientName}</td>
                                   <td className="px-4 py-3.5">
                                     <button 
@@ -2070,6 +3009,178 @@ const AdminClientInvoice = () => {
         </main>
       )}
 
+      {/* AUTO-GENERATED INVOICE EDIT MODAL */}
+      {isEditModalOpen && editForm && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/75 backdrop-blur-md" onClick={() => setIsEditModalOpen(false)} />
+          <div className="bg-white dark:bg-gray-900 rounded-3xl overflow-hidden shadow-2xl flex flex-col w-[96vw] max-w-4xl max-h-[92vh] z-50 border border-gray-200 dark:border-gray-800 relative animate-in fade-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-violet-600 to-indigo-600 px-6 py-4 flex items-center justify-between flex-shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-xl bg-white/10 flex items-center justify-center text-white">
+                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">Edit Auto-Generated Invoice</h3>
+                  <p className="text-[11px] text-white/85 mt-0.5">Modify invoice parameters and candidate details dynamically</p>
+                </div>
+              </div>
+              <button type="button" onClick={() => setIsEditModalOpen(false)} className="p-1.5 rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-all">
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+
+            {/* Scrollable Form Body */}
+            <form onSubmit={handleSaveEditedInvoice} className="flex-1 overflow-y-auto p-6 space-y-6">
+              {/* Grid 1: Basic Invoice Information */}
+              <div className="bg-slate-50 dark:bg-slate-800/20 p-5 rounded-2xl border border-slate-100 dark:border-slate-800 space-y-4">
+                <h4 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">1. Invoice Metadata</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Invoice Number</label>
+                    <input type="text" value={editForm.invoiceNumber} onChange={(e) => setEditForm({ ...editForm, invoiceNumber: e.target.value })} className="w-full px-3.5 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-mono outline-none focus:ring-2 focus:ring-violet-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white transition-all" required />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Invoice Date</label>
+                    <input type="date" value={editForm.invoiceDate} onChange={(e) => setEditForm({ ...editForm, invoiceDate: e.target.value })} className="w-full px-3.5 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl text-xs outline-none focus:ring-2 focus:ring-violet-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white transition-all" required />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Client Company</label>
+                    <select 
+                      value={editForm.clientId} 
+                      onChange={(e) => setEditForm({ ...editForm, clientId: e.target.value })} 
+                      className="w-full px-3.5 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl text-xs outline-none focus:ring-2 focus:ring-violet-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white transition-all font-semibold"
+                    >
+                      <option value="">— Select Client —</option>
+                      {editForm.clientId && !clients.some(c => String(c.id || c._id) === String(editForm.clientId)) && (
+                        <option value={editForm.clientId}>{editForm.clientName}</option>
+                      )}
+                      {clients.map((c) => (
+                        <option key={c.id} value={c.id}>{c.companyName}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Grid 2: Candidates Details */}
+              <div className="bg-slate-50 dark:bg-slate-800/20 p-5 rounded-2xl border border-slate-100 dark:border-slate-800 space-y-4">
+                <h4 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">2. Candidate Breakdown</h4>
+                {editForm.selectedCandidates.map((cand) => (
+                  <div key={cand.id} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 border-b border-gray-200/50 dark:border-gray-800/50 pb-4 last:border-0 last:pb-0">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Candidate Name</label>
+                      <input type="text" value={cand.name} onChange={(e) => handleEditCandidateField(cand.id, 'name', e.target.value)} className="w-full px-3.5 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl text-xs outline-none focus:ring-2 focus:ring-violet-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white transition-all" required />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Designation / Role</label>
+                      <input type="text" value={cand.role} onChange={(e) => handleEditCandidateField(cand.id, 'role', e.target.value)} className="w-full px-3.5 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl text-xs outline-none focus:ring-2 focus:ring-violet-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white transition-all" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Joining Date</label>
+                      <input type="date" value={cand.joiningDate} onChange={(e) => handleEditCandidateField(cand.id, 'joiningDate', e.target.value)} className="w-full px-3.5 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl text-xs outline-none focus:ring-2 focus:ring-violet-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white transition-all" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Actual Salary (CTC)</label>
+                      <input type="number" value={cand.actualSalary} onChange={(e) => handleEditCandidateField(cand.id, 'actualSalary', e.target.value)} className="w-full px-3.5 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl text-xs outline-none focus:ring-2 focus:ring-violet-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white transition-all font-mono" required />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Commission %</label>
+                      <input type="number" value={cand.percentage} onChange={(e) => handleEditCandidateField(cand.id, 'percentage', e.target.value)} className="w-full px-3.5 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl text-xs outline-none focus:ring-2 focus:ring-violet-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white transition-all" required />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-blue-500 uppercase tracking-wider">Payment (Commission)</label>
+                      <div className="w-full px-3.5 py-2.5 border border-blue-100 dark:border-blue-900/50 bg-blue-50/30 dark:bg-blue-950/10 text-blue-600 dark:text-blue-400 rounded-xl text-xs font-bold font-mono">
+                        ₹{Number(cand.payment || 0).toLocaleString('en-IN')}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Grid 3: Tax & Banking details */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="bg-slate-50 dark:bg-slate-800/20 p-5 rounded-2xl border border-slate-100 dark:border-slate-800 space-y-4">
+                  <h4 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">3. Tax Rates</h4>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">CGST %</label>
+                      <input type="number" value={editForm.cgstPercentage} onChange={(e) => setEditForm({ ...editForm, cgstPercentage: e.target.value })} className="w-full px-3.5 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl text-xs outline-none focus:ring-2 focus:ring-violet-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white transition-all" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">SGST %</label>
+                      <input type="number" value={editForm.sgstPercentage} onChange={(e) => setEditForm({ ...editForm, sgstPercentage: e.target.value })} className="w-full px-3.5 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl text-xs outline-none focus:ring-2 focus:ring-violet-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white transition-all" />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-slate-50 dark:bg-slate-800/20 p-5 rounded-2xl border border-slate-100 dark:border-slate-800 space-y-4">
+                  <h4 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">4. Bank & Account Details</h4>
+                  <div className="space-y-3">
+                    <select value={editForm.accountType} onChange={(e) => handleEditBankSelect(e.target.value)} className="w-full px-3.5 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl text-xs outline-none focus:ring-2 focus:ring-violet-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white transition-all font-semibold">
+                      <option value="manual">Enter Manually</option>
+                      <option value="no">No Account Details</option>
+                      {companyBanks.map((bank) => (
+                        <option key={bank._id} value={bank._id}>
+                          {bank.label} {bank.isDefault ? "(Default)" : ""}
+                        </option>
+                      ))}
+                    </select>
+
+                    {editForm.accountType === 'manual' && (
+                      <div className="grid grid-cols-2 gap-2 pt-2">
+                        {[{ key: 'accountNumber', placeholder: 'Account Number' }, { key: 'name', placeholder: 'Account Name' }, { key: 'bank', placeholder: 'Bank Name' }, { key: 'branch', placeholder: 'Branch' }, { key: 'ifsc', placeholder: 'IFSC Code' }, { key: 'pan', placeholder: 'PAN Number' }, { key: 'gst', placeholder: 'GST Number' }].map(({ key, placeholder }) => (
+                          <input key={key} placeholder={placeholder} value={editForm.accountDetails[key]} onChange={(e) => setEditForm(prev => ({ ...prev, accountDetails: { ...prev.accountDetails, [key]: e.target.value } }))} className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-xs outline-none focus:ring-2 focus:ring-violet-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white transition-all" />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Live Totals Section */}
+              <div className="bg-violet-50/50 dark:bg-violet-950/10 p-5 rounded-2xl border border-violet-100/50 dark:border-violet-900/30 flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-bold text-violet-500 uppercase tracking-widest block">Calculated Totals</span>
+                  <div className="flex gap-4 mt-2">
+                    <div>
+                      <span className="text-[9px] text-gray-400 block font-semibold">SUBTOTAL</span>
+                      <span className="text-xs font-bold text-gray-700 dark:text-gray-300 font-mono">₹{getEditFormTotals().subtotal.toLocaleString('en-IN')}</span>
+                    </div>
+                    <div className="w-px h-6 bg-violet-200/50 dark:bg-violet-850" />
+                    <div>
+                      <span className="text-[9px] text-gray-400 block font-semibold">CGST ({editForm.cgstPercentage}%)</span>
+                      <span className="text-xs font-bold text-gray-700 dark:text-gray-300 font-mono">₹{getEditFormTotals().cgst.toLocaleString('en-IN')}</span>
+                    </div>
+                    <div className="w-px h-6 bg-violet-200/50 dark:bg-violet-850" />
+                    <div>
+                      <span className="text-[9px] text-gray-400 block font-semibold">SGST ({editForm.sgstPercentage}%)</span>
+                      <span className="text-xs font-bold text-gray-700 dark:text-gray-300 font-mono">₹{getEditFormTotals().sgst.toLocaleString('en-IN')}</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] font-bold text-violet-600 dark:text-violet-400 uppercase tracking-widest block">Grand Total</span>
+                  <span className="text-lg font-extrabold text-violet-700 dark:text-violet-400 font-mono block mt-1">₹{getEditFormTotals().grandTotal.toLocaleString('en-IN')}</span>
+                </div>
+              </div>
+
+              {/* Submit Buttons */}
+              <div className="border-t border-gray-100 dark:border-gray-800 pt-4 flex gap-3 justify-end flex-shrink-0">
+                <button type="button" onClick={() => setIsEditModalOpen(false)} className="px-5 py-2.5 border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl text-xs font-bold transition-all">
+                  Cancel
+                </button>
+                <button type="submit" disabled={isSaving} className="px-6 py-2.5 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-violet-500/10 flex items-center gap-2">
+                  {isSaving ? (
+                    <><div className="h-3 w-3 border-2 border-white border-t-transparent rounded-full animate-spin" />Saving...</>
+                  ) : 'Save Changes'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* SAVED INVOICE PREVIEW MODAL */}
       {isModalOpen && selectedInvoice && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
@@ -2079,7 +3190,12 @@ const AdminClientInvoice = () => {
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center text-white font-bold text-sm">#</div>
                 <div>
-                  <h3 className="text-sm font-bold text-white">Invoice Details</h3>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-bold text-white">Invoice Details</h3>
+                    {(selectedInvoice.isAutogenerated || String(selectedInvoice.invoiceNumber || '').toUpperCase().includes('AUTO')) && (
+                      <span className="text-[9px] font-bold text-emerald-400 bg-emerald-950/40 px-1.5 py-0.5 rounded uppercase tracking-wider">Auto-generated</span>
+                    )}
+                  </div>
                   <p className="text-xs text-gray-400 mt-0.5">{selectedInvoice.invoiceNumber} · {getOrdinalDate(selectedInvoice.invoiceDate)}</p>
                 </div>
               </div>
