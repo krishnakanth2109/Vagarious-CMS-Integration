@@ -3,6 +3,7 @@ import { ObjectId } from 'mongodb';
 import { getAgreementDB as getDB } from '../config/agreementDatabase.js';
 import multer from 'multer';
 import * as XLSX from 'xlsx';
+import Client from '../models/Client.js';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -51,6 +52,50 @@ function sanitizeDoc(doc) {
     return doc;
 }
 
+async function syncCompanyToClient(companyDoc) {
+    try {
+        const name = companyDoc.name;
+        const email = companyDoc.email;
+        if (!name && !email) return;
+
+        // Parse percentage from compensation object
+        const pct = companyDoc.compensation?.percentage || companyDoc.percentage || 0;
+
+        // Parse lockingPeriod from invoice_post_joining format 'days:hours:minutes'
+        let lockingPeriod = '0';
+        if (companyDoc.invoice_post_joining) {
+            const parts = String(companyDoc.invoice_post_joining).split(':');
+            if (parts.length > 0) {
+                lockingPeriod = parts[0];
+            }
+        }
+
+        const updateFields = {
+            companyName: name,
+            email: email,
+            percentage: String(pct),
+            address: companyDoc.address || '',
+            replacementPeriod: companyDoc.replacement || '',
+            paymentMode: companyDoc.payment_release || '',
+            lockingPeriod: String(lockingPeriod),
+        };
+
+        const client = await Client.findOne({ $or: [{ email: email }, { companyName: name }] });
+        if (client) {
+            await Client.findByIdAndUpdate(client._id, updateFields);
+        } else {
+            const count = await Client.countDocuments();
+            const clientId = `CL${(1000 + count + 1)}`;
+            await Client.create({
+                ...updateFields,
+                clientId
+            });
+        }
+    } catch (err) {
+        console.error('Failed to sync agreement company to main Client:', err.message);
+    }
+}
+
 // ── POST / — Create Company ──
 router.post('/', async (req, res) => {
     try {
@@ -86,6 +131,8 @@ router.post('/', async (req, res) => {
 
         const result = await db.collection('companies').insertOne(newDoc);
         newDoc._id = result.insertedId;
+
+        await syncCompanyToClient(newDoc);
 
         res.status(201).json(fixId(newDoc));
     } catch (err) {
@@ -164,6 +211,11 @@ router.delete('/:id', async (req, res) => {
             return res.status(400).json({ detail: 'Invalid ObjectId' });
         }
 
+        const existing = await db.collection('companies').findOne({ _id: new ObjectId(id) });
+        if (!existing) {
+            return res.status(404).json({ detail: 'Company not found' });
+        }
+
         const result = await db.collection('companies').deleteOne({ _id: new ObjectId(id) });
         if (result.deletedCount === 0) {
             return res.status(404).json({ detail: 'Company not found' });
@@ -171,6 +223,13 @@ router.delete('/:id', async (req, res) => {
 
         // Also delete generated agreements for this company
         await db.collection('generated_agreements').deleteMany({ employee_id: new ObjectId(id) });
+
+        // Synchronize deletion to main Clients
+        try {
+            await Client.deleteOne({ $or: [{ email: existing.email }, { companyName: existing.name }] });
+        } catch (e) {
+            console.error('Failed to sync deletion to main Client:', e.message);
+        }
 
         res.status(204).send();
     } catch (err) {
@@ -212,6 +271,8 @@ router.put('/:id', async (req, res) => {
         );
 
         const updatedDoc = await db.collection('companies').findOne({ _id: new ObjectId(id) });
+        await syncCompanyToClient(updatedDoc);
+
         res.json(fixId(updatedDoc));
     } catch (err) {
         res.status(500).json({ detail: err.message });
@@ -310,6 +371,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
                 };
 
                 await db.collection('companies').insertOne(doc);
+                await syncCompanyToClient(doc);
                 successCount++;
             } catch (e) {
                 errors.push(`Row ${i + 2}: ${e.message}`);

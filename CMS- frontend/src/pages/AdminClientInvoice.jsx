@@ -1154,7 +1154,7 @@ const AdminClientInvoice = () => {
         candidateProfileId: candidate._id || candidate.id || "",
         candidateName: candidate.name || "",
         role: candidate.position || "",
-        joiningDate: candidate.joiningDate ? candidate.joiningDate.split('T')[0] : new Date().toISOString().split("T")[0],
+        joiningDate: candidate._resolvedJoinDate ? candidate._resolvedJoinDate.split('T')[0] : (candidate.joiningDate ? candidate.joiningDate.split('T')[0] : new Date().toISOString().split("T")[0]),
         actualSalary: ctc,
         percentage: resolvedPct,
         cgstPercentage: "9",
@@ -1213,30 +1213,17 @@ const AdminClientInvoice = () => {
 
   const filteredCandidates = useMemo(() => {
     if (!selectedClient) return [];
-    return candidates.filter(c => {
-      const targetCompany = selectedClient.companyName?.toLowerCase() || "";
-      if (!targetCompany) return false;
+    const targetCompany = String(selectedClient.companyName || "").toLowerCase().trim();
+    if (!targetCompany) return [];
 
-      const isJoinedStatus = (st) => String(st || "").toLowerCase().includes("joined");
-
-      // Check direct candidate fields
-      const matchesDirectClient = c.client && c.client.toLowerCase() === targetCompany;
-      const isDirectJoined = isJoinedStatus(c.status) || (Array.isArray(c.status) && c.status.some(isJoinedStatus));
-      if (matchesDirectClient && isDirectJoined) {
-        return true;
-      }
-
-      // Check candidate submissions
-      const submissions = c.submissions || [];
-      const hasJoinedSubmission = submissions.some(sub => 
-        sub.clientName && 
-        sub.clientName.toLowerCase() === targetCompany && 
-        (isJoinedStatus(sub.pipelineStage) || isJoinedStatus(sub.status))
-      );
-
-      return hasJoinedSubmission;
+    // Filter activePlacements to find candidates placed at this client
+    const placements = activePlacements.filter(p => {
+      const clientName = String(p.candidate.client || "").toLowerCase().trim();
+      return clientName === targetCompany;
     });
-  }, [candidates, selectedClient]);
+
+    return placements.map(p => p.candidate);
+  }, [activePlacements, selectedClient]);
 
   const searchedCandidates = useMemo(() => {
     return filteredCandidates.filter(c => 

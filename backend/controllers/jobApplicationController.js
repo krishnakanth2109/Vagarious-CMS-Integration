@@ -23,9 +23,11 @@ export const createJobApplication = async (req, res) => {
     // Optionally resolve a Job document reference by matching position + clientName
     let jobRef = null;
     if (appliedJob && appliedJob !== 'General Application') {
+      const escapedJob = appliedJob.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const escapedCompany = appliedCompany ? appliedCompany.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&') : '';
       const matchedJob = await Job.findOne({
-        position: { $regex: new RegExp(`^${appliedJob.trim()}$`, 'i') },
-        ...(appliedCompany ? { clientName: { $regex: new RegExp(`^${appliedCompany.trim()}$`, 'i') } } : {}),
+        position: { $regex: new RegExp(`^${escapedJob}$`, 'i') },
+        ...(appliedCompany ? { clientName: { $regex: new RegExp(`^${escapedCompany}$`, 'i') } } : {}),
       }).select('_id').lean();
       if (matchedJob) jobRef = matchedJob._id;
     }

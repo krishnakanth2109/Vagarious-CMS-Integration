@@ -2300,70 +2300,242 @@ export default function RecruiterCandidates() {
         </ModalFooter>
       </Modal>
 
-      {/* View Modal */}
-      {viewingCandidate && (
-        <Modal open={isViewDialogOpen} onClose={() => setIsViewDialogOpen(false)} maxWidth="max-w-7xl">
-          <ModalHeader>
-            <div className="flex items-center gap-3">
-              <div>
-                <ModalTitle className="text-xl">{viewingCandidate.name}</ModalTitle>
-                <p className="text-sm font-mono text-blue-600">ID: {getCandidateId(viewingCandidate)}</p>
-              </div>
-              <div className="ml-auto flex flex-wrap gap-2">
-                {getCandidateStatuses(viewingCandidate).map((status) => (
-                  <StatusBadge key={status} status={status} />
-                ))}
-              </div>
-            </div>
-          </ModalHeader>
-          <ModalBody>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="rounded-xl border border-slate-200 bg-white p-5 space-y-3 shadow-sm">
-                <h3 className="font-semibold text-slate-800 border-b pb-2 flex items-center gap-2"><UserCircle className="h-4 w-4" /> Personal Information</h3>
-                <div className="grid grid-cols-2 gap-y-3 text-sm">
-                  <div><Label className="text-xs text-slate-500">Email</Label><div>{viewingCandidate.email}</div></div><br /><br />
-                  <div><Label className="text-xs text-slate-500">Phone</Label>
-                    <div className="flex items-center gap-2">
-                      <div>{viewingCandidate.contact}</div>
-                      <button className="text-green-600" onClick={() => handleWhatsApp(viewingCandidate)}><MessageCircle className="h-3.5 w-3.5" /></button>
-                    </div>
-                  </div>
-                  <div><Label className="text-xs text-slate-500">Date of Birth</Label><div>{formatDate(viewingCandidate.dateOfBirth)}</div></div>
-                  <div><Label className="text-xs text-slate-500">Gender</Label><div>{viewingCandidate.gender || '-'}</div></div>
-                  <div className="col-span-2"><Label className="text-xs text-slate-500">LinkedIn</Label><div>{viewingCandidate.linkedin ? <a href={viewingCandidate.linkedin} target="_blank" className="text-blue-600 hover:underline">{viewingCandidate.linkedin}</a> : '-'}</div></div>
-                  <div><Label className="text-xs text-slate-500">Current Location</Label><div>{viewingCandidate.currentLocation || '-'}</div></div>
-                  <div><Label className="text-xs text-slate-500">Preferred Location</Label><div>{viewingCandidate.preferredLocation || '-'}</div></div>
+      {/* ───────── Premium View Modal ───────── */}
+      {viewingCandidate && isViewDialogOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => setIsViewDialogOpen(false)}
+          />
+
+          {/* Modal Card */}
+          <div
+            className="relative bg-white dark:bg-zinc-900 rounded-3xl shadow-2xl w-full max-w-7xl max-h-[95vh] overflow-hidden flex flex-col border border-zinc-200/60 dark:border-zinc-800/60"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* ── Hero Header ── */}
+            <div className="relative bg-gradient-to-br from-indigo-600 via-violet-600 to-purple-700 px-8 pt-8 pb-6 shrink-0">
+              {/* Close button */}
+              <button
+                onClick={() => setIsViewDialogOpen(false)}
+                className="absolute top-4 right-4 p-2 rounded-xl bg-white/15 hover:bg-white/25 text-white transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+
+              <div className="flex items-start gap-5">
+                {/* Avatar */}
+                <div className="w-18 h-18 rounded-2xl bg-white/20 border-2 border-white/30 flex items-center justify-center text-white text-2xl font-black select-none shrink-0 shadow-lg"
+                  style={{ width: '72px', height: '72px' }}>
+                  {(viewingCandidate.name || 'C').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
                 </div>
-              </div>
-              <div className="rounded-xl border border-slate-200 bg-white p-5 space-y-3 shadow-sm">
-                <h3 className="font-semibold text-slate-800 border-b pb-2 flex items-center gap-2"><Briefcase className="h-4 w-4" /> Professional Details</h3>
-                <div className="grid grid-cols-2 gap-y-3 text-sm">
-                  <div><Label className="text-xs text-slate-500">Current Role</Label><div>{viewingCandidate.position}</div></div>
-                  <div><Label className="text-xs text-slate-500">Industry</Label><div>{viewingCandidate.industry || '-'}</div></div>
-                  <div><Label className="text-xs text-slate-500">Current Company</Label><div>{viewingCandidate.currentCompany || '-'}</div></div>
-                  <div className="col-span-2"><Label className="text-xs text-slate-500">Skills</Label>
-                    <div className="flex flex-wrap gap-1 mt-1">
-                      {Array.isArray(viewingCandidate.skills) ? viewingCandidate.skills.map(s => <Badge key={s} variant="outline" className="bg-white">{s}</Badge>) : viewingCandidate.skills}
-                    </div>
+
+                {/* Name / title */}
+                <div className="flex-1 min-w-0">
+                  <h2 className="text-2xl font-black text-white leading-tight truncate">
+                    {viewingCandidate.name}
+                  </h2>
+                  <p className="text-indigo-200 text-sm font-semibold mt-0.5">
+                    {viewingCandidate.position || 'Position not set'}{viewingCandidate.currentCompany ? ` · ${viewingCandidate.currentCompany}` : ''}
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2 mt-3">
+                    <span className="inline-flex items-center gap-1.5 bg-white/15 border border-white/20 rounded-full px-3 py-1 text-xs font-bold text-white">
+                      <UserCircle className="w-3 h-3" /> {getCandidateId(viewingCandidate)}
+                    </span>
+                    {viewingCandidate.totalExperience && (
+                      <span className="inline-flex items-center gap-1.5 bg-white/15 border border-white/20 rounded-full px-3 py-1 text-xs font-bold text-white">
+                        <Briefcase className="w-3 h-3" /> {viewingCandidate.totalExperience} yrs exp
+                      </span>
+                    )}
+                    {viewingCandidate.currentLocation && (
+                      <span className="inline-flex items-center gap-1.5 bg-white/15 border border-white/20 rounded-full px-3 py-1 text-xs font-bold text-white">
+                        📍 {viewingCandidate.currentLocation}
+                      </span>
+                    )}
+                    {getCandidateStatuses(viewingCandidate).slice(0, 3).map(status => (
+                      <StatusBadge key={status} status={status} />
+                    ))}
                   </div>
+                </div>
+
+                {/* Quick action buttons */}
+                <div className="flex gap-2 shrink-0 mr-14">
+                  {viewingCandidate.contact && (
+                    <a href={`tel:${viewingCandidate.contact}`}
+                      className="p-2.5 rounded-xl bg-white/15 hover:bg-white/25 text-white border border-white/20 transition-colors" title="Call">
+                      <Phone className="w-4 h-4" />
+                    </a>
+                  )}
+                  {viewingCandidate.email && (
+                    <a href={`mailto:${viewingCandidate.email}`}
+                      className="p-2.5 rounded-xl bg-white/15 hover:bg-white/25 text-white border border-white/20 transition-colors" title="Email">
+                      <Mail className="w-4 h-4" />
+                    </a>
+                  )}
+                  {viewingCandidate.contact && (
+                    <button onClick={() => handleWhatsApp(viewingCandidate)}
+                      className="p-2.5 rounded-xl bg-green-500/80 hover:bg-green-500 text-white border border-green-400/40 transition-colors" title="WhatsApp">
+                      <MessageCircle className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
 
-            {/* Client-wise Pipeline */}
-            <div className="mt-6 rounded-xl border border-slate-200 bg-white p-5">
-              <CandidatePipelinePanel
-                candidateId={viewingCandidate._id}
-                apiUrl={API_URL}
-                authHeaders={authHeaders}
-              />
+            {/* ── Scrollable Body ── */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-5 bg-zinc-50/50 dark:bg-zinc-950/30">
+
+              {/* ── Top 3 info cards ── */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+                {/* Personal Info Card */}
+                <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/60 p-5 shadow-sm space-y-3">
+                  <h3 className="text-[10px] font-black uppercase tracking-widest text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">
+                    <UserCircle className="w-3.5 h-3.5" /> Personal Info
+                  </h3>
+                  <div className="space-y-2.5 text-sm">
+                    {[
+                      { label: 'Email', value: viewingCandidate.email, href: `mailto:${viewingCandidate.email}` },
+                      { label: 'Phone', value: viewingCandidate.contact, href: `tel:${viewingCandidate.contact}` },
+                      { label: 'Date of Birth', value: formatDate(viewingCandidate.dateOfBirth) },
+                      { label: 'Gender', value: viewingCandidate.gender },
+                      { label: 'Current Location', value: viewingCandidate.currentLocation },
+                      { label: 'Preferred Location', value: viewingCandidate.preferredLocation },
+                    ].map(({ label, value, href }) => value ? (
+                      <div key={label}>
+                        <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">{label}</div>
+                        {href
+                          ? <a href={href} className="font-semibold text-indigo-600 dark:text-indigo-400 hover:underline truncate block">{value}</a>
+                          : <div className="font-semibold text-zinc-800 dark:text-zinc-200 truncate">{value}</div>
+                        }
+                      </div>
+                    ) : null)}
+                    {viewingCandidate.linkedin && (
+                      <div>
+                        <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">LinkedIn</div>
+                        <a href={viewingCandidate.linkedin} target="_blank" rel="noopener noreferrer"
+                          className="font-semibold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 truncate">
+                          <Linkedin className="w-3 h-3 shrink-0" /> View Profile
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Professional Details Card */}
+                <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/60 p-5 shadow-sm space-y-3">
+                  <h3 className="text-[10px] font-black uppercase tracking-widest text-violet-600 dark:text-violet-400 flex items-center gap-1.5">
+                    <Briefcase className="w-3.5 h-3.5" /> Professional
+                  </h3>
+                  <div className="space-y-2.5 text-sm">
+                    {[
+                      { label: 'Current Role', value: viewingCandidate.position },
+                      { label: 'Current Company', value: viewingCandidate.currentCompany },
+                      { label: 'Industry', value: viewingCandidate.industry },
+                      { label: 'Experience', value: viewingCandidate.totalExperience ? `${viewingCandidate.totalExperience} years` : null },
+                      { label: 'Education', value: viewingCandidate.education },
+                      { label: 'Highest Qualification', value: viewingCandidate.highestQualification },
+                    ].map(({ label, value }) => value ? (
+                      <div key={label}>
+                        <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">{label}</div>
+                        <div className="font-semibold text-zinc-800 dark:text-zinc-200 truncate">{value}</div>
+                      </div>
+                    ) : null)}
+                  </div>
+                </div>
+
+                {/* Salary / Source Card */}
+                <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/60 p-5 shadow-sm space-y-3">
+                  <h3 className="text-[10px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                    <IndianRupee className="w-3.5 h-3.5" /> Compensation &amp; Source
+                  </h3>
+                  <div className="space-y-2.5 text-sm">
+                    {[
+                      { label: 'Current CTC', value: viewingCandidate.currentCTC },
+                      { label: 'Expected CTC', value: viewingCandidate.expectedCTC },
+                      { label: 'Notice Period', value: viewingCandidate.noticePeriod ? `${viewingCandidate.noticePeriod} days` : null },
+                      { label: 'Source', value: viewingCandidate.source },
+                      { label: 'Assigned Recruiter', value: viewingCandidate.assignedRecruiterName || viewingCandidate.assignedTo },
+                    ].map(({ label, value }) => value ? (
+                      <div key={label}>
+                        <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">{label}</div>
+                        <div className="font-semibold text-zinc-800 dark:text-zinc-200 truncate">{value}</div>
+                      </div>
+                    ) : null)}
+                    {viewingCandidate.createdAt && (
+                      <div>
+                        <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Added On</div>
+                        <div className="font-semibold text-zinc-800 dark:text-zinc-200">
+                          {new Date(viewingCandidate.createdAt).toLocaleDateString(undefined, { dateStyle: 'medium' })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* ── Skills ── */}
+              {viewingCandidate.skills && viewingCandidate.skills.length > 0 && (
+                <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/60 p-5 shadow-sm">
+                  <h3 className="text-[10px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400 flex items-center gap-1.5 mb-3">
+                    <Award className="w-3.5 h-3.5" /> Skills &amp; Expertise
+                  </h3>
+                  <div className="flex flex-wrap gap-2">
+                    {(Array.isArray(viewingCandidate.skills) ? viewingCandidate.skills : String(viewingCandidate.skills).split(','))
+                      .map((s, i) => (
+                        <span key={i} className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-900/40">
+                          {String(s).trim()}
+                        </span>
+                      ))}
+                  </div>
+                </div>
+              )}
+
+              {/* ── Pipeline Panel ── */}
+              <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/60 p-5 shadow-sm">
+                <h3 className="text-[10px] font-black uppercase tracking-widest text-rose-600 dark:text-rose-400 flex items-center gap-1.5 mb-4">
+                  <Target className="w-3.5 h-3.5" /> Client-wise Submission Pipeline
+                </h3>
+                <CandidatePipelinePanel
+                  candidateId={viewingCandidate._id}
+                  apiUrl={API_URL}
+                  authHeaders={authHeaders}
+                />
+              </div>
+
+              {/* ── Notes ── */}
+              {viewingCandidate.notes && (
+                <div className="bg-amber-50/50 dark:bg-amber-950/10 border border-amber-200/50 dark:border-amber-900/20 rounded-2xl p-5">
+                  <h3 className="text-[10px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400 mb-2">Notes</h3>
+                  <p className="text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed whitespace-pre-wrap">{viewingCandidate.notes}</p>
+                </div>
+              )}
+
             </div>
-          </ModalBody>
-          <ModalFooter>
-            <Button variant="outline" onClick={() => setIsViewDialogOpen(false)}>Close</Button>
-            <Button onClick={() => { setIsViewDialogOpen(false); openEditDialog(viewingCandidate); }}>Edit Candidate</Button>
-          </ModalFooter>
-        </Modal>
+
+            {/* ── Footer ── */}
+            <div className="px-6 py-4 border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 flex items-center justify-between gap-3 shrink-0">
+              <div className="text-xs text-zinc-400 font-medium">
+                Candidate ID: <span className="font-mono font-bold text-zinc-600 dark:text-zinc-300">{getCandidateId(viewingCandidate)}</span>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setIsViewDialogOpen(false)}
+                  className="px-5 py-2.5 rounded-xl text-xs font-bold border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 transition-colors"
+                >
+                  Close
+                </button>
+                <button
+                  onClick={() => { setIsViewDialogOpen(false); openEditDialog(viewingCandidate); }}
+                  className="px-5 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-500/20 transition-all"
+                >
+                  Edit Candidate
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {renderMatchingJobsModal()}

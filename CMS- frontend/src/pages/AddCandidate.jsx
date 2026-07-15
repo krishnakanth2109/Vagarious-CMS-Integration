@@ -2540,113 +2540,267 @@ export default function AdminCandidates() {
       {isViewDialogOpen && viewCandidate && (
         <ModalPortal>
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setIsViewDialogOpen(false)} />
-          <div className="relative bg-white rounded-xl shadow-2xl max-w-7xl w-full max-h-[90vh] flex flex-col overflow-hidden border border-slate-200">
-            {/* Header */}
-            <div className="p-6 border-b border-slate-200 bg-slate-50 flex justify-between items-start">
-              <div>
-                <h2 className="text-xl font-bold text-slate-900">
-                  <CandidateProfileLink candidate={viewCandidate} className="text-slate-900">
-                    {viewCandidate.name}
-                  </CandidateProfileLink>
-                </h2>
-                <p className="text-sm font-mono text-blue-600 mt-1">{getCandidateId(viewCandidate)}</p>
-              </div>
-              <button onClick={() => setIsViewDialogOpen(false)} className="text-slate-400 hover:text-slate-600 text-2xl font-bold leading-none px-2">×</button>
-            </div>
+          {/* Backdrop */}
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsViewDialogOpen(false)} />
 
-            {/* Body */}
-            <div className="p-6 overflow-y-auto flex-1 space-y-6 text-sm bg-slate-100/60">
-              {/* Personal + Professional grid */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-3 shadow-sm">
-                  <h3 className="font-semibold text-slate-800 border-b pb-2 flex items-center gap-2"><UserCircle className="h-4 w-4" /> Personal Information</h3>
-                  <div className="grid grid-cols-2 gap-y-3">
-                    {[
-                      ['First Name', viewCandidate.firstName],
-                      ['Last Name', viewCandidate.lastName],
-                      ['Email', viewCandidate.email],
-                      ['Contact', viewCandidate.contact],
-                      ['Alt Contact', viewCandidate.alternateNumber],
-                      ['Date of Birth', viewCandidate.dateOfBirth ? new Date(viewCandidate.dateOfBirth).toLocaleDateString() : null],
-                      ['Gender', viewCandidate.gender],
-                      ['Current Location', viewCandidate.currentLocation],
-                      ['Preferred Location', viewCandidate.preferredLocation],
-                    ].map(([label, val]) => val ? (
-                      <div key={label} className="col-span-2 md:col-span-1">
-                        <span className="block text-xs font-semibold text-slate-500 uppercase mb-0.5">{label}</span>
-                        <span className="text-slate-900 font-medium">{val}</span>
-                      </div>
-                    ) : null)}
+          {/* Modal Card */}
+          <div
+            className="relative bg-white dark:bg-zinc-900 rounded-3xl shadow-2xl w-full max-w-7xl max-h-[95vh] overflow-hidden flex flex-col border border-zinc-200/60 dark:border-zinc-800/60"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* ── Hero Header ── */}
+            <div className="relative bg-gradient-to-br from-indigo-600 via-violet-600 to-purple-700 px-8 pt-8 pb-6 shrink-0">
+              {/* Close button */}
+              <button
+                onClick={() => setIsViewDialogOpen(false)}
+                className="absolute top-4 right-4 p-2 rounded-xl bg-white/15 hover:bg-white/25 text-white transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+
+              <div className="flex items-start gap-5">
+                {/* Avatar */}
+                <div
+                  className="rounded-2xl bg-white/20 border-2 border-white/30 flex items-center justify-center text-white text-2xl font-black select-none shrink-0 shadow-lg"
+                  style={{ width: '72px', height: '72px' }}
+                >
+                  {(viewCandidate.name || `${viewCandidate.firstName || ''} ${viewCandidate.lastName || ''}`.trim() || 'C')
+                    .split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
+                </div>
+
+                {/* Name / title block */}
+                <div className="flex-1 min-w-0">
+                  <h2 className="text-2xl font-black text-white leading-tight truncate">
+                    <CandidateProfileLink candidate={viewCandidate} className="text-white hover:text-indigo-100 transition-colors">
+                      {viewCandidate.name || `${viewCandidate.firstName || ''} ${viewCandidate.lastName || ''}`.trim()}
+                    </CandidateProfileLink>
+                  </h2>
+                  <p className="text-indigo-200 text-sm font-semibold mt-0.5">
+                    {viewCandidate.position || 'Position not set'}{viewCandidate.currentCompany ? ` · ${viewCandidate.currentCompany}` : ''}
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2 mt-3">
+                    <span className="inline-flex items-center gap-1.5 bg-white/15 border border-white/20 rounded-full px-3 py-1 text-xs font-bold text-white">
+                      <UserCircle className="w-3 h-3" /> {getCandidateId(viewCandidate)}
+                    </span>
+                    {viewCandidate.totalExperience && (
+                      <span className="inline-flex items-center gap-1.5 bg-white/15 border border-white/20 rounded-full px-3 py-1 text-xs font-bold text-white">
+                        <Briefcase className="w-3 h-3" /> {viewCandidate.totalExperience} yrs exp
+                      </span>
+                    )}
+                    {viewCandidate.currentLocation && (
+                      <span className="inline-flex items-center gap-1.5 bg-white/15 border border-white/20 rounded-full px-3 py-1 text-xs font-bold text-white">
+                        📍 {viewCandidate.currentLocation}
+                      </span>
+                    )}
+                    {getCandidateStatuses(viewCandidate).slice(0, 3).map(status => (
+                      <StatusBadge key={status} status={status} />
+                    ))}
                   </div>
                 </div>
 
-                <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-3 shadow-sm">
-                  <h3 className="font-semibold text-slate-800 border-b pb-2 flex items-center gap-2"><Briefcase className="h-4 w-4" /> Professional Details</h3>
-                  <div className="grid grid-cols-2 gap-y-3">
-                    {[
-                      ['Current Role', viewCandidate.position],
-                      ['Current Company', viewCandidate.currentCompany],
-                      ['Total Exp', viewCandidate.totalExperience ? `${viewCandidate.totalExperience} Yrs` : null],
-                      ['Relevant Exp', viewCandidate.relevantExperience ? `${viewCandidate.relevantExperience} Yrs` : null],
-                      ['Current CTC', viewCandidate.ctc],
-                      ['Expected CTC', viewCandidate.ectc],
-                      ['Notice Period', viewCandidate.noticePeriod],
-                      ['Serving Notice?', viewCandidate.servingNoticePeriod ? 'Yes' : 'No'],
-                      ['LWD', viewCandidate.lwd ? new Date(viewCandidate.lwd).toLocaleDateString() : null],
-                      ['Offers in Hand', viewCandidate.offersInHand ? `Yes (${viewCandidate.offerPackage})` : 'No'],
-                      ['Source', viewCandidate.source],
-                      ['Assigned Recruiter', (
-                        <RecruiterDetailsTrigger
-                          recruiter={getCandidateRecruiterDetails(viewCandidate, recruiters)}
-                          className="text-slate-900 font-medium"
-                        >
-                          {typeof viewCandidate.recruiterId === 'object' ? getRecruiterName(viewCandidate.recruiterId) : viewCandidate.recruiterName || 'Unassigned'}
-                        </RecruiterDetailsTrigger>
-                      )],
-                      ['Remarks', viewCandidate.remarks],
-                    ].map(([label, val]) => val ? (
-                      <div key={label} className="col-span-2 md:col-span-1">
-                        <span className="block text-xs font-semibold text-slate-500 uppercase mb-0.5">{label}</span>
-                        <span className="text-slate-900 font-medium">{val}</span>
-                      </div>
-                    ) : null)}
-                  </div>
-                  <div>
-                    <span className="block text-xs font-semibold text-slate-500 uppercase mb-2">Status</span>
-                    <div className="flex flex-wrap gap-1.5">
-                      {getCandidateStatuses(viewCandidate).map((status) => (
-                        <StatusBadge key={status} status={status} />
-                      ))}
-                    </div>
-                  </div>
-                  {/* Skills */}
-                  {viewCandidate.skills && (
-                    <div>
-                      <span className="block text-xs font-semibold text-slate-500 uppercase mb-1">Skills</span>
-                      <div className="flex flex-wrap gap-1">
-                        {(Array.isArray(viewCandidate.skills) ? viewCandidate.skills : String(viewCandidate.skills).split(',')).map((s) => (
-                          <span key={s} className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 border border-blue-200">{s.trim()}</span>
-                        ))}
-                      </div>
-                    </div>
+                {/* Quick-action buttons */}
+                <div className="flex gap-2 shrink-0 mr-14">
+                  {viewCandidate.contact && (
+                    <a href={`tel:${viewCandidate.contact}`}
+                      className="p-2.5 rounded-xl bg-white/15 hover:bg-white/25 text-white border border-white/20 transition-colors" title="Call">
+                      <Phone className="w-4 h-4" />
+                    </a>
+                  )}
+                  {viewCandidate.email && (
+                    <a href={`mailto:${viewCandidate.email}`}
+                      className="p-2.5 rounded-xl bg-white/15 hover:bg-white/25 text-white border border-white/20 transition-colors" title="Email">
+                      <Mail className="w-4 h-4" />
+                    </a>
+                  )}
+                  {viewCandidate.contact && (
+                    <button onClick={() => handleWhatsApp(viewCandidate)}
+                      className="p-2.5 rounded-xl bg-green-500/80 hover:bg-green-500 text-white border border-green-400/40 transition-colors" title="WhatsApp">
+                      <MessageCircle className="w-4 h-4" />
+                    </button>
                   )}
                 </div>
               </div>
+            </div>
+
+            {/* ── Scrollable body ── */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-5 bg-zinc-50/50 dark:bg-zinc-950/30">
+
+              {/* Three info cards */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+                {/* Personal Info */}
+                <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/60 p-5 shadow-sm space-y-3">
+                  <h3 className="text-[10px] font-black uppercase tracking-widest text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">
+                    <UserCircle className="w-3.5 h-3.5" /> Personal Info
+                  </h3>
+                  <div className="space-y-2.5 text-sm">
+                    {[
+                      { label: 'First Name', value: viewCandidate.firstName },
+                      { label: 'Last Name', value: viewCandidate.lastName },
+                      { label: 'Email', value: viewCandidate.email, href: `mailto:${viewCandidate.email}` },
+                      { label: 'Phone', value: viewCandidate.contact, href: `tel:${viewCandidate.contact}` },
+                      { label: 'Alt Contact', value: viewCandidate.alternateNumber },
+                      { label: 'Date of Birth', value: viewCandidate.dateOfBirth ? new Date(viewCandidate.dateOfBirth).toLocaleDateString() : null },
+                      { label: 'Gender', value: viewCandidate.gender },
+                      { label: 'Current Location', value: viewCandidate.currentLocation },
+                      { label: 'Preferred Location', value: viewCandidate.preferredLocation },
+                    ].map(({ label, value, href }) => value ? (
+                      <div key={label}>
+                        <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">{label}</div>
+                        {href
+                          ? <a href={href} className="font-semibold text-indigo-600 dark:text-indigo-400 hover:underline truncate block">{value}</a>
+                          : <div className="font-semibold text-zinc-800 dark:text-zinc-200 truncate">{value}</div>
+                        }
+                      </div>
+                    ) : null)}
+                    {viewCandidate.linkedin && (
+                      <div>
+                        <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">LinkedIn</div>
+                        <a href={viewCandidate.linkedin} target="_blank" rel="noopener noreferrer"
+                          className="font-semibold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 truncate">
+                          <Linkedin className="w-3 h-3 shrink-0" /> View Profile
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Professional Details */}
+                <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/60 p-5 shadow-sm space-y-3">
+                  <h3 className="text-[10px] font-black uppercase tracking-widest text-violet-600 dark:text-violet-400 flex items-center gap-1.5">
+                    <Briefcase className="w-3.5 h-3.5" /> Professional
+                  </h3>
+                  <div className="space-y-2.5 text-sm">
+                    {[
+                      { label: 'Current Role', value: viewCandidate.position },
+                      { label: 'Current Company', value: viewCandidate.currentCompany },
+                      { label: 'Total Experience', value: viewCandidate.totalExperience ? `${viewCandidate.totalExperience} Yrs` : null },
+                      { label: 'Relevant Experience', value: viewCandidate.relevantExperience ? `${viewCandidate.relevantExperience} Yrs` : null },
+                      { label: 'Notice Period', value: viewCandidate.noticePeriod },
+                      { label: 'Serving Notice?', value: viewCandidate.servingNoticePeriod ? 'Yes' : null },
+                      { label: 'Last Working Day', value: viewCandidate.lwd ? new Date(viewCandidate.lwd).toLocaleDateString() : null },
+                      { label: 'Offers in Hand', value: viewCandidate.offersInHand ? `Yes${viewCandidate.offerPackage ? ` (${viewCandidate.offerPackage})` : ''}` : null },
+                      { label: 'Remarks', value: viewCandidate.remarks },
+                    ].map(({ label, value }) => value ? (
+                      <div key={label}>
+                        <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">{label}</div>
+                        <div className="font-semibold text-zinc-800 dark:text-zinc-200 truncate">{value}</div>
+                      </div>
+                    ) : null)}
+                  </div>
+                </div>
+
+                {/* Compensation & Source */}
+                <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/60 p-5 shadow-sm space-y-3">
+                  <h3 className="text-[10px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                    <IndianRupee className="w-3.5 h-3.5" /> Compensation &amp; Source
+                  </h3>
+                  <div className="space-y-2.5 text-sm">
+                    {[
+                      { label: 'Current CTC', value: viewCandidate.ctc },
+                      { label: 'Expected CTC', value: viewCandidate.ectc },
+                      { label: 'Source', value: viewCandidate.source },
+                    ].map(({ label, value }) => value ? (
+                      <div key={label}>
+                        <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">{label}</div>
+                        <div className="font-semibold text-zinc-800 dark:text-zinc-200 truncate">{value}</div>
+                      </div>
+                    ) : null)}
+                    {/* Recruiter with popover trigger */}
+                    <div>
+                      <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Assigned Recruiter</div>
+                      <div className="font-semibold text-zinc-800 dark:text-zinc-200 truncate">
+                        <RecruiterDetailsTrigger
+                          recruiter={getCandidateRecruiterDetails(viewCandidate, recruiters)}
+                          className="text-indigo-600 dark:text-indigo-400 hover:underline"
+                        >
+                          {typeof viewCandidate.recruiterId === 'object'
+                            ? getRecruiterName(viewCandidate.recruiterId)
+                            : viewCandidate.recruiterName || 'Unassigned'}
+                        </RecruiterDetailsTrigger>
+                      </div>
+                    </div>
+                    {viewCandidate.createdAt && (
+                      <div>
+                        <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Added On</div>
+                        <div className="font-semibold text-zinc-800 dark:text-zinc-200">
+                          {new Date(viewCandidate.createdAt).toLocaleDateString(undefined, { dateStyle: 'medium' })}
+                        </div>
+                      </div>
+                    )}
+                    {/* Status pills */}
+                    {getCandidateStatuses(viewCandidate).length > 0 && (
+                      <div>
+                        <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">Pipeline Status</div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {getCandidateStatuses(viewCandidate).map(status => (
+                            <StatusBadge key={status} status={status} />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Skills */}
+              {viewCandidate.skills && viewCandidate.skills.length > 0 && (
+                <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/60 p-5 shadow-sm">
+                  <h3 className="text-[10px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400 flex items-center gap-1.5 mb-3">
+                    <Award className="w-3.5 h-3.5" /> Skills &amp; Expertise
+                  </h3>
+                  <div className="flex flex-wrap gap-2">
+                    {(Array.isArray(viewCandidate.skills) ? viewCandidate.skills : String(viewCandidate.skills).split(','))
+                      .map((s, i) => (
+                        <span key={i} className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-900/40">
+                          {String(s).trim()}
+                        </span>
+                      ))}
+                  </div>
+                </div>
+              )}
 
               {/* Client-wise Pipeline */}
-              <div className="rounded-xl border border-slate-200 bg-white p-5">
+              <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/60 p-5 shadow-sm">
+                <h3 className="text-[10px] font-black uppercase tracking-widest text-rose-600 dark:text-rose-400 flex items-center gap-1.5 mb-4">
+                  <Target className="w-3.5 h-3.5" /> Client-wise Submission Pipeline
+                </h3>
                 <CandidatePipelinePanel
                   candidateId={viewCandidate._id}
                   apiUrl={API_URL}
                   authHeaders={getAuthHeader}
                 />
               </div>
+
+              {/* Notes */}
+              {viewCandidate.notes && (
+                <div className="bg-amber-50/50 dark:bg-amber-950/10 border border-amber-200/50 dark:border-amber-900/20 rounded-2xl p-5">
+                  <h3 className="text-[10px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400 mb-2">Notes</h3>
+                  <p className="text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed whitespace-pre-wrap">{viewCandidate.notes}</p>
+                </div>
+              )}
+
             </div>
 
-            <div className="p-5 border-t border-slate-200 bg-slate-50 flex justify-end gap-3">
-              <button onClick={() => setIsViewDialogOpen(false)} className="px-5 py-2.5 border border-slate-300 bg-white text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-100 transition">Close</button>
-              <button onClick={() => { setIsViewDialogOpen(false); openEditDialog(viewCandidate); }} className="px-5 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition">Edit Details</button>
+            {/* ── Footer ── */}
+            <div className="px-6 py-4 border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 flex items-center justify-between gap-3 shrink-0">
+              <div className="text-xs text-zinc-400 font-medium">
+                Candidate ID: <span className="font-mono font-bold text-zinc-600 dark:text-zinc-300">{getCandidateId(viewCandidate)}</span>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setIsViewDialogOpen(false)}
+                  className="px-5 py-2.5 rounded-xl text-xs font-bold border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 transition-colors"
+                >
+                  Close
+                </button>
+                <button
+                  onClick={() => { setIsViewDialogOpen(false); openEditDialog(viewCandidate); }}
+                  className="px-5 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-500/20 transition-all"
+                >
+                  Edit Details
+                </button>
+              </div>
             </div>
           </div>
         </div>

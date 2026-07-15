@@ -30,19 +30,23 @@ const resolveUserName = (u) => {
 const normalizeName = (value) => String(value || '').trim().toLowerCase();
 
 // ─────────────────────────────────────────────────────────────────────────────
-// GET /api/submissions?candidateId=<id> or ?jobId=<id>
-// Get submissions for a candidate or requirement.
+// GET /api/submissions?candidateId=<id> or ?jobId=<id> or ?clientName=<name>
+// Get submissions for a candidate, requirement or client name.
 // ─────────────────────────────────────────────────────────────────────────────
 router.get('/', async (req, res) => {
   try {
-    const { candidateId, jobId } = req.query;
-    if (!candidateId && !jobId) {
-      return res.status(400).json({ message: 'candidateId or jobId query param is required' });
+    const { candidateId, jobId, clientName } = req.query;
+    if (!candidateId && !jobId && !clientName) {
+      return res.status(400).json({ message: 'candidateId, jobId or clientName query param is required' });
     }
 
     const query = {};
     if (candidateId) query.candidateId = candidateId;
     if (jobId) query.jobId = jobId;
+    if (clientName) {
+      const escapedClientName = clientName.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      query.clientName = { $regex: new RegExp(`^${escapedClientName}$`, 'i') };
+    }
 
     const submissions = await CandidateSubmission.find(query)
       .populate('jobId', 'jobCode position clientName location')
