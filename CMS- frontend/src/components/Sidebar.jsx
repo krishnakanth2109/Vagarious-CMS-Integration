@@ -6,7 +6,7 @@ import {
   Building2, Receipt, ClipboardList, MessageSquare,
   BarChart3, Settings, Power, User, Users, Calendar,
   Video, FileText, Handshake, FileInput, ContactRound, ChevronDown, Mail,
-  X, Lock
+  X, Lock, QrCode
 } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -54,7 +54,9 @@ export default function Sidebar({ isOpen, toggleSidebar, isMobileOpen, setIsMobi
     { name: 'Client Info', path: '/admin/clients', icon: Building2 },
     { name: 'Invoices', path: '/admin/invoices', icon: Receipt },
     { name: 'Requirements', path: '/admin/requirements', icon: ClipboardList },
+    { name: 'Visitors QR', path: '/admin/visitors-qr', icon: QrCode },
     { name: 'Job Applications', path: '/admin/job-applications', icon: FileInput },
+
     { name: 'Schedules', path: '/admin/schedules', icon: Calendar },
     { name: 'Messages', path: '/admin/messages', icon: MessageSquare },
     { name: 'Agreements', path: '/admin/agreements', icon: Handshake },
@@ -88,7 +90,9 @@ export default function Sidebar({ isOpen, toggleSidebar, isMobileOpen, setIsMobi
       externalImportsMenu,
       { name: 'Recruiters', path: '/admin/recruiters', icon: Briefcase },
       { name: 'Requirements', path: '/admin/requirements', icon: ClipboardList },
+      { name: 'Visitors QR', path: '/admin/visitors-qr', icon: QrCode },
       { name: 'Job Applications', path: '/admin/job-applications', icon: FileInput },
+
       { name: 'Schedules', path: '/admin/schedules', icon: Calendar },
       { name: 'Messages', path: '/admin/messages', icon: MessageSquare },
       { name: 'Agreements', path: '/admin/agreements', icon: Handshake },

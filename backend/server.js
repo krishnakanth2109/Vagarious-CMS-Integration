@@ -31,6 +31,8 @@ import externalClientRoutes from './routes/externalClientRoutes.js';
 import contactRoutes from './routes/contactRoutes.js';
 import invoiceRoutes from './routes/invoiceRoutes.js';
 import companyBankRoutes from './routes/companyBankRoutes.js';
+import visitorsQRRoutes from './routes/visitorsQRRoutes.js';
+
 
 // ── Agreement Module Routes ───────────────────────────────────────────────────
 import { connectAgreementDB } from './config/agreementDatabase.js';
@@ -269,6 +271,8 @@ app.use('/externalcontacts', externalContactRoutes);
 app.use('/externalclients', externalClientRoutes);
 app.use('/contact', contactRoutes);
 app.use('/invoices', invoiceRoutes);
+app.use('/api', visitorsQRRoutes);
+
 
 // Mount AI mock routes at root so index.html can call /start-session-interview etc. directly
 app.use('/', aiMockRoutes);

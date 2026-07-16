@@ -33,6 +33,9 @@ const UserGuide               = lazy(() => import('@/pages/UserGuide'));
 const ExternalContacts        = lazy(() => import('@/pages/ExternalContacts'));
 const ExternalClients         = lazy(() => import('@/pages/ExternalClients'));
 const AdminContactInquiries   = lazy(() => import('@/pages/AdminContactInquiries'));
+const VisitorsQR              = lazy(() => import('@/pages/VisitorsQR'));
+const VisitorsQRApply         = lazy(() => import('@/pages/VisitorsQRApply'));
+
 
 // Manager Specific Pages (Lazy)
 const ManagerDashboard = lazy(() => import('@/pages/ManagerDashboard'));
@@ -92,6 +95,8 @@ function AppRoutes() {
         <Route path="/forgot-password" element={<PublicRoute><ForgotPassword /></PublicRoute>} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/invite" element={<InterviewSession />} />
+        <Route path="/apply/visitors-qr/:token" element={<VisitorsQRApply />} />
+
 
         {/* ===================== ADMIN / MANAGER ROUTES ===================== */}
         <Route path="/admin" element={
@@ -119,7 +124,9 @@ function AppRoutes() {
           <Route path="external-imports/contacts" element={<ExternalContacts />} />
           <Route path="external-imports/clients" element={<ExternalClients />} />
           <Route path="contact-inquiries" element={<AdminContactInquiries />} />
+          <Route path="visitors-qr" element={<VisitorsQR />} />
         </Route>
+
         <Route path="/recruiter" element={
           <ProtectedRoute allowedRoles={['recruiter', 'manager', 'admin']}>
             <DashboardLayout />

@@ -5,7 +5,7 @@ import {
   LayoutDashboard, Users, Briefcase, Calendar, MessageSquare,
   BarChart2, Settings, LogOut, ChevronLeft, ChevronRight,
   User, ClipboardList, Building2, FileText, UserCheck,
-  Menu, X, BrainCircuit
+  Menu, X, BrainCircuit, QrCode, Lock
 } from 'lucide-react';
 
 const adminLinks = [
@@ -15,10 +15,12 @@ const adminLinks = [
   { to: '/admin/clients', label: 'Clients', icon: Building2 },
   { to: '/admin/invoices', label: 'Invoices', icon: FileText },
   { to: '/admin/requirements', label: 'Requirements', icon: ClipboardList },
+  { to: '/admin/visitors-qr', label: 'Visitors QR', icon: QrCode },
   { to: '/admin/messages', label: 'Messages', icon: MessageSquare },
   { to: '/admin/mock', label: 'AI Mock', icon: BrainCircuit },
   { to: '/admin/reports', label: 'Reports', icon: BarChart2 },
 ];
+
 
 const recruiterLinks = [
   { to: '/recruiter', label: 'Dashboard', icon: LayoutDashboard, end: true },
@@ -45,7 +47,7 @@ export function DashboardSidebar({ collapsed, onToggle, mobileOpen, setMobileOpe
     setShowSettingsDropdown(false);
   }, [location.pathname, setMobileOpen]);
 
-  const links = userRole === 'admin' ? adminLinks : recruiterLinks;
+  const links = (userRole === 'admin' || userRole === 'manager') ? adminLinks : recruiterLinks;
   const profilePath = userRole === 'recruiter' ? '/recruiter/profile' : '/admin/profile';
   const passwordPath = userRole === 'recruiter' ? '/recruiter/change-password' : '/admin/change-password';
 
@@ -60,9 +62,10 @@ export function DashboardSidebar({ collapsed, onToggle, mobileOpen, setMobileOpe
       <div className={`flex items-center justify-between px-4 py-5 border-b border-gray-200 dark:border-gray-700 ${collapsed && !isMobile ? 'justify-center' : ''}`}>
         {(!collapsed || isMobile) && (
           <span className="text-xl font-bold text-blue-600 dark:text-blue-400 truncate">
-            {userRole === 'admin' ? 'Admin Panel' : 'Recruiter CMS'}
+            {(userRole === 'admin' || userRole === 'manager') ? 'Admin Panel' : 'Recruiter CMS'}
           </span>
         )}
+
         {!isMobile && (
           <button
             onClick={onToggle}

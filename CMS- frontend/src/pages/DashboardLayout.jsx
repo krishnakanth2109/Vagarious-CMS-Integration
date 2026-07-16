@@ -28,7 +28,7 @@ export default function DashboardLayout() {
               <span className="text-white font-extrabold text-sm">V</span>
             </div>
             <span className="text-slate-900 dark:text-white font-bold text-lg tracking-tight">
-              {userRole === 'admin' ? 'Admin Panel' : 'Recruiter CMS'}
+              {(userRole === 'admin' || userRole === 'manager') ? 'Admin Panel' : 'Recruiter CMS'}
             </span>
           </div>
         </div>
