@@ -289,42 +289,20 @@ export default function VisitorsQRApply() {
 
             {/* Qualification */}
             <div className="space-y-2">
-              <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-zinc-555 dark:text-zinc-400">
+              <label htmlFor="qualification" className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-zinc-555 dark:text-zinc-400">
                 <GraduationCap className="w-4 h-4 text-indigo-500" />
                 Highest Qualification <span className="text-red-500">*</span>
               </label>
-              <div className="grid grid-cols-2 gap-3 mt-1">
-                <label className={`flex items-center justify-center gap-3 px-4 py-3 border rounded-2xl cursor-pointer text-sm font-semibold transition-all select-none ${
-                  formData.qualification === 'Post Graduate'
-                    ? 'border-indigo-500 bg-indigo-50/40 text-indigo-600 dark:bg-indigo-950/20 dark:text-indigo-400 shadow-sm font-bold'
-                    : 'border-zinc-200 dark:border-zinc-800 bg-zinc-50/30 dark:bg-zinc-950 text-zinc-650 hover:bg-zinc-50 dark:hover:bg-zinc-900'
-                }`}>
-                  <input
-                    type="radio"
-                    name="qualification"
-                    value="Post Graduate"
-                    checked={formData.qualification === 'Post Graduate'}
-                    onChange={handleInputChange}
-                    className="sr-only"
-                  />
-                  <span>Post Graduate</span>
-                </label>
-                <label className={`flex items-center justify-center gap-3 px-4 py-3 border rounded-2xl cursor-pointer text-sm font-semibold transition-all select-none ${
-                  formData.qualification === 'Graduate'
-                    ? 'border-indigo-500 bg-indigo-50/40 text-indigo-600 dark:bg-indigo-950/20 dark:text-indigo-400 shadow-sm font-bold'
-                    : 'border-zinc-200 dark:border-zinc-800 bg-zinc-50/30 dark:bg-zinc-950 text-zinc-655 hover:bg-zinc-50 dark:hover:bg-zinc-900'
-                }`}>
-                  <input
-                    type="radio"
-                    name="qualification"
-                    value="Graduate"
-                    checked={formData.qualification === 'Graduate'}
-                    onChange={handleInputChange}
-                    className="sr-only"
-                  />
-                  <span>Graduate</span>
-                </label>
-              </div>
+              <input
+                id="qualification"
+                type="text"
+                name="qualification"
+                required
+                value={formData.qualification}
+                onChange={handleInputChange}
+                className="w-full px-4 py-3 border border-zinc-200 dark:border-zinc-800 rounded-2xl text-sm bg-zinc-50/50 dark:bg-zinc-950 focus:bg-white dark:focus:bg-zinc-900 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all dark:text-zinc-100 placeholder-zinc-400"
+                placeholder="e.g. B.Tech, MBA, MCA"
+              />
             </div>
 
             {/* Year of Pass Out */}

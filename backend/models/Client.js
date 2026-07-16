@@ -8,6 +8,7 @@ const clientSchema = mongoose.Schema({
   companyName: {
     type: String,
     required: true,
+    trim: true,
   },
   contactPerson: {
     type: String,

@@ -454,10 +454,13 @@ export default function RecruiterAssignments() {
       ]);
       if (resJobs.ok) {
         const data = await resJobs.json();
-        setJobs(data.map((j) => ({ ...j, id: j._id })));
+        setJobs(data.map((j) => ({ ...j, id: j._id, clientName: (j.clientName || '').trim() })));
       }
       if (resRecs.ok) setRecruiters(await resRecs.json());
-      if (resClients.ok) setClients(await resClients.json());
+      if (resClients.ok) {
+        const data = await resClients.json();
+        setClients(data.map((c) => ({ ...c, companyName: (c.companyName || '').trim() })));
+      }
       if (resCandidates.ok) {
         const data = await resCandidates.json();
         const candidatesArray = Array.isArray(data) ? data : data.data || [];

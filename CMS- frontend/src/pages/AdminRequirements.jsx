@@ -1173,12 +1173,12 @@ export default function AdminRequirements() {
       if(jobsRes.ok) {
         const data = await jobsRes.json();
         const jobsArray = Array.isArray(data) ? data : data.data || [];
-        setJobs(jobsArray.map((j) => ({ ...j, id: j._id })));
+        setJobs(jobsArray.map((j) => ({ ...j, id: j._id, clientName: (j.clientName || '').trim() })));
       }
       if(clientsRes.ok) {
         const data = await clientsRes.json();
         const clientsArray = Array.isArray(data) ? data : data.data || [];
-        setClients(clientsArray.map((c) => ({ id: c._id, companyName: c.companyName })));
+        setClients(clientsArray.map((c) => ({ id: c._id, companyName: (c.companyName || '').trim() })));
       }
       if(recRes.ok) {
         const data = await recRes.json();
@@ -1569,6 +1569,7 @@ export default function AdminRequirements() {
     setForm({
       ...initialFormState,
       ...job,
+      clientName: (job.clientName || '').trim(),
       jobDescription: job.jobDescription || "",
       jdLink: job.jdLink || "",
       customFields: job.customFields || {},

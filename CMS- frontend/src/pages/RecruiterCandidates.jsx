@@ -799,8 +799,23 @@ export default function RecruiterCandidates() {
         }));
         setCandidates(fixedCandidates);
       }
-      if (jobRes.ok) setJobs(await jobRes.json());
-      if (clientRes.ok) setClients(await clientRes.json());
+      if (jobRes.ok) {
+        const data = await jobRes.json();
+        const cleanedJobs = (Array.isArray(data) ? data : []).map(j => ({
+          ...j,
+          clientName: (j.clientName || '').trim()
+        }));
+        setJobs(cleanedJobs);
+      }
+      if (clientRes.ok) {
+        const data = await clientRes.json();
+        const cleanedClients = (Array.isArray(data) ? data : []).map(c => ({
+          ...c,
+          companyName: (c.companyName || '').trim(),
+          name: (c.name || '').trim()
+        }));
+        setClients(cleanedClients);
+      }
     } catch (error) {
       toast({ variant: "destructive", title: "Error", description: "Failed to load data" });
     } finally { setLoading(false); }

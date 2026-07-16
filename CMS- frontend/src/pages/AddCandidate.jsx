@@ -476,9 +476,9 @@ const candidateMatchesClient = (candidate, clientFilter) => {
   if (clientFilter === 'all') return true;
   const submissions = getCandidateSubmissions(candidate);
   if (submissions.length > 0) {
-    return submissions.some((submission) => submission.clientName === clientFilter);
+    return submissions.some((submission) => (submission.clientName || '').trim().toLowerCase() === clientFilter.trim().toLowerCase());
   }
-  return candidate?.client === clientFilter;
+  return (candidate?.client || '').trim().toLowerCase() === clientFilter.trim().toLowerCase();
 };
 
 const CandidateClientCell = ({ candidate, onShowMore }) => {
@@ -716,11 +716,21 @@ export default function AdminCandidates() {
       }
       if (resCli.ok) {
         const data = await resCli.json();
-        setClients(data);
+        const cleanedClients = (Array.isArray(data) ? data : []).map(c => ({
+          ...c,
+          companyName: (c.companyName || '').trim(),
+          name: (c.name || '').trim()
+        }));
+        setClients(cleanedClients);
       }
       if (resJobs.ok) {
         const data = await resJobs.json();
-        setJobs(Array.isArray(data) ? data : data.jobs || []);
+        const jobsArr = Array.isArray(data) ? data : data.jobs || [];
+        const cleanedJobs = jobsArr.map(j => ({
+          ...j,
+          clientName: (j.clientName || '').trim()
+        }));
+        setJobs(cleanedJobs);
       }
     } catch (e) {
       toast({ title: 'Error', description: 'Network error.', variant: 'destructive' });

@@ -112,7 +112,7 @@ export default function ClientJobSubmissions({
   const getJobsForClient = (clientName) => {
     if (!clientName) return [];
     return jobs.filter(
-      (j) => (j.clientName || '').toLowerCase() === clientName.toLowerCase()
+      (j) => (j.clientName || '').trim().toLowerCase() === clientName.trim().toLowerCase()
     );
   };
 
